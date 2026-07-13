@@ -1,0 +1,11 @@
+
+<svg xmlns="http://www.w3.org/2000/svg" width="900" height="520" viewBox="0 0 900 520">
+  <rect width="900" height="520" fill="#e8f1ff"/>
+  <circle cx="180" cy="205" r="72" fill="#ffd9b3"/>
+  <rect x="110" y="278" width="140" height="150" rx="28" fill="#4f7ccf"/>
+  <circle cx="450" cy="185" r="72" fill="#f2c7a5"/>
+  <rect x="380" y="258" width="140" height="170" rx="28" fill="#5f9f6f"/>
+  <circle cx="720" cy="205" r="72" fill="#d9a77b"/>
+  <rect x="650" y="278" width="140" height="150" rx="28" fill="#d66a6a"/>
+  <text x="450" y="70" text-anchor="middle" font-family="Arial" font-size="38" font-weight="700" fill="#1d2a3a">Občané tvoří společnost</text>
+</svg>

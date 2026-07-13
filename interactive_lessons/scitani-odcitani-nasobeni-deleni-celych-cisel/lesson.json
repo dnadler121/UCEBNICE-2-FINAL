@@ -1,0 +1,11 @@
+{
+  "subject": "matematika",
+  "school": "Střední škola",
+  "grade": "1. ročník",
+  "topic": "Základní početní operace",
+  "title": "Sčítání, odčítání, násobení a dělení celých čísel",
+  "slug": "scitani-odcitani-nasobeni-deleni-celych-cisel",
+  "description": "Procvičování základních početních operací s celými čísly, kulatými závorkami a správným pořadím operací.",
+  "icon": "➗",
+  "is_published": true
+}

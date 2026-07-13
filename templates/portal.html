@@ -1,0 +1,57 @@
+{% extends 'base.html' %}
+{% block content %}
+<main class="portal-shell">
+  <section class="portal-hero">
+    <div class="portal-copy">
+      <span class="portal-kicker">DIGITÁLNÍ UČEBNICE</span>
+      <h1>Vyber si předmět a začni pracovat</h1>
+      <p>Jedno přihlášení, všechny lekce na jednom místě. Každá lekce se automaticky zařadí podle předmětu, školy, ročníku a tématu.</p>
+    </div>
+    <div class="portal-visual" aria-hidden="true">
+      <span>📘</span><span>✏️</span><span>🧠</span>
+    </div>
+  </section>
+
+  <section class="subject-grid">
+    <a class="subject-tile tile-bio" href="{{ url_for('subject_catalog', kind='bio-obc') }}">
+      <div class="subject-icon">🧬</div>
+      <div>
+        <span class="subject-label">PŘEDMĚTY</span>
+        <h2>Biologie a občanská výchova</h2>
+        <p>Výklady z HTML, otázky, aktivity a závěrečné testy.</p>
+      </div>
+      <div class="subject-foot"><b>{{ counts.bio_obc }}</b> lekcí <span>Otevřít →</span></div>
+    </a>
+
+    <a class="subject-tile tile-math" href="{{ url_for('subject_catalog', kind='matematika') }}">
+      <div class="subject-icon">➗</div>
+      <div>
+        <span class="subject-label">INTERAKTIVNÍ LEKCE</span>
+        <h2>Matematika</h2>
+        <p>Školy a ročníky, témata a samostatné matematické podaplikace.</p>
+      </div>
+      <div class="subject-foot"><b>{{ counts.matematika }}</b> lekcí <span>Otevřít →</span></div>
+    </a>
+
+    <a class="subject-tile tile-info" href="{{ url_for('subject_catalog', kind='informatika') }}">
+      <div class="subject-icon">💻</div>
+      <div>
+        <span class="subject-label">INTERAKTIVNÍ LEKCE</span>
+        <h2>Informatika</h2>
+        <p>Algoritmy, programování, data a další praktická témata.</p>
+      </div>
+      <div class="subject-foot"><b>{{ counts.informatika }}</b> lekcí <span>Otevřít →</span></div>
+    </a>
+  </section>
+
+  {% if user.role == 'teacher' %}
+  <section class="teacher-quickbar">
+    <div><b>Učitelská správa</b><span>Vytváření lekcí, studenti a výsledky</span></div>
+    <a href="{{ url_for('new_lesson') }}">➕ HTML lekce</a>
+    <a href="{{ url_for('import_interactive_lesson') }}">📦 Import matematika / informatika</a>
+    <a href="{{ url_for('teacher_students') }}">👨‍🎓 Studenti</a>
+    <a href="{{ url_for('teacher_database') }}">🗄️ Výsledky</a>
+  </section>
+  {% endif %}
+</main>
+{% endblock %}

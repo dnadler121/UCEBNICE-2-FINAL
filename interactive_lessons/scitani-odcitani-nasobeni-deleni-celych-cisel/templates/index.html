@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="cs">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{{ package.title }}</title>
+    <link rel="stylesheet" href="{{ asset_url('style.css') }}">
+</head>
+<body>
+<div class="page">
+    <header class="hero">
+        <div>
+            <a class="back-link" href="{{ portal_url }}">← Zpět do matematiky</a>
+            <p class="eyebrow">MATEMATIKA · {{ package.school }} · {{ package.grade_name }}</p>
+            <h1>{{ package.title }}</h1>
+            <p class="subtitle">
+                Nejprve kulaté závorky, potom násobení a dělení zleva doprava
+                a nakonec sčítání a odčítání zleva doprava.
+            </p>
+        </div>
+        <div class="badge">{{ package.topic }}</div>
+    </header>
+
+    <div class="lesson-progress card">
+        <div>
+            <strong>Postup lekcí</strong>
+            <span id="progressText">0 z 10 příkladů</span>
+        </div>
+        <div class="progress-track"><div id="progressBar" class="progress-bar"></div></div>
+    </div>
+
+    <main class="layout">
+        <section class="card lesson">
+            <h2>Jak postupovat</h2>
+            <div class="rule"><span class="rule-number">1</span><p>Nejdříve vypočítej výrazy v kulatých závorkách.</p></div>
+            <div class="rule"><span class="rule-number">2</span><p>Potom násobení a dělení zleva doprava.</p></div>
+            <div class="rule"><span class="rule-number">3</span><p>Nakonec sčítání a odčítání zleva doprava.</p></div>
+
+            <div class="example-box">
+                <strong>Příklad</strong>
+                <div>15 − (8 + 2 · 3)</div>
+                <small>Nejdříve uvnitř závorky vypočítáme 2 · 3.</small>
+            </div>
+        </section>
+
+        <section class="card exercise">
+            <div class="exercise-head">
+                <div>
+                    <p class="eyebrow">PROCVIČOVÁNÍ</p>
+                    <h2>Vypočítej zvýrazněnou část</h2>
+                </div>
+                <button id="newButton" class="primary">Nový příklad</button>
+            </div>
+
+            <div id="expression" class="expression">Načítám příklad…</div>
+
+            <div class="answer-row">
+                <label for="answer">Výsledek zvýrazněné operace</label>
+                <div class="answer-controls">
+                    <input id="answer" type="number" inputmode="numeric" autocomplete="off">
+                    <button id="checkButton" class="secondary">Zkontrolovat</button>
+                </div>
+            </div>
+
+            <div id="message" class="message neutral">Připravuji lekci.</div>
+
+            <div class="stats">
+                <div><span id="steps">0</span><small>správné kroky</small></div>
+                <div><span id="mistakes">0</span><small>chyby v příkladu</small></div>
+            </div>
+        </section>
+    </main>
+
+    <section class="card settings">
+        <div>
+            <p class="eyebrow">NASTAVENÍ GENERÁTORU</p>
+            <h2>Jaký příklad se má vytvořit?</h2>
+        </div>
+        <div class="settings-grid">
+            <label>Počet čísel
+                <select id="count">
+                    <option value="3">3</option><option value="4">4</option>
+                    <option value="5" selected>5</option><option value="6">6</option>
+                    <option value="7">7</option><option value="8">8</option>
+                </select>
+            </label>
+            <label>Nejvyšší číslo
+                <input id="maxNumber" type="number" min="5" max="100" value="20">
+            </label>
+            <label class="parentheses-setting">Kulaté závorky
+                <span class="check-line"><input id="useParentheses" type="checkbox" checked> Používat v příkladech</span>
+            </label>
+            <fieldset>
+                <legend>Povolené operace</legend>
+                <label><input type="checkbox" name="operation" value="+" checked> +</label>
+                <label><input type="checkbox" name="operation" value="-" checked> −</label>
+                <label><input type="checkbox" name="operation" value="*" checked> ·</label>
+                <label><input type="checkbox" name="operation" value="/" checked> :</label>
+            </fieldset>
+        </div>
+        <p class="note">Dělení se generuje pouze tehdy, když vyjde celé číslo.</p>
+    </section>
+</div>
+
+<script>
+window.LESSON_URLS = {
+    newExample: "{{ api_url('new') }}",
+    checkAnswer: "{{ api_url('check') }}",
+    completeLesson: "{{ complete_url }}"
+};
+</script>
+<script src="{{ asset_url('script.js') }}"></script>
+</body>
+</html>

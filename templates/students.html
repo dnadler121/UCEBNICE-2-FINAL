@@ -1,0 +1,78 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="layout dashboard-layout">
+  <main class="main-card">
+    <div class="title-row">
+      <div>
+        <h1>Studenti</h1>
+        <p>Každý student má vlastní jméno a heslo. Díky tomu vidíš, jaké téma právě dělá a jak dopadl v posledním testu.</p>
+      </div>
+      <div class="teacher-actions">
+        <a class="switch" href="{{ url_for('teacher_database') }}">🗄️ Databáze studentů</a>
+        <a class="switch" href="{{ url_for('teacher_home') }}">← Zpět do editoru</a>
+      </div>
+    </div>
+
+    {% with messages = get_flashed_messages() %}
+      {% if messages %}<div class="flash-msg">{{ messages[0] }}</div>{% endif %}
+    {% endwith %}
+
+    <section class="course-card">
+      <h2>➕ Registrovat studenta</h2>
+      <form class="editor-form" method="post">
+        <label>Uživatelské jméno studenta
+          <input name="username" placeholder="jan.novak" pattern="[A-Za-zÀ-ž0-9._ -]+\.[A-Za-zÀ-ž0-9._ -]+" required>
+          <small>Zadej ve tvaru jmeno.prijmeni. Zobrazované jméno aplikace vytvoří automaticky.</small>
+        </label>
+        <label>Heslo
+          <input name="password" placeholder="např. zive123" required>
+        </label>
+        <button class="savebtn">Vytvořit studenta</button>
+      </form>
+    </section>
+
+    <section class="course-card">
+      <h2>👨‍🎓 Přehled studentů</h2>
+      {% if student_rows %}
+        <div class="table-wrap">
+          <table class="data-table">
+            <thead><tr><th>Student</th><th>Login</th><th>Právě dělá</th><th>Poslední test</th><th></th></tr></thead>
+            <tbody>
+            {% for row in student_rows %}
+              <tr>
+                <td><b>{{ row.student.name }}</b></td>
+                <td>{{ row.student.username }}</td>
+                <td>
+                  {% if row.progress %}
+                    {{ row.progress.lesson.title }}<br><small>{{ row.progress.status }}</small>
+                  {% else %}
+                    <span class="muted">zatím nezačal/a</span>
+                  {% endif %}
+                </td>
+                <td>
+                  {% if row.result %}
+                    <b>Známka {{ row.result.grade }}</b><br><small>{{ row.result.percent }} % · {{ row.result.lesson.title }}</small>
+                  {% else %}
+                    <span class="muted">bez testu</span>
+                  {% endif %}
+                </td>
+                <td class="right-cell">
+                  <form method="post" action="{{ url_for('delete_student', user_id=row.student.id) }}" onsubmit="return confirm('Opravdu smazat studenta {{ row.student.name }} včetně výsledků?');">
+                    <button class="link-button danger" type="submit">🗑️ Smazat</button>
+                  </form>
+                </td>
+              </tr>
+            {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      {% else %}
+        <p>Zatím nejsou vytvoření žádní studenti.</p>
+      {% endif %}
+    </section>
+  </main>
+  <aside class="rightbar">
+    <div class="panel graphic"><div class="big-plant">👤</div><h2>Bez anonymního přihlášení</h2><p>Studenti se nepřihlašují jako student/student, ale pod vlastním účtem.</p></div>
+  </aside>
+</div>
+{% endblock %}

@@ -1,0 +1,304 @@
+:root{
+  --green:#08943f;--green2:#16a34a;--green3:#eaf8ef;--blue:#0b72ef;
+  --navy:#071a2d;--navy2:#0a2a45;--text:#101828;--muted:#667085;
+  --line:#e4eaf1;--line2:#edf1f6;--bg:#f5f8fb;--card:#fff;
+  --shadow:0 18px 46px rgba(15,23,42,.075);--soft:0 8px 22px rgba(15,23,42,.045);
+}
+*{box-sizing:border-box} html{scroll-behavior:smooth}
+body{margin:0;font-family:Inter,Segoe UI,Arial,sans-serif;color:var(--text);background:#f5f8fb;background-image:radial-gradient(700px 240px at 50% -80px,rgba(34,197,94,.11),transparent 70%),linear-gradient(180deg,#fbfdff,#f3f7fb)}
+.topbar{height:62px;background:rgba(255,255,255,.96);border-bottom:1px solid var(--line);display:flex;align-items:center;gap:22px;padding:0 26px;position:sticky;top:0;z-index:30;box-shadow:0 6px 22px rgba(15,23,42,.035)}
+.brand{display:flex;align-items:center;gap:10px;min-width:290px}.leaf{font-size:30px}.brand-title{font-size:30px;line-height:1;color:var(--green);font-weight:950;letter-spacing:-.04em}.pill{background:#e8f8ee;color:#07883a;border-radius:11px;padding:7px 11px;font-weight:900;font-size:13px}.crumbs{font-size:13px;color:#475467;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.crumbs span{color:#98a2b3;margin:0 10px}.profile{display:flex;align-items:center;gap:12px;white-space:nowrap}.badge{background:#fff;border:1px solid var(--line);border-radius:10px;padding:8px 12px;font-weight:850;font-size:13px;box-shadow:var(--soft)}.avatar{font-size:25px;background:#eef2ff;border-radius:50%;padding:5px}.profile small{display:block;color:#667085;font-size:12px}.layout{max-width:1510px;margin:0 auto;padding:18px 18px 16px;display:grid;grid-template-columns:285px minmax(720px,1fr) 286px;gap:18px;align-items:start}.sidebar{position:sticky;top:80px;min-height:calc(100vh - 98px);border-radius:10px;background:linear-gradient(180deg,#0a2137,#06182a);color:#fff;padding:18px 14px;box-shadow:0 26px 70px rgba(2,8,23,.22);overflow:hidden}.side-label{font-size:12px;color:#c6d0da;letter-spacing:.04em;margin:4px 0 18px 6px}.block-title{display:flex;justify-content:space-between;align-items:center;padding:12px 8px;font-weight:850;border-bottom:1px solid rgba(255,255,255,.12)}.block-title.muted{font-weight:800;color:#e9f0f7;margin-top:8px}.lesson-row{display:flex;align-items:center;gap:10px;color:#fff;text-decoration:none;border-radius:11px;padding:13px 11px;margin:8px 0;font-size:14px;font-weight:850;transition:.15s}.lesson-row:hover{background:rgba(255,255,255,.06)}.lesson-row.active{background:linear-gradient(90deg,rgba(22,163,74,.97),rgba(14,89,82,.7));box-shadow:inset 0 0 0 1px rgba(255,255,255,.08)}.lesson-row.locked{color:#ecf4fb}.ok{width:20px;height:20px;border-radius:50%;display:grid;place-items:center;background:#22c55e;font-size:12px;flex:0 0 20px}.box{width:18px;height:18px;border:1px solid #8da0b5;border-radius:4px;flex:0 0 18px}.divider{height:1px;background:rgba(255,255,255,.12);margin:14px 0}.promo{display:grid;grid-template-columns:78px 1fr;gap:12px;align-items:center;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.09);border-radius:12px;padding:13px;margin-top:18px}.promo img{width:76px;height:76px;border-radius:17px;object-fit:cover}.promo p{margin:6px 0 0;color:#cbd5e1;line-height:1.45}.progressbox{background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.10);border-radius:12px;padding:15px;margin-top:14px}.between{display:flex;justify-content:space-between}.mini{height:8px;background:#233f57;border-radius:99px;margin-top:12px;overflow:hidden}.mini i{display:block;height:100%;width:4%;border-radius:99px;background:#19b25a}.resultbtn{width:100%;border:0;border-radius:11px;background:rgba(255,255,255,.10);color:#fff;padding:15px;margin-top:14px;font-weight:900}.main-card{background:#fff;border:1px solid var(--line);border-radius:14px;box-shadow:var(--shadow);padding:21px;overflow:hidden}.title-row{display:flex;justify-content:space-between;align-items:flex-start;gap:14px}.title-row h1{margin:0 0 8px;font-size:31px;font-weight:950;letter-spacing:-.045em}.title-row p{margin:0;color:#475467}.switch{border:1px solid var(--line);border-radius:11px;background:#fff;color:#344054;text-decoration:none;padding:12px 18px;font-weight:800;box-shadow:var(--soft)}.bar{height:7px;background:#e6edf4;border-radius:99px;margin:17px 0 22px;overflow:hidden}.bar i{display:block;height:100%;background:linear-gradient(90deg,var(--green),var(--green2));border-radius:99px}.hero-grid{display:grid;grid-template-columns:315px 1fr;gap:18px;align-items:stretch}.explain-card{background:linear-gradient(145deg,#effaf3,#fff);border:1px solid #d8ebdf;border-radius:14px;padding:22px;min-height:345px}.explain-card h2{margin:0 0 16px;color:var(--green);font-size:26px;font-weight:950}.explain-card p{margin:0;font-size:16px;line-height:1.74}.interest{margin-top:18px;border:1px solid #f2dc92;background:#fffbe8;border-radius:12px;padding:15px;line-height:1.55}.hero-img{display:block;width:100%;height:345px;object-fit:cover;border-radius:13px;border:1px solid #d5dfe9;box-shadow:0 12px 28px rgba(15,23,42,.11)}.dots{text-align:center;margin:12px 0 0}.dots b,.dots span{display:inline-block;width:10px;height:9px;border-radius:99px;background:#d6dee7;margin:0 4px}.dots b{width:16px;background:var(--green)}.tabs{display:flex;gap:28px;border-bottom:1px solid var(--line);margin-top:23px}.tabs b,.tabs span{padding:16px 0 13px}.tabs b{color:var(--green);border-bottom:3px solid var(--green);font-weight:950}.tabs span{color:#475467}.question-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;margin-top:16px}.q-card{position:relative;border:1px solid var(--line);border-radius:14px;background:#fff;padding:15px;box-shadow:0 6px 18px rgba(15,23,42,.04)}.q-card h3{margin:0 0 12px 34px;font-size:14px;line-height:1.45}.num{position:absolute;top:15px;left:15px;width:24px;height:24px;border-radius:50%;background:var(--green);color:white;display:grid;place-items:center;font-weight:950}.img-options{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}.img-options button{border:1px solid var(--line);border-radius:10px;background:#fff;padding:6px;cursor:pointer;transition:.15s}.img-options button:hover,.choice-options button:hover{transform:translateY(-1px);box-shadow:0 8px 18px rgba(15,23,42,.08)}.img-options img{width:100%;height:72px;object-fit:cover;border-radius:8px;background:#f8fafc}.img-options small{display:block;text-align:center;margin-top:6px;color:#344054;font-size:12px}.img-options button.selected,.choice-options button.selected{border:2px solid var(--green);background:#effaf3;box-shadow:0 0 0 3px rgba(8,148,63,.10)}.choice-options{display:grid;gap:8px}.choice-options button,.radio{border:1px solid var(--line);border-radius:10px;background:#fff;padding:12px;text-align:left}.text-answer{width:100%;border:1px solid var(--line);border-radius:10px;padding:13px;font-size:14px}.text-answer:focus{outline:3px solid rgba(8,148,63,.12);border-color:var(--green)}.check-text{margin-top:8px;border:0;border-radius:9px;background:var(--green);color:#fff;font-weight:850;padding:10px 13px}.feedback{margin-top:10px;font-weight:850}.feedback.ok{display:block;color:var(--green);background:transparent;width:auto;height:auto}.feedback.bad{color:#dc2626}.hint{display:block;color:#667085;margin-top:8px;line-height:1.4}.bottom-nav{display:flex;justify-content:space-between;margin-top:14px}.back,.next,.primary{padding:12px 22px;border-radius:10px;text-decoration:none;font-weight:900}.back{background:white;border:1px solid var(--line);color:#344054}.next{background:linear-gradient(90deg,var(--green),var(--green2));color:#fff;box-shadow:0 10px 24px rgba(8,148,63,.22)}.test-strip{margin-top:14px;border:1px solid #cfe0f5;border-radius:13px;background:#f7fbff;display:flex;align-items:center;gap:18px;padding:15px 18px}.test-strip h2{margin:0;color:#0b72ef;font-size:21px}.test-strip p{margin:3px 0;color:#667085}.test-strip span{white-space:nowrap;color:#344054}.testbtn{margin-left:auto;text-decoration:none;background:#0b72ef;color:#fff;border-radius:11px;padding:16px 26px;font-weight:950;box-shadow:0 10px 24px rgba(11,114,239,.22)}.rightbar{display:flex;flex-direction:column;gap:16px;position:sticky;top:80px}.panel{background:#fff;border:1px solid var(--line);border-radius:14px;box-shadow:var(--soft);padding:19px}.panel h2{margin:0 0 14px;color:var(--green);font-size:20px;font-weight:950}.step{display:flex;justify-content:space-between;align-items:center;padding:10px 0}.step.done b{width:23px;height:23px;background:var(--green);color:white;border-radius:50%;display:grid;place-items:center}.step:not(.done) b{width:23px;height:23px;border:2px solid #cfd8e3;border-radius:50%;display:block}.bar.small{height:7px;margin:15px 0 0}.panel em{float:right;color:#344054}.panel button{width:100%;background:white;border:1px solid var(--line);border-radius:10px;padding:13px;text-align:left;margin:9px 0}.tip{background:linear-gradient(145deg,#f1fbf4,#fff)}.tip span{float:right;font-size:55px}.tip p{line-height:1.55}.welcome-card,.finish-card{background:white;border:1px solid var(--line);border-radius:18px;max-width:720px;margin:80px auto;padding:42px;text-align:center;box-shadow:var(--shadow)}.primary{display:inline-block;background:var(--green);color:white}.final-form{display:grid;gap:15px}.q-card.final{padding-left:22px}.radio{display:block;margin:8px 0}.q-card.final h3{margin-left:34px}.final-actions{text-align:right}.big-score{font-size:66px;color:var(--green);font-weight:950}.summary{list-style:none;padding:0}.summary li{padding:10px;border-bottom:1px solid var(--line)}
+@media(max-width:1350px){.layout{grid-template-columns:245px minmax(640px,1fr);max-width:1160px}.rightbar{display:none}.sidebar{padding:16px 12px}.hero-grid{grid-template-columns:295px 1fr}.question-grid{grid-template-columns:1fr}.test-strip{flex-wrap:wrap}.testbtn{margin-left:0}.profile{display:none}.brand{min-width:260px}.hero-img{height:330px}.explain-card{min-height:330px}}
+@media(max-width:900px){.layout{grid-template-columns:1fr;padding:12px}.sidebar{position:relative;top:0;min-height:auto}.hero-grid{grid-template-columns:1fr}.hero-img{height:260px}.topbar{height:auto;padding:14px;flex-wrap:wrap}.crumbs{display:none}.main-card{padding:16px}.title-row{flex-direction:column}.test-strip{display:block}.testbtn{display:inline-block;margin-top:12px}.brand-title{font-size:25px}}
+/* Praktické úpravy: výklad vedle otázek, aktivita, grafika místo nástrojů */
+.study-grid{display:grid;grid-template-columns:330px 1fr;gap:16px;margin-top:16px;align-items:start}.mini-explain,.test-explain{position:sticky;top:82px;background:linear-gradient(145deg,#effaf3,#fff);border:1px solid #d8ebdf;border-radius:14px;padding:18px;box-shadow:0 6px 18px rgba(15,23,42,.04)}.mini-explain h2,.test-explain h2{margin:0 0 10px;color:var(--green);font-size:20px}.mini-explain h3,.test-explain h3{margin:8px 0;color:#101828}.mini-explain p,.test-explain p{line-height:1.65;margin:0 0 12px}.interest.compact{font-size:14px}.question-grid.vertical{grid-template-columns:1fr;margin-top:0}.activity-box{margin-top:16px;border:1px solid #cfe0f5;border-radius:14px;background:linear-gradient(145deg,#f7fbff,#fff);padding:18px}.activity-box h2{margin:0 0 8px;color:#0b72ef}.activity-box p{font-size:16px;line-height:1.6}.done-check{display:inline-flex;gap:10px;align-items:center;border:1px solid var(--line);border-radius:12px;background:#fff;padding:12px 16px;font-weight:900}.done-check input{width:20px;height:20px}.graphic{text-align:center;background:linear-gradient(145deg,#f0fff4,#fff)}.big-plant{font-size:72px;line-height:1;margin:8px 0 12px}.test-study-grid{display:grid;grid-template-columns:370px 1fr;gap:18px;align-items:start}.test-explain article{border-top:1px solid #d8ebdf;padding-top:12px;margin-top:12px}.submit{border:0;cursor:pointer}.img-options.form label{border:1px solid var(--line);border-radius:10px;background:#fff;padding:6px;text-align:center}.img-options.form input{display:block;margin:0 auto 5px}
+@media(max-width:1350px){.study-grid,.test-study-grid{grid-template-columns:1fr}.mini-explain,.test-explain{position:relative;top:0}.rightbar{display:none}}
+
+.locked-next{opacity:.48;filter:grayscale(.25);cursor:not-allowed;box-shadow:none!important}
+.lock-msg{margin-top:10px;text-align:right;color:#dc2626;font-weight:850;font-size:13px}
+.lock-msg.ok{color:var(--green)}
+.q-card.answered-ok{border-color:#19b25a;box-shadow:0 0 0 3px rgba(25,178,90,.10)}
+/* Úpravy pro učitelský login, poslední známku a editor */
+.toplink{border:1px solid var(--line);border-radius:10px;padding:8px 10px;text-decoration:none;color:#344054;font-weight:850;background:#fff}
+.gradebox{background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.10);border-radius:12px;padding:15px;margin-top:14px;display:grid;gap:6px}.gradebox span{font-size:12px;color:#c6d0da}.gradebox b{font-size:22px}.gradebox small{color:#d5e1ed;line-height:1.35}.theme-picture{grid-template-columns:86px 1fr}.theme-picture img{width:86px;height:86px;border-radius:17px;object-fit:cover;border:1px solid rgba(255,255,255,.18)}.panel-img{width:100%;height:145px;object-fit:cover;border-radius:13px;border:1px solid var(--line);margin-bottom:12px}.inline-figure{margin:18px 0 0}.inline-figure img{width:100%;max-height:230px;object-fit:cover;border-radius:12px;border:1px solid var(--line)}.inline-figure figcaption{font-size:13px;color:#667085;margin-top:6px}.inline-figure.small img{max-height:150px}.login-page{min-height:calc(100vh - 62px);display:grid;place-items:center;padding:24px}.login-card{width:min(480px,100%);background:#fff;border:1px solid var(--line);border-radius:20px;box-shadow:var(--shadow);padding:34px}.login-logo{font-size:54px;text-align:center}.login-card h1{text-align:center;margin:6px 0 8px;font-size:34px}.login-card p{text-align:center;color:#667085}.login-card label{display:grid;gap:7px;margin:14px 0;font-weight:850}.login-card input,.editor-form input,.editor-form textarea{width:100%;border:1px solid var(--line);border-radius:11px;padding:12px;font:inherit}.login-card button,.savebtn{width:100%;border:0;border-radius:12px;background:linear-gradient(90deg,var(--green),var(--green2));color:#fff;padding:14px 18px;font-weight:950;font-size:16px;cursor:pointer}.login-card small{display:block;text-align:center;margin-top:14px;color:#667085}.login-error{background:#fef2f2;color:#b91c1c;border:1px solid #fecaca;border-radius:12px;padding:12px;margin:12px 0;font-weight:850}.editor-layout{grid-template-columns:285px minmax(720px,1fr)}.editor-card{max-width:1000px}.editor-form h2{margin-top:26px;color:var(--green)}.editor-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}.editor-form label{font-weight:850;color:#344054;display:grid;gap:7px}.edit-section{border:1px solid var(--line);border-radius:14px;padding:16px;margin:14px 0;background:#fbfdff;display:grid;gap:12px}.edit-section h3{margin:0;color:#0b72ef}.savebtn{margin-top:10px;max-width:260px}
+@media(max-width:900px){.editor-grid{grid-template-columns:1fr}.toplink{font-size:13px}.profile{display:flex!important;flex-wrap:wrap}.editor-layout{grid-template-columns:1fr}}
+
+.dashboard-layout{grid-template-columns:1fr 360px}.course-card{background:#fff;border-radius:26px;padding:24px;margin:18px 0;box-shadow:0 18px 50px rgba(31,77,61,.08);border:1px solid rgba(50,90,70,.08)}.course-card h2{margin:0 0 16px}.block-title.wide{margin-top:14px}.lesson-list{display:grid;gap:10px;margin:10px 0 18px}.lesson-row.big{display:inline-flex;background:#f6fbf7;border-radius:18px;padding:14px 16px;text-decoration:none;color:#173d2f;border:1px solid rgba(46,125,88,.12)}.editor-form label{display:block;font-weight:800;color:#244839;margin:14px 0 8px}.editor-form input,.editor-form textarea{width:100%;box-sizing:border-box;border:1px solid #dbe9df;border-radius:18px;padding:14px 16px;font:inherit;background:#fbfefc}.editor-form textarea{min-height:90px}.form-grid{display:grid;grid-template-columns:1fr 1fr;gap:18px}.question-progress{background:#eef8f0;border:1px solid #cfe9d5;border-radius:18px;padding:12px 16px;font-weight:900;color:#2b6a47;margin:12px 0 18px}.testbtn{border:0;border-radius:18px;background:#2d8f58;color:#fff;font-weight:900;padding:14px 22px;cursor:pointer;box-shadow:0 12px 24px rgba(45,143,88,.18)}.testbtn.submit{margin-top:18px;background:#236f47}.final-form .q-card{transition:all .25s ease}.toplink{background:#eef8f0;border-radius:12px;padding:9px 12px;text-decoration:none;color:#24523c;font-weight:800}.inline-figure img,.panel-img,.hero-img{object-fit:cover}.main-card .course-card .lesson-row{margin-right:8px}
+@media(max-width:900px){.dashboard-layout,.form-grid{grid-template-columns:1fr}}
+
+.switch.locked-test{opacity:.55;filter:grayscale(.25);cursor:not-allowed;background:#f8fafc;color:#667085;box-shadow:none}
+.flash-msg{border:1px solid #f2dc92;background:#fffbe8;border-radius:12px;padding:12px 14px;margin:14px 0;color:#7a5a00;font-weight:800}
+.lock-msg{font-size:13px;color:#667085;align-self:center;margin-left:12px;max-width:340px}.lock-msg.ok{color:var(--green);font-weight:900}
+.gradebox{background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.10);border-radius:12px;padding:15px;margin-top:14px}.gradebox span{display:block;color:#dbeafe;font-size:12px;font-weight:900}.gradebox b{display:block;margin:7px 0 4px}.gradebox small{color:#cbd5e1;line-height:1.45}.panel-img{width:100%;max-height:130px;object-fit:cover;border-radius:14px;margin-bottom:12px}.question-progress{border:1px solid #d8ebdf;background:#f1fbf4;color:var(--green);border-radius:12px;padding:11px 14px;font-weight:950;margin-bottom:12px}
+.teacher-actions{display:flex;gap:10px;flex-wrap:wrap;justify-content:flex-end}.student-row{display:flex;justify-content:space-between;align-items:center;border:1px solid var(--line);border-radius:14px;background:#fbfefc;padding:14px 16px;color:#173d2f}.student-row span{color:#667085;font-weight:800}
+
+/* učitelský editor - bezpečné mazání a archivace */
+.teacher-lesson-row{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:14px;
+  margin:10px 0;
+  padding:10px 12px;
+  border-radius:18px;
+  background:rgba(255,255,255,.78);
+  border:1px solid rgba(121, 94, 63, .10);
+}
+.teacher-lesson-row.archived{opacity:.72; filter:saturate(.7);}
+.row-actions{display:flex; align-items:center; gap:10px; flex-wrap:wrap; justify-content:flex-end;}
+.row-actions form{display:inline; margin:0;}
+.link-button{border:0; background:transparent; color:#5c7f49; font-weight:800; cursor:pointer; font-size:.95rem; padding:6px 8px; border-radius:10px;}
+.link-button:hover{background:rgba(92,127,73,.10);}
+.link-button.danger{color:#b23a3a;}
+.link-button.danger:hover{background:rgba(178,58,58,.10);}
+.badge-muted{font-size:.75rem; padding:3px 8px; border-radius:999px; background:#eee3d1; color:#6f604d; margin-left:8px;}
+.notice{padding:12px 16px; border-radius:18px; background:#fff8dc; border:1px solid rgba(135,110,52,.18); margin:14px 0; color:#625231; font-weight:700;}
+.notice p{margin:4px 0;}
+@media(max-width:780px){.teacher-lesson-row{align-items:flex-start; flex-direction:column}.row-actions{justify-content:flex-start}}
+
+.brand-link{text-decoration:none;color:inherit}.lesson-actions{display:flex;gap:10px;align-items:center;flex-wrap:wrap;justify-content:flex-end}
+/* V1.1 – studenti, databáze a výrobna otázek */
+.table-wrap{overflow:auto;border:1px solid var(--line);border-radius:18px;background:#fff}
+.data-table{width:100%;border-collapse:collapse;font-size:14px}
+.data-table th{background:#f3faf5;color:#24523c;text-align:left;padding:13px 14px;border-bottom:1px solid var(--line);font-weight:950;white-space:nowrap}
+.data-table td{padding:13px 14px;border-bottom:1px solid var(--line);vertical-align:top}
+.data-table tr:last-child td{border-bottom:0}.data-table small,.muted{color:#667085}.right-cell{text-align:right}.right-cell form{margin:0}.factory-head{display:flex;justify-content:space-between;gap:18px;align-items:flex-start}.factory-head h2{margin:0 0 6px}.factory-head p{margin:0;color:#667085}.factory-badge{background:#e8f8ee;color:#07883a;border:1px solid #cdeed8;border-radius:999px;padding:7px 12px;font-weight:950}.factory-badge.blue{background:#eff6ff;color:#0b72ef;border-color:#dbeafe}.factory-tabs{margin:14px 0;border-bottom:0}.factory-tabs button{border:1px solid var(--line);background:#fff;border-radius:13px;padding:10px 13px;font-weight:900;color:#344054;cursor:pointer}.factory-tabs button.sel{background:#e8f8ee;border-color:#b9e7c8;color:#07883a}.factory-add{border:1px solid #dbe9df;border-radius:18px;background:#fbfefc;padding:16px;margin:12px 0}.grid4{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}.helpText{font-size:13px;color:#667085;margin:8px 0 0}.question-list{display:grid;gap:10px}.factory-qcard{border:1px solid var(--line);border-radius:16px;background:#fff;padding:14px;box-shadow:var(--soft)}.factory-qcard b{display:block;margin:8px 0}.factory-qcard p{margin:0 0 8px;color:#667085}.editor-section-card{scroll-margin-top:80px}
+@media(max-width:900px){.grid4{grid-template-columns:1fr 1fr}.factory-head{display:block}.right-cell{text-align:left}}
+/* Výrobna – galerie obrázků a otázky se 4 obrázky */
+.image-library-card{border:1px solid #dbe9df;background:linear-gradient(180deg,#fbfefc,#ffffff)}
+.image-drop{display:block;border:2px dashed #bfe7cb;border-radius:18px;padding:18px;text-align:center;background:#f4fbf6;color:#087f3f;font-weight:950;cursor:pointer;margin:14px 0}
+.image-drop input{display:none}.editor-gallery{display:grid;grid-template-columns:repeat(auto-fill,minmax(105px,1fr));gap:12px;margin-top:14px}.empty-gallery{border:1px solid var(--line);border-radius:16px;background:#fff;padding:18px;color:#667085;text-align:center}.gallery-thumb{border:1px solid #d9e9df;border-radius:16px;background:#fff;padding:8px;cursor:pointer;box-shadow:var(--soft);transition:.15s transform,.15s border-color}.gallery-thumb:hover{transform:translateY(-2px);border-color:#87d99f}.gallery-thumb img{width:100%;height:78px;object-fit:cover;border-radius:12px;display:block}.gallery-thumb small{display:block;margin-top:6px;font-size:11px;color:#667085;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.image-slot-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin:10px 0}.image-slot{min-height:115px;border:2px dashed #cfe6d7;border-radius:18px;background:#fff;cursor:pointer;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;color:#667085;overflow:hidden;position:relative}.image-slot.active{border-color:#15a34a;background:#f0fbf3}.image-slot span{font-weight:950;font-size:24px;color:#0c8a3d}.image-slot small{padding:4px 8px}.image-slot img{width:100%;height:115px;object-fit:cover;display:block}.image-slot b{position:absolute;top:8px;left:8px;background:#16a34a;color:#fff;border-radius:999px;width:28px;height:28px;display:grid;place-items:center}.qcard-images{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}.mini-img{position:relative;border:2px solid #e5e7eb;border-radius:12px;overflow:hidden;display:inline-block}.mini-img.right{border-color:#16a34a}.mini-img img{width:58px;height:48px;object-fit:cover;display:block}.mini-img small{position:absolute;top:3px;left:3px;background:rgba(0,0,0,.55);color:#fff;border-radius:999px;padding:1px 6px;font-size:11px}.img-options{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin:12px 0}.img-options button,.img-options label{border:1px solid var(--line);border-radius:18px;background:#fff;padding:10px;cursor:pointer;text-align:center;box-shadow:var(--soft)}.img-options img{width:100%;height:150px;object-fit:cover;border-radius:14px;display:block}.img-options small{display:block;margin-top:6px;color:#667085}.img-options button.correct{border-color:#16a34a;background:#f0fbf3}@media(max-width:900px){.image-slot-grid{grid-template-columns:1fr 1fr}.editor-gallery{grid-template-columns:repeat(2,1fr)}}
+.question-image{margin:10px 0;border:1px solid #dbe7e1;border-radius:14px;background:#f8fbfd;padding:8px;text-align:center}.question-image img{max-width:100%;max-height:180px;object-fit:contain;border-radius:10px}.image-slot-grid.one{grid-template-columns:minmax(120px,220px)}
+
+/* lepší práce s obrázky v editoru */
+.image-preview{
+  min-height:140px;
+  border:2px dashed #cfe6d7;
+  border-radius:18px;
+  background:#fbfefc;
+  display:grid;
+  place-items:center;
+  overflow:hidden;
+  margin-top:8px;
+  color:#667085;
+  font-size:13px;
+  text-align:center;
+}
+.image-preview img{width:100%;height:150px;object-fit:cover;display:block}
+.image-preview span{padding:8px 10px}
+.question-image-picker{border:1px solid #dbe9df;border-radius:18px;background:#fff;padding:10px;box-shadow:var(--soft)}
+.question-image-picker .image-preview{margin:0 0 10px;min-height:120px}
+.question-image-picker .image-preview img{height:125px}
+.image-pick-btn{display:block!important;margin:0!important;background:#e8f8ee;color:#07883a;border-radius:13px;padding:10px 12px;text-align:center;cursor:pointer;font-weight:950!important}
+.image-pick-btn input{display:none!important}
+.inline-picker-holder{max-width:320px}.image-slot-grid.direct{grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}.slot-picker{min-width:0}.hidden-file-bucket{display:none}
+@media(max-width:900px){.image-slot-grid.direct{grid-template-columns:1fr 1fr}}
+
+/* DOCX import výkladu */
+.docx-help{margin-top:10px;color:#64748b;font-size:.92rem;line-height:1.35}
+.docx-current-preview{margin-top:18px;padding:18px;border:1px solid rgba(15,23,42,.10);border-radius:20px;background:rgba(255,255,255,.72);max-height:360px;overflow:auto}
+.docx-current-preview.muted{color:#64748b}
+.docx-content p{line-height:1.75;margin:0 0 14px}
+.docx-content h2,.docx-content h3,.docx-content h4{margin:18px 0 10px;color:#14532d}
+.docx-content .docx-figure{margin:18px auto;text-align:center}
+.docx-content .docx-figure img{max-width:100%;border-radius:24px;box-shadow:0 18px 40px rgba(15,23,42,.16)}
+.docx-content .docx-table{width:100%;border-collapse:collapse;margin:18px 0;background:white;border-radius:16px;overflow:hidden}
+.docx-content .docx-table td{border:1px solid rgba(15,23,42,.12);padding:10px 12px;vertical-align:top}
+.docx-content .docx-list{padding-left:10px}
+.lesson-docx-grid{grid-template-columns:1fr!important}
+
+/* PDF výklad */
+.pdf-lesson-viewer{
+  border:1px solid rgba(30,41,59,.10);
+  border-radius:22px;
+  overflow:hidden;
+  background:#fff;
+  box-shadow:0 16px 35px rgba(15,23,42,.08);
+  margin:14px 0;
+}
+.pdf-toolbar{
+  display:flex;
+  gap:12px;
+  align-items:center;
+  justify-content:space-between;
+  padding:12px 16px;
+  background:linear-gradient(135deg,#eefcf3,#f8fafc);
+  color:#244035;
+  font-size:14px;
+}
+.pdf-toolbar span{opacity:.8; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:55%;}
+.pdf-toolbar a{font-weight:800; color:#15803d; text-decoration:none;}
+.pdf-lesson-viewer iframe{
+  width:100%;
+  height:72vh;
+  min-height:620px;
+  border:0;
+  display:block;
+  background:#f8fafc;
+}
+.pdf-current-preview{margin-top:10px; border:1px dashed rgba(30,41,59,.18); border-radius:16px; padding:12px; background:#f8fafc;}
+.pdf-current-preview iframe,.pdf-editor-preview{width:100%; height:360px; border:0; border-radius:14px; margin-top:10px; background:#fff;}
+
+/* PDF výklad */
+.pdf-lesson-viewer{
+  border:1px solid rgba(30,41,59,.10);
+  border-radius:22px;
+  overflow:hidden;
+  background:#fff;
+  box-shadow:0 16px 35px rgba(15,23,42,.08);
+  margin:14px 0;
+}
+.pdf-toolbar{
+  display:flex;
+  gap:12px;
+  align-items:center;
+  justify-content:space-between;
+  padding:12px 16px;
+  background:linear-gradient(135deg,#eefcf3,#f8fafc);
+  color:#244035;
+  font-size:14px;
+}
+.pdf-toolbar span{opacity:.8; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:55%;}
+.pdf-toolbar a{font-weight:800; color:#15803d; text-decoration:none;}
+.pdf-lesson-viewer iframe{
+  width:100%;
+  height:72vh;
+  min-height:620px;
+  border:0;
+  display:block;
+  background:#f8fafc;
+}
+.pdf-current-preview{margin-top:10px; border:1px dashed rgba(30,41,59,.18); border-radius:16px; padding:12px; background:#f8fafc;}
+.pdf-current-preview iframe,.pdf-editor-preview{width:100%; height:360px; border:0; border-radius:14px; margin-top:10px; background:#fff;}
+/* Obrázky importované z DOCX přes Mammoth */
+.docx-content img,
+.docx-current-preview img{
+  max-width:100%;
+  height:auto;
+  display:block;
+  margin:18px auto;
+  border-radius:22px;
+  box-shadow:0 16px 36px rgba(15,23,42,.14);
+}
+.docx-import-note{
+  background:#ecfdf5;
+  border:1px solid #bbf7d0;
+  color:#14532d;
+  border-radius:16px;
+  padding:10px 12px;
+  margin:0 0 14px;
+  font-size:.92rem;
+}
+.docx-import-warnings{
+  margin:8px 0 14px;
+  color:#92400e;
+  background:#fffbeb;
+  border:1px solid #fde68a;
+  border-radius:14px;
+  padding:10px 12px;
+}
+
+/* CKEditor ve výkladu */
+.editor-form .ck-editor{margin-top:8px}
+.editor-form .ck-editor__editable{min-height:420px;border-radius:0 0 16px 16px!important;padding:22px!important;background:#fff!important}
+.editor-form .ck-toolbar{border-radius:16px 16px 0 0!important;background:#f8fbfd!important;border-color:#dbe7e1!important}
+.docx-content img,.explain-card img,.test-explain img{max-width:100%;height:auto;border-radius:18px;box-shadow:var(--soft);margin:14px 0;display:block}
+.docx-content table,.explain-card table,.test-explain table{border-collapse:collapse;width:100%;margin:14px 0;background:#fff;border-radius:12px;overflow:hidden}
+.docx-content td,.docx-content th,.explain-card td,.explain-card th,.test-explain td,.test-explain th{border:1px solid #dbe7e1;padding:8px 10px}
+.docx-content figure,.explain-card figure,.test-explain figure{margin:14px 0}
+.docx-content figcaption,.explain-card figcaption,.test-explain figcaption{font-size:13px;color:#667085;text-align:center;margin-top:6px}
+
+/* Pomůcky pro CKEditor ve výkladu */
+.ckeditor-image-tools{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin:6px 0 8px}
+.image-insert-btn{display:inline-flex;align-items:center;gap:8px;padding:10px 14px;border:1px solid #bfe6cf;border-radius:14px;background:#f1fbf5;color:#0f8f45;font-weight:900;cursor:pointer;box-shadow:0 6px 16px rgba(15,143,69,.08)}
+.image-insert-btn:hover{background:#e8f8ef}
+.small-note{font-size:13px;line-height:1.35;max-width:520px}
+.ck-content img{max-width:100%;height:auto;border-radius:14px;box-shadow:0 8px 22px rgba(15,40,70,.08)}
+.lesson-html img,.reading-card img,.imported-docx-content img{max-width:100%;height:auto;border-radius:14px;box-shadow:0 8px 22px rgba(15,40,70,.08)}
+
+/* HTML import výkladu */
+.lesson-html-preview{margin-top:12px;line-height:1.65;color:#102033}
+.lesson-html-preview img{max-width:100%;height:auto;border-radius:16px;box-shadow:0 10px 26px rgba(15,23,42,.10);margin:12px 0;display:block}
+.lesson-html-preview table{width:100%;border-collapse:collapse;margin:14px 0;background:#fff;border-radius:12px;overflow:hidden}
+.lesson-html-preview td,.lesson-html-preview th{border:1px solid #dbe7e1;padding:8px 10px}
+.editor-section-card small{display:block;color:#64748b;margin-top:6px;line-height:1.35}
+
+/* HTML výklad se zobrazuje pouze jednou nahoře. Pod ním jsou už jen otázky. */
+.study-grid.questions-only{display:block;margin-top:16px;}
+.study-grid.questions-only .question-grid.vertical{grid-template-columns:repeat(2,minmax(0,1fr));margin-top:0;}
+@media(max-width:1350px){.study-grid.questions-only .question-grid.vertical{grid-template-columns:1fr;}}
+
+/* ===== UČEBNICE 2.0: hlavní portál a katalogy ===== */
+.portal-shell,.catalog-shell{max-width:1240px;margin:0 auto;padding:42px 28px 70px}.portal-hero{position:relative;overflow:hidden;display:flex;align-items:center;justify-content:space-between;gap:36px;padding:48px 52px;border-radius:34px;background:linear-gradient(135deg,#18264c,#334f9d 58%,#5577d6);color:#fff;box-shadow:0 24px 60px rgba(21,39,89,.22)}.portal-hero:after{content:"";position:absolute;width:340px;height:340px;border-radius:50%;right:-120px;top:-145px;background:rgba(255,255,255,.11)}.portal-copy{position:relative;z-index:1;max-width:760px}.portal-kicker,.subject-label,.catalog-title p,.grade-card-head span{display:block;font-size:.78rem;font-weight:850;letter-spacing:.14em}.portal-copy h1{font-size:clamp(2.2rem,5vw,4.6rem);line-height:1.02;margin:10px 0 18px}.portal-copy p{font-size:1.12rem;line-height:1.65;color:rgba(255,255,255,.84);margin:0}.portal-visual{position:relative;z-index:1;min-width:230px;display:grid;grid-template-columns:repeat(2,1fr);gap:14px;transform:rotate(-4deg)}.portal-visual span{display:grid;place-items:center;height:98px;border-radius:24px;background:rgba(255,255,255,.16);font-size:2.7rem;backdrop-filter:blur(8px)}.portal-visual span:first-child{grid-row:span 2;height:210px;font-size:4rem}.subject-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:22px;margin-top:28px}.subject-tile{min-height:360px;display:flex;flex-direction:column;gap:22px;padding:30px;border-radius:28px;text-decoration:none;color:#15203a;border:1px solid rgba(24,44,86,.1);box-shadow:0 16px 42px rgba(30,50,90,.10);transition:.22s ease}.subject-tile:hover{transform:translateY(-7px);box-shadow:0 24px 55px rgba(30,50,90,.17)}.tile-bio{background:linear-gradient(160deg,#f0fff7,#dff8ea)}.tile-math{background:linear-gradient(160deg,#f2f5ff,#e4eaff)}.tile-info{background:linear-gradient(160deg,#fff8ec,#ffedcf)}.subject-icon{display:grid;place-items:center;width:68px;height:68px;border-radius:21px;background:#fff;font-size:2rem;box-shadow:0 9px 22px rgba(20,40,80,.11)}.subject-label{color:#5d6b8d}.subject-tile h2{font-size:1.75rem;margin:7px 0 10px}.subject-tile p{line-height:1.6;color:#5e6980;margin:0}.subject-foot{margin-top:auto;padding-top:20px;border-top:1px solid rgba(30,50,90,.12);display:flex;align-items:center;gap:6px;color:#5e6980}.subject-foot b{font-size:1.35rem;color:#16213d}.subject-foot span{margin-left:auto;font-weight:800;color:#243e83}.teacher-quickbar{margin-top:24px;padding:19px 22px;border-radius:20px;background:#fff;box-shadow:0 12px 35px rgba(30,50,90,.08);display:flex;align-items:center;gap:12px}.teacher-quickbar div{margin-right:auto}.teacher-quickbar div span{display:block;color:#788196;font-size:.9rem}.teacher-quickbar a{padding:11px 15px;border-radius:12px;background:#eef2fb;color:#263d79;text-decoration:none;font-weight:750}.catalog-head{padding:20px 0 28px}.back-link{display:inline-block;margin-bottom:24px;text-decoration:none;color:#506080;font-weight:750}.catalog-title{display:flex;align-items:center;gap:18px}.catalog-title>span{font-size:3.1rem}.catalog-title p{margin:0;color:#5d6b8d}.catalog-title h1{font-size:clamp(2rem,4vw,3.5rem);margin:3px 0}.catalog-intro{color:#6e778b;font-size:1.08rem}.catalog-subject{margin-bottom:32px}.catalog-subject-name{display:flex;align-items:center;gap:12px;margin-bottom:16px}.catalog-subject-name span{font-size:1.7rem}.catalog-subject-name h2{margin:0}.grade-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:20px}.grade-card{background:#fff;border-radius:24px;padding:24px;box-shadow:0 14px 38px rgba(31,47,83,.09);border:1px solid #e7ebf3}.grade-card-head{padding-bottom:15px;border-bottom:1px solid #e5e9f1}.grade-card-head span{color:#78829a}.grade-card-head h3{font-size:1.35rem;margin:6px 0 0}.topic-group{margin-top:18px}.topic-group h4{margin:0 0 9px;color:#27395f}.topic-lessons{display:grid;gap:8px}.topic-lessons a{display:flex;align-items:center;gap:10px;padding:12px 13px;border-radius:12px;background:#f5f7fb;text-decoration:none;color:#283754;font-weight:700}.topic-lessons a:hover{background:#eaf0ff}.topic-lessons a span{margin-left:auto}.topic-lessons small{font-weight:500;color:#9a6b36}.empty-catalog{max-width:680px;margin:45px auto;text-align:center;padding:50px 30px;border-radius:28px;background:#fff;box-shadow:0 16px 45px rgba(31,47,83,.09)}.empty-catalog>div{font-size:4rem}.classification-note{padding:13px 15px;border-radius:13px;background:#eef4ff;color:#3a4c73}.database-title-row{display:flex;justify-content:space-between;align-items:center;gap:16px}.database-title-row h2{margin:0}
+@media(max-width:900px){.subject-grid,.grade-grid{grid-template-columns:1fr}.portal-visual{display:none}.portal-hero{padding:38px 30px}.teacher-quickbar{align-items:stretch;flex-direction:column}.teacher-quickbar div{margin-right:0}}@media(max-width:560px){.portal-shell,.catalog-shell{padding:22px 13px 50px}.portal-hero{border-radius:24px;padding:30px 22px}.subject-tile{min-height:auto}.database-title-row{align-items:flex-start;flex-direction:column}}
+
+
+/* Import interaktivních lekcí */
+.import-shell { max-width: 1050px; }
+.import-card, .json-help {
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 24px;
+  padding: 28px;
+  margin: 22px 0;
+  box-shadow: 0 14px 40px rgba(15, 23, 42, .08);
+}
+.upload-box {
+  display: grid;
+  place-items: center;
+  gap: 8px;
+  min-height: 220px;
+  border: 2px dashed #94a3b8;
+  border-radius: 20px;
+  background: #f8fafc;
+  cursor: pointer;
+  text-align: center;
+  padding: 25px;
+}
+.upload-box:hover { border-color: #4f46e5; background: #eef2ff; }
+.upload-box input { margin-top: 12px; max-width: 100%; }
+.upload-icon { font-size: 42px; }
+.upload-box b { font-size: 1.25rem; }
+.upload-box small { color: #64748b; }
+.import-submit { display: block; margin: 18px auto 0; border: 0; cursor: pointer; }
+.json-help pre {
+  overflow-x: auto;
+  padding: 20px;
+  border-radius: 16px;
+  background: #111827;
+  color: #e5e7eb;
+  line-height: 1.55;
+}
+
+
+/* Učebnice 2.0 – přehledná učitelská administrace */
+.admin-choice-grid {
+  display:grid;
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  gap:18px;
+  margin:22px 0 30px;
+}
+.admin-choice {
+  display:flex;
+  flex-direction:column;
+  gap:12px;
+  padding:24px;
+  border-radius:22px;
+  text-decoration:none;
+  color:#162033;
+  border:1px solid #dfe7ef;
+  box-shadow:0 14px 34px rgba(15,23,42,.08);
+  transition:.18s ease;
+}
+.admin-choice:hover { transform:translateY(-3px); box-shadow:0 20px 42px rgba(15,23,42,.13); }
+.admin-choice > span { font-size:42px; }
+.admin-choice h2 { margin:0 0 6px; }
+.admin-choice p { margin:0; color:#586579; }
+.html-choice { background:linear-gradient(145deg,#effcf4,#ffffff); }
+.app-choice { background:linear-gradient(145deg,#eef2ff,#ffffff); }
+.import-action { background:#4f46e5!important; color:white!important; border-color:#4f46e5!important; }
+.section-heading { margin:28px 0 12px; }
+.lesson-row small { display:block; margin-top:5px; color:#677286; font-weight:500; }
+.empty-admin-state { text-align:center; padding:38px 20px; }
+.empty-admin-state > span { font-size:48px; }
+@media(max-width:760px){ .admin-choice-grid{grid-template-columns:1fr;} }

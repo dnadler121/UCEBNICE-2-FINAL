@@ -1,0 +1,21 @@
+<aside class="sidebar">
+  <div class="side-label">LEKCE</div>
+  {% set ns = namespace(last_block='') %}
+  {% for l in lessons %}
+    {% if l.block != ns.last_block %}
+      {% if not loop.first %}<div class="divider"></div>{% endif %}
+      <div class="block-title">{{ l.block }} <span>⌄</span></div>
+      {% set ns.last_block = l.block %}
+    {% endif %}
+    <a class="lesson-row {{ 'active' if lesson and l._id==lesson._id else '' }}" href="{{ url_for('lesson', lesson_id=l._id) }}"><span class="ok">✓</span>{{ l.title }}</a>
+  {% endfor %}
+  <div class="promo theme-picture">
+    {% set pic = lesson.hero_image if lesson and lesson.hero_image else lessons[0].hero_image if lessons and lessons[0].hero_image else None %}
+    {% if pic %}<img src="{{ url_for('uploads', filename=pic) }}" alt="Obrázek k tématu">{% else %}<div class="promo-icon">🌿</div>{% endif %}
+    <div><b>Obrázek k tématu</b><p>Načítá se z databáze.</p></div>
+  </div>
+  <div class="progressbox"><div class="between"><span>TVŮJ POSTUP</span><b>1 / {{ lessons|length }} lekcí</b></div><div class="mini"><i style="width:{{ (100 / (lessons|length if lessons|length else 1))|round }}%"></i></div><small>Podle dokončených lekcí</small></div>
+  <div class="gradebox"><span>POSLEDNÍ TEST</span>
+    {% if last_result %}<b>Známka {{ last_result.grade }}</b><small>{{ last_result.percent }} % · {{ last_result.lesson }}</small>{% else %}<b>Ještě nedokončeno</b><small>Známka se ukáže po testu.</small>{% endif %}
+  </div>
+</aside>

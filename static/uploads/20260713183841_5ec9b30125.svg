@@ -1,0 +1,12 @@
+
+<svg xmlns="http://www.w3.org/2000/svg" width="900" height="520" viewBox="0 0 900 520">
+  <rect width="900" height="520" fill="#fff8e6"/>
+  <rect x="130" y="120" width="640" height="300" rx="24" fill="#ffffff" stroke="#d2b56f" stroke-width="6"/>
+  <rect x="180" y="180" width="180" height="180" rx="18" fill="#eaf0f7"/>
+  <circle cx="270" cy="245" r="42" fill="#f0c29c"/>
+  <rect x="220" y="290" width="100" height="48" rx="12" fill="#4f7ccf"/>
+  <line x1="410" y1="205" x2="690" y2="205" stroke="#8d98a6" stroke-width="14"/>
+  <line x1="410" y1="255" x2="650" y2="255" stroke="#8d98a6" stroke-width="14"/>
+  <line x1="410" y1="305" x2="680" y2="305" stroke="#8d98a6" stroke-width="14"/>
+  <text x="450" y="80" text-anchor="middle" font-family="Arial" font-size="38" font-weight="700" fill="#4a3d1d">Občanství spojuje člověka se státem</text>
+</svg>

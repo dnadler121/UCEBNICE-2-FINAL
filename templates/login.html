@@ -1,0 +1,15 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="login-page">
+  <form class="login-card" method="post">
+    <div class="login-logo">🌱</div>
+    <h1>Přihlášení</h1>
+    <p>Po přihlášení se teprve zobrazí předměty, bloky a lekce. Učitel navíc uvidí editor.</p>
+    {% if error %}<div class="login-error">{{ error }}</div>{% endif %}
+    <label>Uživatelské jméno<input name="username" autocomplete="username" required></label>
+    <label>Heslo<input name="password" type="password" autocomplete="current-password" required></label>
+    <button>Vstoupit do aplikace</button>
+    <small>Učitelský účet se načítá z <b>.env</b>. Studenty vytváří učitel v editoru.</small>
+  </form>
+</div>
+{% endblock %}

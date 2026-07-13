@@ -1,0 +1,65 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="layout">
+  {% include 'sidebar.html' %}
+  <main class="main-card" data-lesson="{{ lesson._slug }}" data-step="{{ step }}" data-completed="{{ 1 if step in completed_steps else 0 }}">
+    <div class="title-row"><div><h1>{{ lesson.title }}</h1><p>Část {{ step+1 }} z {{ lesson.sections|length }} · Výklad a hledání v textu</p></div>
+      <div class="lesson-actions">
+        <a class="switch" href="{{ url_for('dashboard') }}">← Výběr lekcí</a>
+        {% if user and user.role == 'teacher' %}<a class="switch" href="{{ url_for('edit_lesson', lesson_id=lesson._id) }}">✏️ Upravit</a>{% endif %}
+        {% if ready_for_test %}
+        <a id="testSwitch" class="switch" href="{{ url_for('final_test', lesson_id=lesson._id) }}">⇄ Přepnout na test</a>
+        {% else %}
+        <a id="testSwitch" class="switch locked-test" href="{{ url_for('final_test', lesson_id=lesson._id) }}" aria-disabled="true">🔒 Test je zamčený</a>
+        {% endif %}
+      </div>
+    </div>
+    {% with messages = get_flashed_messages() %}{% if messages %}<div class="flash-msg">{{ messages[0] }}</div>{% endif %}{% endwith %}
+    <div class="bar"><i style="width:{{ ((step+1) / lesson.sections|length * 100)|round }}%"></i></div>
+    {% set sec = lesson.sections[step] %}
+    <section class="hero-grid lesson-docx-grid">
+      <div class="explain-card docx-content" id="vyklad"><h2>{{ sec.heading }}</h2>{{ sec.text|safe }}<div class="interest"><b>💡 Zajímavost</b><br>{{ sec.interest }}</div></div>
+    </section>
+
+    <nav class="tabs"><b>Otázky k výkladu</b><span>Najdi odpověď v textu vlevo/nahoře</span></nav>
+    <section class="study-grid questions-only">
+      <div class="question-grid vertical">
+      {% for q in sec.questions %}
+      <div class="q-card" data-q='{{ q|tojson }}'>
+        <span class="num">{{ loop.index }}</span><h3>{{ q.question }}</h3>
+        {% if q.type == 'image_choice' %}
+        <div class="img-options">
+          {% for im in q.images %}
+          <button data-answer="{{ loop.index0 }}"><img src="{{ url_for('uploads', filename=im) }}"><small>{{ q.labels[loop.index0] if q.labels is defined else '' }}</small></button>
+          {% endfor %}
+        </div>
+        {% elif q.type == 'choice' %}
+        <div class="choice-options">
+          {% for op in q.options %}<button data-answer="{{ loop.index0 }}">{{ op }}</button>{% endfor %}
+        </div>
+        {% else %}
+        {% if q.image %}<div class="question-image"><img src="{{ url_for('uploads', filename=q.image) }}"></div>{% endif %}
+        <input class="text-answer" placeholder="Napiš odpověď"><button class="check-text">Zkontrolovat</button>
+        {% endif %}
+        <div class="feedback"></div>
+        {% if q.hint %}<small class="hint">{{ q.hint }}</small>{% endif %}
+      </div>
+      {% endfor %}
+      </div>
+    </section>
+
+    <section class="activity-box">
+      <h2>Aktivita</h2>
+      <p>{{ sec.activity if sec.activity else lesson.activity if lesson.activity else 'Zde si můžeš do JSONu napsat vlastní aktivitu. Žák si potom sám odškrtne, že ji splnil.' }}</p>
+      <label class="done-check"><input id="activityDone" type="checkbox"> Aktivitu jsem splnil/a</label>
+    </section>
+
+    <div class="bottom-nav"><a class="back" href="{{ url_for('lesson', lesson_id=lesson._id, step=step-1) if step>0 else url_for('dashboard') }}">← Zpět</a>{% if step+1 < lesson.sections|length %}<a id="nextBtn" class="next locked-next" href="{{ url_for('lesson', lesson_id=lesson._id, step=step+1) }}">Další část →</a>{% else %}<a id="nextBtn" class="next locked-next" href="{{ url_for('final_test', lesson_id=lesson._id) }}">Spustit test →</a>{% endif %}<div id="lockMsg" class="lock-msg">Nejdřív odpověz správně na všechny otázky k výkladu a odškrtni aktivitu.</div></div>
+  </main>
+  <aside class="rightbar">
+    <div class="panel"><h2>Postup v lekci</h2><div class="step done">1 Výklad <b>✓</b></div><div class="step done">2 Otázky k výkladu <b>✓</b></div><div class="step">3 Aktivita <b></b></div><div class="step">4 Závěrečný test <b></b></div><div class="bar small"><i style="width:50%"></i></div><em>50%</em></div>
+    <div class="panel graphic">{% if lesson.hero_image %}<img class="panel-img" src="{{ url_for('uploads', filename=lesson.hero_image) }}">{% else %}<div class="big-plant">🌱</div>{% endif %}<h2>Učíme se hledáním</h2><p>Žák odpověď nehádá. Vrací se k textu, čte pozorně a hledá důkaz.</p></div>
+    <div class="panel tip"><h2>Tip pro tebe</h2><p>{{ lesson.tip }}</p><span>{{ course.icon }}</span></div>
+  </aside>
+</div>
+{% endblock %}

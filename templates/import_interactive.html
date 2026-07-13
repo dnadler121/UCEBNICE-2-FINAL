@@ -1,0 +1,43 @@
+{% extends 'base.html' %}
+{% block content %}
+<main class="catalog-shell import-shell">
+  <div class="catalog-head">
+    <a class="back-link" href="{{ url_for('portal') }}">← Zpět na hlavní stránku</a>
+    <div class="catalog-title">
+      <span>📦</span>
+      <div><p>MATEMATIKA A INFORMATIKA</p><h1>Importovat novou lekci</h1></div>
+    </div>
+    <p class="catalog-intro">
+      Nahraj ZIP balíček. Aplikace povinně přečte soubor <b>lesson.json</b>
+      a podle něj lekci automaticky zařadí.
+    </p>
+  </div>
+
+  <section class="import-card">
+    <form method="post" enctype="multipart/form-data">
+      <label class="upload-box">
+        <span class="upload-icon">⬆️</span>
+        <b>Vyber ZIP balíček lekce</b>
+        <small>Musí obsahovat lesson.json a templates/index.html</small>
+        <input type="file" name="package" accept=".zip,application/zip" required>
+      </label>
+      <button class="switch import-submit" type="submit">📦 Importovat a automaticky zařadit</button>
+    </form>
+  </section>
+
+  <section class="json-help">
+    <h2>Povinný soubor lesson.json</h2>
+    <pre>{
+  "subject": "matematika",
+  "school": "Střední škola",
+  "grade": "1. ročník",
+  "topic": "Početní operace",
+  "title": "Hierarchie početních operací",
+  "slug": "hierarchie-pocetnich-operaci",
+  "description": "Procvičení pořadí početních operací",
+  "icon": "➗"
+}</pre>
+    <p>Pro informatiku použij <code>"subject": "informatika"</code>.</p>
+  </section>
+</main>
+{% endblock %}

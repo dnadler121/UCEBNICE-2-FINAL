@@ -1,0 +1,162 @@
+{
+  "id": "bio6_01",
+  "subject": "Biologie",
+  "grade": "6. ročník",
+  "block": "Blok 1 – Život kolem nás",
+  "title": "1. Co je živé a neživé",
+  "subtitle": "Část 1 z 4 · Výklad",
+  "points": 1200,
+  "streak": "5 dní v řadě",
+  "teacher": "David Nádler",
+  "hero_image": "1.jpg",
+  "tip": "Přemýšlej, co mají všechny živé organismy společného. To je klíč k pochopení!",
+  "sections": [
+    {
+      "heading": "Co je živé?",
+      "text": "Živé organismy jsou všechno, co má život. Patří mezi ně lidé, zvířata, rostliny, houby i mikroskopické organismy. Všechno živé se rodí, roste, dýchá, přijímá potravu, reaguje na okolí, rozmnožuje se a jednou umírá.",
+      "interest": "V jedné lžičce půdy žijí miliony organismů!",
+      "image": "1.jpg",
+      "questions": [
+        {
+          "type": "image_choice",
+          "question": "Který z těchto objektů je živý?",
+          "images": [
+            "2.jpg",
+            "3.jpg",
+            "4.jpg",
+            "5.jpg"
+          ],
+          "labels": [
+            "Kámen",
+            "Pes",
+            "Sklo",
+            "Voda"
+          ],
+          "correct": "1"
+        },
+        {
+          "type": "text",
+          "question": "Které organismy byly zmíněny ve výkladu? Napiš alespoň jeden.",
+          "roots": [
+            "pes",
+            "strom",
+            "houb",
+            "rostlin",
+            "zvir",
+            "lide",
+            "organism"
+          ],
+          "hint": "Příklady: pes, strom, houba, rostlina"
+        },
+        {
+          "type": "text",
+          "question": "Proč není oheň živý organismus?",
+          "roots": [
+            "bun",
+            "nerost",
+            "nerozmno",
+            "potrav",
+            "organism"
+          ],
+          "hint": "Oheň nemá buňky a nerozmnožuje se jako organismus."
+        }
+      ],
+      "activity": "Najdi doma nebo venku 3 živé a 3 neživé věci. Zapiš je do sešitu a u jedné živé věci napiš, podle čeho poznáš, že je živá."
+    },
+    {
+      "heading": "Znaky života",
+      "text": "Živé organismy poznáme podle společných znaků. Jsou tvořeny buňkami, přijímají látky a energii, rostou, vyvíjejí se, reagují na změny prostředí a rozmnožují se. Některé znaky nemusíme vidět hned, ale u živých organismů existují.",
+      "interest": "Slunečnice se během dne otáčí za světlem.",
+      "image": "6.jpg",
+      "questions": [
+        {
+          "type": "choice",
+          "question": "Co je základní stavební jednotka života?",
+          "options": [
+            "kámen",
+            "buňka",
+            "sklo",
+            "voda"
+          ],
+          "correct": "1"
+        },
+        {
+          "type": "text",
+          "question": "Napiš jeden znak živého organismu.",
+          "roots": [
+            "rost",
+            "dych",
+            "rozmno",
+            "bun",
+            "reag",
+            "potrav",
+            "energie"
+          ],
+          "hint": "Například růst, dýchání, buňky, rozmnožování."
+        }
+      ],
+      "activity": "Najdi doma nebo venku 3 živé a 3 neživé věci. Zapiš je do sešitu a u jedné živé věci napiš, podle čeho poznáš, že je živá."
+    }
+  ],
+  "final_test": [
+    {
+      "type": "choice",
+      "question": "Mezi živé organismy patří:",
+      "options": [
+        "kámen",
+        "pes",
+        "sklo",
+        "voda"
+      ],
+      "correct": "1"
+    },
+    {
+      "type": "text",
+      "question": "Čím jsou tvořeny všechny živé organismy?",
+      "roots": [
+        "bun"
+      ]
+    },
+    {
+      "type": "image_choice",
+      "question": "Který obrázek ukazuje živý organismus?",
+      "images": [
+        "2.jpg",
+        "3.jpg",
+        "4.jpg",
+        "5.jpg"
+      ],
+      "labels": [
+        "Kámen",
+        "Pes",
+        "Sklo",
+        "Voda"
+      ],
+      "correct": "1"
+    },
+    {
+      "type": "choice",
+      "question": "Proč robot není živý?",
+      "options": [
+        "Je kovový a nemá buňky.",
+        "Má barvu.",
+        "Může se pohybovat.",
+        "Je drahý."
+      ],
+      "correct": "0"
+    },
+    {
+      "type": "text",
+      "question": "Napiš jeden společný znak organismů.",
+      "roots": [
+        "rost",
+        "dych",
+        "rozmno",
+        "reag",
+        "bun",
+        "potrav"
+      ]
+    }
+  ],
+  "activity": "Najdi doma nebo venku 3 živé a 3 neživé věci. Zapiš je do sešitu a u jedné živé věci napiš, podle čeho poznáš, že je živá."
+}

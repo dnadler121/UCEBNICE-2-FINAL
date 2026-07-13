@@ -1,0 +1,81 @@
+{% extends 'base.html' %}
+{% block content %}
+<main class="catalog-shell">
+  <div class="catalog-head">
+    <a class="back-link" href="{{ url_for('portal') }}">← Zpět na hlavní stránku</a>
+    <div class="catalog-title"><span>{{ icon }}</span><div><p>VÝBĚR LEKCE</p><h1>{{ title }}</h1></div></div>
+    <p class="catalog-intro">Vyber školu a ročník, potom téma a konkrétní lekci.</p>
+  </div>
+
+
+  {% if interactive_groups %}
+    <section class="catalog-subject">
+      <div class="catalog-subject-name"><span>{{ icon }}</span><h2>Interaktivní lekce</h2></div>
+      <div class="grade-grid">
+      {% for g in interactive_groups %}
+        <article class="grade-card">
+          <div class="grade-card-head">
+            <span>{{ g.school }}</span>
+            <h3>{{ g.grade }}</h3>
+          </div>
+          {% for topic, lessons_in_topic in g.topics.items() %}
+            <div class="topic-group">
+              <h4>{{ topic }}</h4>
+              <div class="topic-lessons">
+              {% for l in lessons_in_topic %}
+                <a href="{{ url_for('interactive_lesson', slug=l.slug) }}">
+                  {{ l.icon }} {{ l.title }} <span>→</span>
+                </a>
+              {% endfor %}
+              </div>
+            </div>
+          {% endfor %}
+        </article>
+      {% endfor %}
+      </div>
+    </section>
+  {% endif %}
+
+  {% if subjects %}
+    {% for s in subjects %}
+      <section class="catalog-subject">
+        <div class="catalog-subject-name"><span>{{ s.icon }}</span><h2>{{ s.name }}</h2></div>
+        <div class="grade-grid">
+        {% for g in s.grades|sort(attribute='name') %}
+          <article class="grade-card">
+            <div class="grade-card-head"><span>ROČNÍK / ŠKOLA</span><h3>{{ g.name }}</h3></div>
+            {% for b in g.blocks|sort(attribute='order') %}
+              {% set visible = b.lessons|selectattr('is_published')|list %}
+              {% if visible or user.role == 'teacher' %}
+              <div class="topic-group">
+                <h4>{{ b.title }}</h4>
+                <div class="topic-lessons">
+                {% for l in b.lessons|sort(attribute='order') %}
+                  {% if l.is_published or user.role == 'teacher' %}
+                    <a href="{{ url_for('lesson', lesson_id=l.id) }}">{{ l.title }}{% if not l.is_published %}<small>archivováno</small>{% endif %}<span>→</span></a>
+                  {% endif %}
+                {% endfor %}
+                </div>
+              </div>
+              {% endif %}
+            {% endfor %}
+          </article>
+        {% endfor %}
+        </div>
+      </section>
+    {% endfor %}
+  {% elif not interactive_groups %}
+    <section class="empty-catalog">
+      <div>{{ icon }}</div><h2>Zatím tu není žádná lekce</h2>
+      <p>Jakmile učitel vytvoří nebo později importuje první lekci, automaticky se zde zobrazí pod správným ročníkem a tématem.</p>
+      {% if user.role == 'teacher' %}
+      {% if kind in ['matematika', 'informatika'] %}
+        <a class="switch" href="{{ url_for('import_interactive_lesson') }}">📦 Importovat první lekci</a>
+      {% else %}
+        <a class="switch" href="{{ url_for('new_lesson') }}">➕ Vytvořit první lekci</a>
+      {% endif %}
+    {% endif %}
+    </section>
+  {% endif %}
+</main>
+{% endblock %}

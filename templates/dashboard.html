@@ -1,0 +1,78 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="layout dashboard-layout">
+  <main class="main-card">
+    <div class="title-row">
+      <div>
+        <h1>Moje lekce</h1>
+        <p>{% if user.role=='teacher' %}Vyber předmět, ročník, blok a lekci. Dokud nic nevytvoříš, nic se studentům neukazuje.{% else %}Vyber si lekci, pokračuj v práci a aplikace uloží tvůj postup.{% endif %}</p>
+      </div>
+      {% if user.role=='teacher' %}
+        <a class="switch" href="{{ url_for('new_lesson') }}">➕ Nová lekce</a>
+      {% endif %}
+    </div>
+
+    {% with messages = get_flashed_messages() %}
+      {% if messages %}
+        <div class="notice">
+          {% for message in messages %}<p>{{ message }}</p>{% endfor %}
+        </div>
+      {% endif %}
+    {% endwith %}
+
+    {% if subjects %}
+      {% for s in subjects %}
+      <section class="course-card">
+        <h2>{{ s.icon }} {{ s.name }}</h2>
+        {% for g in s.grades %}
+          <h3>{{ g.name }}</h3>
+          {% for b in g.blocks|sort(attribute='order') %}
+            <div class="block-title wide">{{ b.title }}</div>
+            <div class="lesson-list">
+              {% for l in b.lessons|sort(attribute='order') %}
+                {% if user.role == 'teacher' or l.is_published %}
+                  {% if user.role == 'teacher' %}
+                    <div class="teacher-lesson-row {% if not l.is_published %}archived{% endif %}">
+                      <a class="lesson-row big" href="{{ url_for('lesson', lesson_id=l.id) }}">
+                        {{ l.title }}
+                        {% if not l.is_published %}<span class="badge-muted">Archivováno</span>{% endif %}
+                      </a>
+                      <div class="row-actions">
+                        <a class="link-button" href="{{ url_for('edit_lesson', lesson_id=l.id) }}">✏️ Upravit</a>
+                        {% if l.is_published %}
+                          <form method="post" action="{{ url_for('archive_lesson', lesson_id=l.id) }}" onsubmit="return confirm('Archivovat lekci {{ l.title }}? Studentům se přestane zobrazovat, ale výsledky zůstanou uložené.');">
+                            <button class="link-button" type="submit">📦 Archivovat</button>
+                          </form>
+                        {% else %}
+                          <form method="post" action="{{ url_for('restore_lesson', lesson_id=l.id) }}">
+                            <button class="link-button" type="submit">↩️ Obnovit</button>
+                          </form>
+                        {% endif %}
+                        <form method="post" action="{{ url_for('delete_lesson', lesson_id=l.id) }}" onsubmit="return confirm('Opravdu TRVALE smazat lekci {{ l.title }}? Smažou se i navázané otázky a výsledky této lekce.');">
+                          <button class="link-button danger" type="submit">🗑️ Smazat</button>
+                        </form>
+                      </div>
+                    </div>
+                  {% else %}
+                    <a class="lesson-row big" href="{{ url_for('lesson', lesson_id=l.id) }}">{{ l.title }}</a>
+                  {% endif %}
+                {% endif %}
+              {% endfor %}
+            </div>
+          {% endfor %}
+        {% endfor %}
+      </section>
+      {% endfor %}
+    {% else %}
+      <p>Zatím nejsou vložené žádné předměty.</p>
+    {% endif %}
+  </main>
+  <aside class="rightbar">
+    <div class="panel graphic">
+      <div class="big-plant">🌱</div>
+      <h2>Krásný engine zůstává</h2>
+      <p>Design zůstává stejný, mění se jen data a editor.</p>
+    </div>
+  </aside>
+</div>
+{% endblock %}

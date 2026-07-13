@@ -1,0 +1,16 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="layout">
+{% include 'sidebar.html' %}
+<main class="main-card test-wide"><h1>Závěrečný test</h1><p>Test slouží jako práce s textem. Výklad je pořád vedle, aby žák hledal odpovědi.</p>
+  <section class="test-study-grid">
+    <aside class="test-explain"><h2>Výklad k testu</h2>{% for sec in lesson.sections %}<article><h3>{{ sec.heading }}</h3><div class="docx-content">{{ sec.text|safe }}</div></article>{% endfor %}</aside>
+    <form method="post" action="{{ url_for('finish', lesson_id=lesson._id) }}" class="final-form">
+{% for q in lesson.final_test %}<div class="q-card final final-one"><span class="num">{{ loop.index }}</span><h3>{{ q.question }}</h3>{% set qi=q.id %}
+{% if q.type=='choice' %}{% for op in q.options %}<label class="radio"><input type="radio" name="q{{qi}}" value="{{loop.index0}}" required> {{ op }}</label>{% endfor %}
+{% elif q.type=='image_choice' %}<div class="img-options form">{% for im in q.images %}<label><input type="radio" name="q{{qi}}" value="{{loop.index0}}" required><img src="{{ url_for('uploads', filename=im) }}"><small>{{ q.labels[loop.index0] }}</small></label>{% endfor %}</div>
+{% else %}{% if q.image %}<div class="question-image"><img src="{{ url_for('uploads', filename=q.image) }}"></div>{% endif %}<input name="q{{qi}}" class="text-answer" required placeholder="Napiš odpověď">{% endif %}</div>{% endfor %}<button class="testbtn submit">Odevzdat test</button></form>
+  </section>
+</main>
+<aside class="rightbar"><div class="panel graphic"><div class="big-plant">🔎</div><h2>Hledej v textu</h2><p>Správná odpověď má být dohledatelná ve výkladu.</p></div></aside>
+</div>{% endblock %}

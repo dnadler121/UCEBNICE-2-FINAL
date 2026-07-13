@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="cs">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{ lesson.title if lesson else course.subject }}</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand brand-link" href="{{ url_for('portal') if user else url_for('login') }}"><div class="leaf">{{ course.icon }}</div><div class="brand-title">{{ course.subject|upper }}</div>{% if course.grade %}<span class="pill">{{ course.grade }}</span>{% endif %}</a>
+  <div class="crumbs">{% if user and lesson %}{{ course.subject }} {{ course.grade }} <span>›</span> {{ lesson.block }} <span>›</span> <b>{{ lesson.title }}</b>{% elif user %}Vyber předmět, školu a ročník, téma a lekci{% else %}Přihlášení{% endif %}</div>
+  <div class="profile">
+    {% if user %}
+      <span class="avatar">👤</span><div><b>{{ user.name }}</b><small>{{ 'Učitel' if user.role == 'teacher' else 'Student' }}</small></div>
+      {% if user.role == 'teacher' %}<a class="toplink" href="{{ url_for('teacher_home') }}">✏️ Editor</a><a class="toplink" href="{{ url_for('teacher_students') }}">👨‍🎓 Studenti</a><a class="toplink" href="{{ url_for('teacher_database') }}">🗄️ Databáze</a>{% endif %}
+      <a class="toplink" href="{{ url_for('logout') }}">Odhlásit</a>
+    {% else %}
+      <span class="avatar">👤</span><div><b>Nepřihlášeno</b><small>Login</small></div>
+    {% endif %}
+  </div>
+</header>
+{% block content %}{% endblock %}
+<script src="{{ url_for('static', filename='js/app.js') }}"></script>
+</body>
+</html>

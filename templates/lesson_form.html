@@ -1,0 +1,102 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="layout dashboard-layout">
+<main class="main-card editor-form">
+  <div class="title-row">
+    <div>
+      <h1>{{ 'Upravit lekci' if lesson else 'Nová lekce' }}</h1>
+      <p>Design studentské části zůstává stejný. Tady připravíš obsah, obrázky a jedny otázky. Ty se použijí pod výkladem i v závěrečném testu.</p>
+    </div>
+    <a class="switch" href="{{ url_for('teacher_home') }}">← Zpět do editoru</a>
+  </div>
+
+  <form method="post" enctype="multipart/form-data" id="lessonEditorForm">
+    <input type="hidden" name="questions_json" id="questions_json">
+
+    <section class="course-card editor-section-card">
+      <h2>1. Základ lekce</h2>
+      <p class="classification-note"><b>Toto zařazení je povinné.</b> Podle něj aplikace sama vytvoří správný oddíl a lekci zobrazí na správném místě.</p>
+      <div class="form-grid">
+        <label>Předmět
+          <input name="subject" list="subjectSuggestions" required placeholder="Biologie / Občanská výchova / Matematika / Informatika" value="{{ lesson.block.grade.subject.name if lesson else '' }}">
+          <datalist id="subjectSuggestions"><option value="Biologie"><option value="Občanská výchova"><option value="Matematika"><option value="Informatika"></datalist>
+        </label>
+        <label>Ikona<input name="icon" value="{{ lesson.block.grade.subject.icon if lesson else '📚' }}"></label>
+        <label>Škola a ročník
+          <input name="grade" required placeholder="např. Montessori – 6. ročník nebo 1. ročník SŠ" value="{{ lesson.block.grade.name if lesson else '' }}">
+        </label>
+        <label>Téma
+          <input name="block" required placeholder="např. Občanství, Početní operace, Python" value="{{ lesson.block.title if lesson else '' }}">
+        </label>
+      </div>
+      <label>Název lekce<input name="title" required placeholder="např. Co znamená být občan" value="{{ lesson.title if lesson else '' }}"></label>
+      <label>Tip pro tebe<textarea name="tip">{{ lesson.tip if lesson else 'Čti výklad jako detektiv. Každá odpověď je někde v textu.' }}</textarea></label>
+    </section>
+
+    <section class="course-card editor-section-card">
+      <h2>2. Výklad</h2>
+      <div class="form-grid">
+        <label>Obrázek do levého panelu / k tématu
+          <input type="file" name="hero_image" accept="image/*" class="preview-input" data-preview="heroPreview">
+          <div id="heroPreview" class="image-preview">{% if lesson and lesson.hero_image %}<img src="{{ url_for('uploads', filename=lesson.hero_image) }}"><span>Aktuální obrázek</span>{% else %}<span>Náhled obrázku</span>{% endif %}</div>
+        </label>
+        <div class="docx-current-preview muted">
+          <b>Výklad vlož jako hotové HTML.</b><br>
+          Připrav výklad mimo aplikaci, převeď ho na HTML a sem vlož soubor <b>.html</b>. Obrázky ze složky k HTML přilož níže jako „Obrázky k HTML“.
+        </div>
+      </div>
+      <label>Nadpis výkladu<input name="heading" value="{{ section.heading if section else 'Jak poznáme živé organismy?' }}"></label>
+      <div class="form-grid">
+        <label>Import HTML výkladu
+          <input type="file" name="html_file" accept=".html,.htm,text/html">
+          <small>Vyber hlavní soubor .html nebo .htm.</small>
+        </label>
+        <label>Obrázky k HTML
+          <input type="file" name="html_assets" accept="image/*" multiple>
+          <small>Vyber obrázky, které vznikly při exportu HTML. Aplikace opraví cesty automaticky podle názvů souborů.</small>
+        </label>
+      </div>
+      <div class="docx-current-preview">
+        <b>Aktuálně uložený výklad / náhled:</b>
+        <div class="docx-content lesson-html-preview">{{ section.text|safe if section and section.text else '<p>Zatím není vložený žádný HTML výklad.</p>'|safe }}</div>
+      </div>
+      <input type="hidden" name="text" value="{{ section.text|e if section else '' }}">
+      <label>Zajímavost<textarea name="interest">{{ section.interest if section else 'Některé věci mohou vypadat jako živé, ale nejsou organismy.' }}</textarea></label>
+      <label>Aktivita<textarea name="activity">{{ section.activity if section else 'Rozhlédni se kolem sebe a napiš si 3 živé organismy a 3 neživé věci.' }}</textarea></label>
+    </section>
+
+    <section class="course-card editor-section-card question-factory" data-target="questions">
+      <div class="factory-head"><div><h2>3. Otázky</h2><p>Vytváříš jen jedny otázky. Student je nejdřív řeší pod výkladem a stejné otázky se potom náhodně zobrazí v testu vedle výkladu. Obrázky vkládáš přímo u otázky a hned vidíš náhled.</p></div><span class="factory-badge">jedny otázky</span></div>
+      <div class="tabs factory-tabs">
+        <button type="button" data-type="choice" class="sel">Výběr odpovědi</button>
+        <button type="button" data-type="image_choice">4 obrázky</button>
+        <button type="button" data-type="text">Krátká odpověď</button>
+      </div>
+      <div class="factory-add">
+        <label>Otázka<input class="factory-question" placeholder="Který příklad je živý organismus?"></label>
+        <div class="factory-dynamic"></div>
+        <button type="button" class="savebtn add-question">+ Přidat otázku</button>
+      </div>
+      <div id="questionFileBucket" class="hidden-file-bucket"></div>
+      <div class="question-list"></div>
+    </section>
+
+    <button class="testbtn submit">Uložit lekci</button>
+  </form>
+</main>
+<aside class="rightbar">
+  <div class="panel graphic"><div class="big-plant">🛠️</div><h2>Výrobna otázek</h2><p>Nejdřív vybereš typ otázky. U obrázků pracuješ s náhledy, takže si nemusíš pamatovat čísla.</p></div>
+</aside>
+</div>
+<script>
+window.initialQuestions = {
+  questions: {{ (questions_json or '[]')|safe }}
+};
+window.initialGallery = [
+  {% for img in gallery_images or [] %}{name: {{ img|tojson }}, url: {{ url_for('uploads', filename=img)|tojson }} }{{ ',' if not loop.last }}{% endfor %}
+];
+</script>
+<script src="{{ url_for('static', filename='js/editor_questions.js') }}"></script>
+
+
+{% endblock %}

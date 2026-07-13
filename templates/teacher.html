@@ -1,0 +1,99 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="layout dashboard-layout">
+  <main class="main-card">
+    <div class="title-row">
+      <div>
+        <h1>Učitelská administrace</h1>
+        <p>HTML lekce jsou pro biologii a občanskou výchovu. Matematika a informatika se přidávají jako ZIP aplikace s povinným souborem lesson.json.</p>
+      </div>
+      <div class="teacher-actions">
+        <a class="switch" href="{{ url_for('new_lesson') }}">📝 Nová HTML lekce</a>
+        <a class="switch import-action" href="{{ url_for('import_interactive_lesson') }}">📦 Import aplikace</a>
+        <a class="switch" href="{{ url_for('teacher_students') }}">👨‍🎓 Studenti</a>
+        <a class="switch" href="{{ url_for('teacher_database') }}">📊 Výsledky</a>
+      </div>
+    </div>
+
+    {% with messages = get_flashed_messages() %}
+      {% if messages %}
+        <div class="notice">{% for message in messages %}<p>{{ message }}</p>{% endfor %}</div>
+      {% endif %}
+    {% endwith %}
+
+    <section class="admin-choice-grid">
+      <a class="admin-choice html-choice" href="{{ url_for('new_lesson') }}">
+        <span>🧬</span>
+        <div><h2>Biologie a občanská výchova</h2><p>Vložit HTML výklad, obrázky, otázky a závěrečný test.</p></div>
+        <b>Vytvořit HTML lekci →</b>
+      </a>
+      <a class="admin-choice app-choice" href="{{ url_for('import_interactive_lesson') }}">
+        <span>📦</span>
+        <div><h2>Matematika a informatika</h2><p>Importovat hotovou podaplikaci. Zařazení se načte z lesson.json.</p></div>
+        <b>Importovat ZIP aplikaci →</b>
+      </a>
+    </section>
+
+    <h2 class="section-heading">HTML lekce</h2>
+    {% for s in subjects %}
+      <section class="course-card">
+        <h2>{{ s.icon }} {{ s.name }}</h2>
+        {% for g in s.grades %}
+          <h3>{{ g.name }}</h3>
+          {% for b in g.blocks|sort(attribute='order') %}
+            <div class="block-title wide">{{ b.title }}</div>
+            {% for l in b.lessons|sort(attribute='order') %}
+              <div class="teacher-lesson-row {% if not l.is_published %}archived{% endif %}">
+                <a class="lesson-row big" href="{{ url_for('lesson', lesson_id=l.id) }}">
+                  {{ l.title }}{% if not l.is_published %} <span class="badge-muted">archiv</span>{% endif %}
+                </a>
+                <div class="row-actions">
+                  <a class="toplink" href="{{ url_for('edit_lesson', lesson_id=l.id) }}">✏️ Upravit</a>
+                  {% if l.is_published %}
+                    <form method="post" action="{{ url_for('archive_lesson', lesson_id=l.id) }}">
+                      <button class="link-button" type="submit">📦 Archivovat</button>
+                    </form>
+                  {% else %}
+                    <form method="post" action="{{ url_for('restore_lesson', lesson_id=l.id) }}">
+                      <button class="link-button" type="submit">↩️ Obnovit</button>
+                    </form>
+                  {% endif %}
+                  <form method="post" action="{{ url_for('delete_lesson', lesson_id=l.id) }}" onsubmit="return confirm('Opravdu trvale smazat lekci?');">
+                    <button class="link-button danger" type="submit">🗑️ Smazat</button>
+                  </form>
+                </div>
+              </div>
+            {% endfor %}
+          {% endfor %}
+        {% endfor %}
+      </section>
+    {% endfor %}
+
+    <h2 class="section-heading">Interaktivní aplikace</h2>
+    <section class="course-card">
+      {% if interactive_lessons %}
+        {% for l in interactive_lessons %}
+          <div class="teacher-lesson-row">
+            <a class="lesson-row big" href="{{ url_for('interactive_lesson', slug=l.slug) }}">
+              {{ l.icon }} <b>{{ l.title }}</b>
+              <small>{{ l.subject|capitalize }} · {{ l.school }} · {{ l.grade_name }} · {{ l.topic }}</small>
+            </a>
+            <div class="row-actions">
+              <form method="post" action="{{ url_for('delete_interactive_lesson', lesson_id=l.id) }}" onsubmit="return confirm('Smazat interaktivní lekci {{ l.title }} včetně jejích výsledků?');">
+                <button class="link-button danger" type="submit">🗑️ Smazat</button>
+              </form>
+            </div>
+          </div>
+        {% endfor %}
+      {% else %}
+        <div class="empty-admin-state">
+          <span>📦</span>
+          <h3>Zatím není importovaná žádná aplikace</h3>
+          <p>První matematickou nebo informatickou lekci nahraješ tlačítkem níže.</p>
+          <a class="switch import-action" href="{{ url_for('import_interactive_lesson') }}">Importovat první aplikaci</a>
+        </div>
+      {% endif %}
+    </section>
+  </main>
+</div>
+{% endblock %}

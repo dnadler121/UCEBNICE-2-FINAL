@@ -1,0 +1,12 @@
+{% extends 'base.html' %}
+{% block content %}
+<main class="finish-card">
+  <div class="medal">{{ grade }}</div>
+  <h1>Test dokončen</h1>
+  <p>Výsledek posledního dokončeného testu: <b>{{ score }} / {{ total }}</b> · {{ percent }} %</p>
+  <h2>Známka {{ grade }}</h2>
+  <p>100–95 % = 1, potom vždy po 5 % o známku hůře.</p>
+  <a class="primary" href="{{ url_for('lesson', lesson_id=lesson._id) }}">Zpět do lekce</a>
+  <a class="secondary" href="{{ url_for('dashboard') }}">Moje lekce</a>
+</main>
+{% endblock %}
