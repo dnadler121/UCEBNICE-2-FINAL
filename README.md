@@ -11,18 +11,6 @@ python app.py
 
 Otevři: http://127.0.0.1:5000
 
-## Účty
-
-Učitel je načten z `.env`:
-
-- uživatel: `dnadler`
-- heslo: `stepanekKK11111`
-
-Ukázkový student:
-
-- uživatel: `jan.novak`
-- heslo: `zive123`
-
 ## Co je nového
 
 - Zachovaný původní studentský design.
