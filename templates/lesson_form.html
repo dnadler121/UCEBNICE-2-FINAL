@@ -42,7 +42,7 @@
         </label>
         <div class="docx-current-preview muted">
           <b>Výklad vlož jako hotové HTML.</b><br>
-          Připrav výklad mimo aplikaci, převeď ho na HTML a sem vlož soubor <b>.html</b>. Obrázky ze složky k HTML přilož níže jako „Obrázky k HTML“.
+          Připrav výklad mimo aplikaci, převeď ho na HTML a sem vlož hlavní soubor <b>.html</b>.
         </div>
       </div>
       <label>Nadpis výkladu<input name="heading" value="{{ section.heading if section else 'Jak poznáme živé organismy?' }}"></label>
@@ -51,9 +51,10 @@
           <input type="file" name="html_file" accept=".html,.htm,text/html">
           <small>Vyber hlavní soubor .html nebo .htm.</small>
         </label>
-        <label>Obrázky k HTML
-          <input type="file" name="html_assets" accept="image/*" multiple>
-          <small>Vyber obrázky, které vznikly při exportu HTML. Aplikace opraví cesty automaticky podle názvů souborů.</small>
+        <label>Vložit otázky ze souboru JSON
+          <input type="file" id="questionsJsonFile" accept=".json,application/json">
+          <small>Otázky z JSON se přidají k otázkám vytvořeným ručně. Aplikace sama rozpozná krátkou odpověď s kořeny i výběr ze 4 možností.</small>
+          <span id="questionsJsonStatus" class="helpText"></span>
         </label>
       </div>
       <div class="docx-current-preview">

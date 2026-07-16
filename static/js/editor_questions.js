@@ -12,6 +12,81 @@
   function sync(){ const el=document.getElementById('questions_json'); if(el) el.value = JSON.stringify(state.questions.map(q=>{ const x={...q}; delete x.preview; delete x.previews; return x; })); }
   function newField(){ fileCounter += 1; return `qimg_${Date.now()}_${fileCounter}`; }
 
+  function firstValue(obj, names){
+    for(const name of names){
+      if(obj && obj[name] !== undefined && obj[name] !== null) return obj[name];
+    }
+    return undefined;
+  }
+
+  function normalizeRoots(value){
+    if(Array.isArray(value)) return value.map(x=>String(x).trim()).filter(Boolean);
+    if(typeof value === 'string') return value.split(/[,;|]/).map(x=>x.trim()).filter(Boolean);
+    return [];
+  }
+
+  function normalizeImportedQuestion(item){
+    if(!item || typeof item !== 'object') throw new Error('Položka otázky není objekt.');
+    const question=String(firstValue(item,['question','otazka','prompt','text']) || '').trim();
+    if(!question) throw new Error('U otázky chybí text otázky.');
+
+    const rawType=String(firstValue(item,['type','typ','qtype']) || '').trim().toLowerCase();
+    const roots=normalizeRoots(firstValue(item,['roots','koreny','root','koren','answer_roots','correct_roots']));
+    const answer=firstValue(item,['answer','odpoved','correct_answer','spravna_odpoved']);
+    if(!roots.length && answer !== undefined && !Array.isArray(answer)) roots.push(String(answer).trim());
+
+    const optionsRaw=firstValue(item,['options','moznosti','answers','odpovedi']);
+    const options=Array.isArray(optionsRaw) ? optionsRaw.map(x=>String(x).trim()).filter(Boolean) : [];
+    const isText=['text','short','short_answer','kratka_odpoved','jedna_odpoved'].includes(rawType) || (roots.length && !options.length);
+    const isChoice=['choice','multiple_choice','vyber','4_moznosti','four_options'].includes(rawType) || options.length;
+
+    if(isText){
+      if(!roots.length) throw new Error(`Otázka „${question}“ nemá kořen odpovědi.`);
+      return {type:'text', question, roots, image:''};
+    }
+    if(isChoice){
+      if(options.length < 2) throw new Error(`Otázka „${question}“ musí mít alespoň 2 možnosti.`);
+      let correctRaw=firstValue(item,['correct','spravna','correct_index','spravna_moznost','correct_answer']);
+      let correct=0;
+      if(typeof correctRaw === 'string' && !/^\d+$/.test(correctRaw.trim())){
+        const found=options.findIndex(x=>x.toLowerCase()===correctRaw.trim().toLowerCase());
+        if(found >= 0) correct=found;
+      }else if(correctRaw !== undefined){
+        const n=Number(correctRaw);
+        if(Number.isFinite(n)) correct=(n >= 1 && n <= options.length) ? n-1 : n;
+      }
+      correct=Math.max(0,Math.min(options.length-1,Math.trunc(correct || 0)));
+      return {type:'choice', question, options, correct};
+    }
+    throw new Error(`U otázky „${question}“ nelze určit typ.`);
+  }
+
+  function setupJsonImport(){
+    const input=document.getElementById('questionsJsonFile');
+    const status=document.getElementById('questionsJsonStatus');
+    const box=document.querySelector('.question-factory[data-target="questions"]');
+    if(!input || !box) return;
+    input.addEventListener('change', async()=>{
+      status.textContent='';
+      const file=input.files && input.files[0];
+      if(!file) return;
+      try{
+        const parsed=JSON.parse(await file.text());
+        const source=Array.isArray(parsed) ? parsed : firstValue(parsed,['questions','otazky','items']);
+        if(!Array.isArray(source)) throw new Error('JSON musí obsahovat pole otázek nebo objekt s položkou „questions“ / „otazky“.');
+        const imported=source.map(normalizeImportedQuestion);
+        state.questions.push(...imported);
+        renderList(box);
+        sync();
+        status.textContent=`Načteno ${imported.length} otázek. Ručně vytvořené otázky zůstaly zachované.`;
+        input.value='';
+      }catch(err){
+        status.textContent=`Chyba JSON: ${err.message || err}`;
+        input.value='';
+      }
+    });
+  }
+
   function previewFile(input, target){
     const box = typeof target === 'string' ? document.getElementById(target) : target;
     if(!box) return;
@@ -136,5 +211,6 @@
     box.querySelector('.add-question').addEventListener('click',()=>addQuestion(box));
   });
   setupGeneralPreviews();
+  setupJsonImport();
   const form=document.getElementById('lessonEditorForm'); if(form){ form.addEventListener('submit',()=>sync()); }
 })();
