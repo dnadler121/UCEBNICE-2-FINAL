@@ -155,3 +155,44 @@ setupOneByOne('.question-grid.vertical', '.q-card[data-q]');
   form.addEventListener('submit', e=>{ if(!answered(cards[index])){ e.preventDefault(); alert('Nejdřív odpověz na poslední otázku.'); } });
   show();
 })();
+
+// Průběžné ukládání HTML lekcí (biologie a občanka)
+(function setupHtmlProgressSaving(){
+  if(!mainCard) return;
+  let saveTimer = null;
+  function payload(status='rozpracováno'){
+    return {
+      lesson_id: Number(mainCard.dataset.lesson),
+      step: Number(mainCard.dataset.step),
+      questions: correctQuestions.size,
+      activity: !!document.querySelector('#activityDone')?.checked,
+      status
+    };
+  }
+  function save(status='rozpracováno', useBeacon=false){
+    const body = JSON.stringify(payload(status));
+    if(useBeacon && navigator.sendBeacon){
+      navigator.sendBeacon('/api/html-progress', new Blob([body], {type:'application/json'}));
+      return Promise.resolve();
+    }
+    return fetch('/api/html-progress', {method:'POST', headers:{'Content-Type':'application/json'}, body, keepalive:true}).catch(()=>{});
+  }
+  function scheduleSave(){
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(()=>save(), 150);
+  }
+  document.querySelectorAll('.q-card[data-q]').forEach(card=>{
+    card.addEventListener('click', ()=>setTimeout(scheduleSave, 30));
+  });
+  document.querySelector('#activityDone')?.addEventListener('change', scheduleSave);
+  const exitBtn = document.querySelector('#saveExitBtn');
+  if(exitBtn){
+    exitBtn.addEventListener('click', async e=>{
+      e.preventDefault();
+      await save('přerušeno a uloženo');
+      window.location.href = exitBtn.href;
+    });
+  }
+  window.addEventListener('pagehide', ()=>save('rozpracováno', true));
+  scheduleSave();
+})();

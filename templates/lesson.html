@@ -5,7 +5,7 @@
   <main class="main-card" data-lesson="{{ lesson._slug }}" data-step="{{ step }}" data-completed="{{ 1 if step in completed_steps else 0 }}">
     <div class="title-row"><div><h1>{{ lesson.title }}</h1><p>Část {{ step+1 }} z {{ lesson.sections|length }} · Výklad a hledání v textu</p></div>
       <div class="lesson-actions">
-        <a class="switch" href="{{ url_for('dashboard') }}">← Výběr lekcí</a>
+        <a id="saveExitBtn" class="switch" href="{{ url_for('dashboard') }}">💾 Ukončit a uložit</a>
         {% if user and user.role == 'teacher' %}<a class="switch" href="{{ url_for('edit_lesson', lesson_id=lesson._id) }}">✏️ Upravit</a>{% endif %}
         {% if ready_for_test %}
         <a id="testSwitch" class="switch" href="{{ url_for('final_test', lesson_id=lesson._id) }}">⇄ Přepnout na test</a>

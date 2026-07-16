@@ -427,6 +427,13 @@ def get_focus_session(kind, key, create=False):
     return row
 
 
+def get_focus_count(kind, key):
+    user = current_user()
+    if not user:
+        return 0
+    row = LessonFocusSession.query.filter_by(user_id=user.id, lesson_kind=str(kind), lesson_key=str(key)).first()
+    return int(row.count or 0) if row else 0
+
 def consume_focus_count(kind, key):
     row = get_focus_session(kind, key, create=False)
     count = int(row.count) if row else 0
@@ -820,6 +827,11 @@ def finish(lesson_id):
         detail.append(ok)
     percent = round(score/max(total,1)*100); grade = grade_from_percent(percent)
     focus_lost = consume_focus_count('html', lesson.id)
+    Result.query.filter_by(user_id=current_user().id, lesson_id=lesson.id).filter(Result.status != 'dokončeno').delete(synchronize_session=False)
+    partial = session.get('html_partial_progress', {})
+    partial.pop(str(lesson.id), None)
+    session['html_partial_progress'] = partial
+    session.modified = True
     db.session.add(Result(user_id=current_user().id, lesson_id=lesson.id, percent=percent, grade=grade, score=score, total=total, focus_lost=focus_lost, status='dokončeno')); db.session.commit()
     touch_progress(lesson.id, 1000, 'dokončeno')
     return render_template('finish.html', lesson=data, course=course_from_lesson(lesson), score=score, total=total, percent=percent, grade=grade, detail=detail)
@@ -834,6 +846,66 @@ def check_question(q, ans):
 def api_check():
     d = request.get_json(force=True)
     return jsonify({'ok': check_question(d.get('question',{}), d.get('answer',''))})
+
+def save_html_partial_result(lesson, status='rozpracováno'):
+    user = current_user()
+    if not user or user.role != 'student':
+        return None
+    data = lesson_to_dict(lesson)
+    progress_map = session.get('html_partial_progress', {})
+    lesson_map = progress_map.get(str(lesson.id), {})
+    total = 0
+    score = 0
+    for idx, section in enumerate(data.get('sections', [])):
+        units = len(section.get('questions', [])) + 1  # + aktivita
+        total += units
+        saved = lesson_map.get(str(idx), {})
+        score += min(units, int(saved.get('questions', 0)) + (1 if saved.get('activity') else 0))
+    total += len(data.get('final_test', []))
+    percent = round(score / max(total, 1) * 100)
+    row = Result.query.filter_by(user_id=user.id, lesson_id=lesson.id).filter(Result.status != 'dokončeno').order_by(Result.created_at.desc()).first()
+    if not row:
+        row = Result(user_id=user.id, lesson_id=lesson.id, created_at=datetime.utcnow())
+        db.session.add(row)
+    row.percent = percent
+    row.grade = grade_from_percent(percent)
+    row.score = score
+    row.total = total
+    row.focus_lost = get_focus_count('html', lesson.id)
+    row.status = status
+    row.created_at = datetime.utcnow()
+    db.session.commit()
+    touch_progress(lesson.id, 0, status)
+    return row
+
+@app.route('/api/html-progress', methods=['POST'])
+def api_html_progress():
+    r = require_login()
+    if r:
+        return jsonify({'ok': False, 'error': 'login'}), 401
+    d = request.get_json(silent=True) or {}
+    lesson_id = int(d.get('lesson_id', 0))
+    step = int(d.get('step', 0))
+    lesson = db.session.get(Lesson, lesson_id)
+    if not lesson:
+        return jsonify({'ok': False, 'error': 'lesson'}), 404
+    data = lesson_to_dict(lesson)
+    if step < 0 or step >= len(data.get('sections', [])):
+        return jsonify({'ok': False, 'error': 'step'}), 400
+    q_total = len(data['sections'][step].get('questions', []))
+    q_done = max(0, min(q_total, int(d.get('questions', 0))))
+    activity = bool(d.get('activity', False))
+    progress_map = session.get('html_partial_progress', {})
+    lesson_map = progress_map.setdefault(str(lesson_id), {})
+    old = lesson_map.get(str(step), {})
+    lesson_map[str(step)] = {
+        'questions': max(int(old.get('questions', 0)), q_done),
+        'activity': bool(old.get('activity')) or activity,
+    }
+    session['html_partial_progress'] = progress_map
+    session.modified = True
+    row = save_html_partial_result(lesson, str(d.get('status') or 'rozpracováno'))
+    return jsonify({'ok': True, 'percent': row.percent if row else 0})
 
 @app.route('/api/section-complete', methods=['POST'])
 def api_section_complete():
