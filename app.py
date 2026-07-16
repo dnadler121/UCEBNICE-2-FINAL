@@ -861,7 +861,10 @@ def save_html_partial_result(lesson, status='rozpracováno'):
         total += units
         saved = lesson_map.get(str(idx), {})
         score += min(units, int(saved.get('questions', 0)) + (1 if saved.get('activity') else 0))
-    total += len(data.get('final_test', []))
+    final_total = len(data.get('final_test', []))
+    total += final_total
+    final_saved = lesson_map.get('_final_test', {})
+    score += min(final_total, int(final_saved.get('answered', 0)))
     percent = round(score / max(total, 1) * 100)
     row = Result.query.filter_by(user_id=user.id, lesson_id=lesson.id).filter(Result.status != 'dokončeno').order_by(Result.created_at.desc()).first()
     if not row:
@@ -905,6 +908,30 @@ def api_html_progress():
     session['html_partial_progress'] = progress_map
     session.modified = True
     row = save_html_partial_result(lesson, str(d.get('status') or 'rozpracováno'))
+    return jsonify({'ok': True, 'percent': row.percent if row else 0})
+
+@app.route('/api/html-test-progress', methods=['POST'])
+def api_html_test_progress():
+    r = require_login()
+    if r:
+        return jsonify({'ok': False, 'error': 'login'}), 401
+    d = request.get_json(silent=True) or {}
+    lesson_id = int(d.get('lesson_id', 0))
+    lesson = db.session.get(Lesson, lesson_id)
+    if not lesson:
+        return jsonify({'ok': False, 'error': 'lesson'}), 404
+    data = lesson_to_dict(lesson)
+    total = len(data.get('final_test', []))
+    answered = max(0, min(total, int(d.get('answered', 0))))
+    progress_map = session.get('html_partial_progress', {})
+    lesson_map = progress_map.setdefault(str(lesson_id), {})
+    old = lesson_map.get('_final_test', {})
+    lesson_map['_final_test'] = {
+        'answered': max(int(old.get('answered', 0)), answered)
+    }
+    session['html_partial_progress'] = progress_map
+    session.modified = True
+    row = save_html_partial_result(lesson, str(d.get('status') or 'závěrečný test – rozpracováno'))
     return jsonify({'ok': True, 'percent': row.percent if row else 0})
 
 @app.route('/api/section-complete', methods=['POST'])

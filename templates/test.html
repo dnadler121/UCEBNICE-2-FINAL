@@ -2,7 +2,13 @@
 {% block content %}
 <div class="layout">
 {% include 'sidebar.html' %}
-<main class="main-card test-wide"><h1>Závěrečný test</h1><p>Test slouží jako práce s textem. Výklad je pořád vedle, aby žák hledal odpovědi.</p>
+<main class="main-card test-wide" id="finalTestCard" data-lesson-id="{{ lesson._id }}">
+  <div class="title-row">
+    <div><h1>Závěrečný test</h1><p>Test slouží jako práce s textem. Výklad je pořád vedle, aby žák hledal odpovědi.</p></div>
+    <div class="lesson-actions">
+      <a id="testSaveExitBtn" class="switch" href="{{ url_for('dashboard') }}">💾 Ukončit a uložit</a>
+    </div>
+  </div>
   <section class="test-study-grid">
     <aside class="test-explain"><h2>Výklad k testu</h2>{% for sec in lesson.sections %}<article><h3>{{ sec.heading }}</h3><div class="docx-content">{{ sec.text|safe }}</div></article>{% endfor %}</aside>
     <form method="post" action="{{ url_for('finish', lesson_id=lesson._id) }}" class="final-form">

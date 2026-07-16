@@ -196,3 +196,84 @@ setupOneByOne('.question-grid.vertical', '.q-card[data-q]');
   window.addEventListener('pagehide', ()=>save('rozpracováno', true));
   scheduleSave();
 })();
+
+
+// Průběžné ukládání závěrečného testu (Biologie a Občanka)
+(function setupFinalTestSaving(){
+  const testCard = document.querySelector('#finalTestCard[data-lesson-id]');
+  const form = document.querySelector('.final-form');
+  if(!testCard || !form) return;
+
+  const lessonId = Number(testCard.dataset.lessonId);
+  const storageKey = `ucebnice_html_test_${lessonId}`;
+  let saveTimer = null;
+
+  function formAnswers(){
+    const answers = {};
+    form.querySelectorAll('input[name^="q"]').forEach(input=>{
+      if(input.type === 'radio'){
+        if(input.checked) answers[input.name] = input.value;
+      } else if(input.value.trim()){
+        answers[input.name] = input.value;
+      }
+    });
+    return answers;
+  }
+
+  function answeredCount(){
+    return Object.keys(formAnswers()).length;
+  }
+
+  function restoreAnswers(){
+    try{
+      const saved = JSON.parse(localStorage.getItem(storageKey) || '{}');
+      Object.entries(saved).forEach(([name, value])=>{
+        const controls = form.querySelectorAll(`[name="${CSS.escape(name)}"]`);
+        controls.forEach(input=>{
+          if(input.type === 'radio') input.checked = String(input.value) === String(value);
+          else input.value = value;
+        });
+      });
+    }catch(_e){}
+  }
+
+  function saveLocal(){
+    try{ localStorage.setItem(storageKey, JSON.stringify(formAnswers())); }catch(_e){}
+  }
+
+  function save(status='závěrečný test – rozpracováno', useBeacon=false){
+    saveLocal();
+    const body = JSON.stringify({lesson_id: lessonId, answered: answeredCount(), status});
+    if(useBeacon && navigator.sendBeacon){
+      navigator.sendBeacon('/api/html-test-progress', new Blob([body], {type:'application/json'}));
+      return Promise.resolve();
+    }
+    return fetch('/api/html-test-progress', {
+      method:'POST', headers:{'Content-Type':'application/json'}, body, keepalive:true
+    }).catch(()=>{});
+  }
+
+  function scheduleSave(){
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(()=>save(), 150);
+  }
+
+  restoreAnswers();
+  form.addEventListener('change', scheduleSave);
+  form.addEventListener('input', scheduleSave);
+
+  const exitBtn = document.querySelector('#testSaveExitBtn');
+  if(exitBtn){
+    exitBtn.addEventListener('click', async e=>{
+      e.preventDefault();
+      await save('přerušeno a uloženo');
+      window.location.href = exitBtn.href;
+    });
+  }
+
+  form.addEventListener('submit', ()=>{
+    try{ localStorage.removeItem(storageKey); }catch(_e){}
+  });
+  window.addEventListener('pagehide', ()=>save('závěrečný test – rozpracováno', true));
+  scheduleSave();
+})();
