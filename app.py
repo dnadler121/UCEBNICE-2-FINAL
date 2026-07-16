@@ -3,6 +3,7 @@ from pathlib import Path
 from datetime import datetime
 from flask import Flask, render_template, render_template_string, request, jsonify, session, redirect, url_for, send_from_directory, flash
 from flask_sqlalchemy import SQLAlchemy
+from sqlalchemy import inspect, text
 from werkzeug.security import generate_password_hash, check_password_hash
 from werkzeug.utils import secure_filename
 from dotenv import load_dotenv
@@ -101,6 +102,8 @@ class Result(db.Model):
     score = db.Column(db.Integer, default=0)
     total = db.Column(db.Integer, default=0)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    focus_lost = db.Column(db.Integer, default=0)
+    status = db.Column(db.String(60), default='dokončeno')
     user = db.relationship('User')
     lesson = db.relationship('Lesson')
 
@@ -127,6 +130,8 @@ class InteractiveResult(db.Model):
     percent = db.Column(db.Integer, default=100)
     grade = db.Column(db.Integer, default=1)
     completed_at = db.Column(db.DateTime, default=datetime.utcnow)
+    focus_lost = db.Column(db.Integer, default=0)
+    status = db.Column(db.String(60), default='dokončeno')
     user = db.relationship('User')
     interactive_lesson = db.relationship('InteractiveLesson')
 
@@ -141,6 +146,16 @@ class InteractiveProgress(db.Model):
     updated_at = db.Column(db.DateTime, default=datetime.utcnow)
     user = db.relationship('User')
     interactive_lesson = db.relationship('InteractiveLesson')
+
+
+class LessonFocusSession(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    lesson_kind = db.Column(db.String(20), nullable=False)  # html / interactive
+    lesson_key = db.Column(db.String(160), nullable=False)
+    count = db.Column(db.Integer, default=0)
+    terminated = db.Column(db.Boolean, default=False)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow)
 
 
 class StudentProgress(db.Model):
@@ -366,7 +381,7 @@ def load_interactive_module(lesson):
     return module
 
 
-def upsert_interactive_progress(lesson, percent=100, grade=None):
+def upsert_interactive_progress(lesson, percent=100, grade=None, focus_lost=0):
     user = current_user()
     if not user or user.role != 'student':
         return
@@ -390,9 +405,93 @@ def upsert_interactive_progress(lesson, percent=100, grade=None):
         user_id=user.id,
         interactive_lesson_id=lesson.id,
         percent=int(percent),
-        grade=int(grade)
+        grade=int(grade),
+        focus_lost=int(focus_lost or 0),
+        status='dokončeno'
     ))
     db.session.commit()
+
+def get_focus_session(kind, key, create=False):
+    user = current_user()
+    if not user or user.role != 'student':
+        return None
+    row = LessonFocusSession.query.filter_by(
+        user_id=user.id, lesson_kind=str(kind), lesson_key=str(key)
+    ).first()
+    if not row and create:
+        row = LessonFocusSession(
+            user_id=user.id, lesson_kind=str(kind), lesson_key=str(key), count=0
+        )
+        db.session.add(row)
+        db.session.flush()
+    return row
+
+
+def consume_focus_count(kind, key):
+    row = get_focus_session(kind, key, create=False)
+    count = int(row.count) if row else 0
+    if row:
+        db.session.delete(row)
+    return count
+
+
+@app.route('/api/focus-lost', methods=['POST'])
+def api_focus_lost():
+    r = require_login()
+    if r:
+        return jsonify({'ok': False, 'error': 'login'}), 401
+    user = current_user()
+    if user.role != 'student':
+        return jsonify({'ok': True, 'ignored': True})
+
+    data = request.get_json(silent=True) or {}
+    kind = str(data.get('kind', '')).strip()
+    key = str(data.get('key', '')).strip()
+    if kind not in ('html', 'interactive') or not key:
+        return jsonify({'ok': False, 'error': 'Neplatná lekce.'}), 400
+
+    row = get_focus_session(kind, key, create=True)
+    if row.terminated:
+        return jsonify({'ok': True, 'count': row.count, 'terminated': True,
+                        'redirect': url_for('focus_terminated')})
+
+    row.count = min(3, int(row.count or 0) + 1)
+    row.updated_at = datetime.utcnow()
+    row.terminated = row.count >= 3
+
+    if row.terminated:
+        if kind == 'html':
+            lesson_item = db.session.get(Lesson, int(key)) if key.isdigit() else None
+            if lesson_item:
+                db.session.add(Result(
+                    user_id=user.id, lesson_id=lesson_item.id,
+                    percent=0, grade=5, score=0, total=0,
+                    focus_lost=3, status='ukončeno po 3 opuštěních'
+                ))
+                touch_progress(lesson_item.id, 0, 'ukončeno po 3 opuštěních')
+        else:
+            lesson_item = InteractiveLesson.query.filter_by(slug=key).first()
+            if lesson_item:
+                db.session.add(InteractiveResult(
+                    user_id=user.id, interactive_lesson_id=lesson_item.id,
+                    percent=0, grade=5, focus_lost=3,
+                    status='ukončeno po 3 opuštěních'
+                ))
+        db.session.commit()
+        return jsonify({'ok': True, 'count': 3, 'terminated': True,
+                        'redirect': url_for('focus_terminated')})
+
+    db.session.commit()
+    return jsonify({'ok': True, 'count': row.count, 'terminated': False})
+
+
+@app.route('/lesson-ukoncena')
+def focus_terminated():
+    r = require_login()
+    if r:
+        return r
+    return render_template('terminated.html', course=course_from_lesson(None), lesson=None)
+
 
 @app.route('/login', methods=['GET','POST'])
 def login():
@@ -566,8 +665,21 @@ def interactive_lesson(slug):
     if not template_file.exists():
         return 'Balíček lekce neobsahuje templates/index.html.', 500
 
+    html_source = template_file.read_text(encoding='utf-8')
+    if current_user().role == 'student':
+        guard = render_template_string(
+            '<script>window.UCEBNICE_FOCUS_GUARD={{ cfg|tojson }};</script>'
+            "<script src=\"{{ url_for('static', filename='js/focus_guard.js') }}\"></script>",
+            cfg={'kind': 'interactive', 'key': slug}
+        )
+        if '</body>' in html_source.lower():
+            pos = html_source.lower().rfind('</body>')
+            html_source = html_source[:pos] + guard + html_source[pos:]
+        else:
+            html_source += guard
+
     return render_template_string(
-        template_file.read_text(encoding='utf-8'),
+        html_source,
         package=lesson_item,
         lesson=lesson_item,
         user=current_user(),
@@ -632,7 +744,8 @@ def complete_interactive(slug):
     except (TypeError, ValueError):
         return jsonify({'ok': False, 'error': 'Neplatný výsledek.'}), 400
 
-    upsert_interactive_progress(lesson_item, percent=percent, grade=grade)
+    focus_lost = consume_focus_count('interactive', slug)
+    upsert_interactive_progress(lesson_item, percent=percent, grade=grade, focus_lost=focus_lost)
     return jsonify({
         'ok': True,
         'message': 'Dokončení lekce bylo uloženo.',
@@ -706,7 +819,8 @@ def finish(lesson_id):
         if ok: score += 1
         detail.append(ok)
     percent = round(score/max(total,1)*100); grade = grade_from_percent(percent)
-    db.session.add(Result(user_id=current_user().id, lesson_id=lesson.id, percent=percent, grade=grade, score=score, total=total)); db.session.commit()
+    focus_lost = consume_focus_count('html', lesson.id)
+    db.session.add(Result(user_id=current_user().id, lesson_id=lesson.id, percent=percent, grade=grade, score=score, total=total, focus_lost=focus_lost, status='dokončeno')); db.session.commit()
     touch_progress(lesson.id, 1000, 'dokončeno')
     return render_template('finish.html', lesson=data, course=course_from_lesson(lesson), score=score, total=total, percent=percent, grade=grade, detail=detail)
 
@@ -1262,8 +1376,31 @@ def old_img(slug, filename):
 def img(filename):
     return send_from_directory(UPLOADS, filename)
 
+def ensure_schema_updates():
+    inspector = inspect(db.engine)
+    required = {
+        'result': {
+            'focus_lost': 'INTEGER DEFAULT 0',
+            'status': "VARCHAR(60) DEFAULT 'dokončeno'"
+        },
+        'interactive_result': {
+            'focus_lost': 'INTEGER DEFAULT 0',
+            'status': "VARCHAR(60) DEFAULT 'dokončeno'"
+        }
+    }
+    for table_name, columns in required.items():
+        existing = {c['name'] for c in inspector.get_columns(table_name)} if inspector.has_table(table_name) else set()
+        for column_name, sql_type in columns.items():
+            if column_name not in existing:
+                db.session.execute(text(
+                    f'ALTER TABLE {table_name} ADD COLUMN {column_name} {sql_type}'
+                ))
+    db.session.commit()
+
+
 def seed():
     db.create_all()
+    ensure_schema_updates()
     tu = os.getenv('TEACHER_USERNAME', 'dnadler').lower()
     tp = os.getenv('TEACHER_PASSWORD', 'change-me')
     tn = os.getenv('TEACHER_NAME', 'Učitel')

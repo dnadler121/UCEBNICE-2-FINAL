@@ -6,7 +6,7 @@
   <title>{{ lesson.title if lesson else course.subject }}</title>
   <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
 </head>
-<body>
+<body{% if user and user.role == 'student' and lesson and lesson._id is defined %} data-focus-guard="1"{% endif %}>
 <header class="topbar">
   <a class="brand brand-link" href="{{ url_for('portal') if user else url_for('login') }}"><div class="leaf">{{ course.icon }}</div><div class="brand-title">{{ course.subject|upper }}</div>{% if course.grade %}<span class="pill">{{ course.grade }}</span>{% endif %}</a>
   <div class="crumbs">{% if user and lesson %}{{ course.subject }} {{ course.grade }} <span>›</span> {{ lesson.block }} <span>›</span> <b>{{ lesson.title }}</b>{% elif user %}Vyber předmět, školu a ročník, téma a lekci{% else %}Přihlášení{% endif %}</div>
@@ -22,5 +22,9 @@
 </header>
 {% block content %}{% endblock %}
 <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+{% if user and user.role == 'student' and lesson and lesson._id is defined %}
+<script>window.UCEBNICE_FOCUS_GUARD={{ {'kind':'html','key':lesson._id}|tojson }};</script>
+<script src="{{ url_for('static', filename='js/focus_guard.js') }}"></script>
+{% endif %}
 </body>
 </html>

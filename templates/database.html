@@ -28,7 +28,7 @@
       <div class="table-wrap">
         <table class="data-table">
           <thead>
-            <tr><th>Student</th><th>Předmět</th><th>Škola a ročník</th><th>Téma</th><th>Lekce</th><th>Výsledek</th><th>Aktuální známka</th><th>Poslední dokončení</th><th></th></tr>
+            <tr><th>Student</th><th>Předmět</th><th>Škola a ročník</th><th>Téma</th><th>Lekce</th><th>Výsledek</th><th>Aktuální známka</th><th>Opuštění</th><th>Poslední dokončení</th><th></th></tr>
           </thead>
           <tbody>
             {% for r in html_results %}
@@ -38,8 +38,9 @@
                 <td>{{ r.lesson.block.grade.name }}</td>
                 <td>{{ r.lesson.block.title }}</td>
                 <td>{{ r.lesson.title }}</td>
-                <td>{{ r.percent }} %<br><small>{{ r.score }}/{{ r.total }}</small></td>
+                <td>{{ r.percent }} %<br><small>{{ r.status or 'dokončeno' }}</small></td>
                 <td><b>{{ r.grade }}</b></td>
+                <td><b>{{ r.focus_lost or 0 }}×</b></td>
                 <td>{{ r.created_at.strftime('%d.%m.%Y %H:%M') }}</td>
                 <td><form method="post" action="{{ url_for('delete_result', result_id=r.id) }}"><button class="link-button danger">Smazat</button></form></td>
               </tr>
@@ -51,14 +52,15 @@
                 <td>{{ r.interactive_lesson.school }} · {{ r.interactive_lesson.grade_name }}</td>
                 <td>{{ r.interactive_lesson.topic }}</td>
                 <td>{{ r.interactive_lesson.title }}</td>
-                <td>{{ r.percent }} %<br><small>dokončeno</small></td>
+                <td>{{ r.percent }} %<br><small>{{ r.status or 'dokončeno' }}</small></td>
                 <td><b>{{ r.grade }}</b></td>
+                <td><b>{{ r.focus_lost or 0 }}×</b></td>
                 <td>{{ r.completed_at.strftime('%d.%m.%Y %H:%M') }}</td>
                 <td><form method="post" action="{{ url_for('delete_interactive_result', result_id=r.id) }}"><button class="link-button danger">Smazat</button></form></td>
               </tr>
             {% endfor %}
             {% if not html_results and not interactive_results %}
-              <tr><td colspan="9" class="muted">Zatím není uložen žádný výsledek.</td></tr>
+              <tr><td colspan="10" class="muted">Zatím není uložen žádný výsledek.</td></tr>
             {% endif %}
           </tbody>
         </table>
