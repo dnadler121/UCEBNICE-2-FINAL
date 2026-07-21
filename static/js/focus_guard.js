@@ -1,23 +1,34 @@
 (() => {
   const cfg = window.UCEBNICE_FOCUS_GUARD;
-  if (!cfg || !cfg.kind || !cfg.key) return;
+
+  // Ochrana se spustí pouze na stránce lekce,
+  // kde server předal druh lekce a její klíč.
+  if (!cfg || !cfg.kind || !cfg.key) {
+    return;
+  }
 
   const storageKey = `ucebnice-focus-${cfg.kind}-${cfg.key}`;
+
+  const MIN_AWAY_MS = 15000;
+
   let finished = false;
   let sending = false;
   let lastLossAt = 0;
   let awayStartedAt = null;
 
-  const MIN_AWAY_MS = 15000;
+  const localCount = () =>
+    Number(sessionStorage.getItem(storageKey) || 0);
 
-  const localCount = () => Number(sessionStorage.getItem(storageKey) || 0);
   const setLocalCount = (value) =>
     sessionStorage.setItem(storageKey, String(value));
 
   async function registerLoss() {
     const now = Date.now();
 
-    if (finished || sending || now - lastLossAt < 1200) return;
+    // Zabrání dvojímu odeslání stejného opuštění.
+    if (finished || sending || now - lastLossAt < 1200) {
+      return;
+    }
 
     lastLossAt = now;
     sending = true;
@@ -38,43 +49,57 @@
 
       const data = await response.json();
 
-      if (!data.ok) return;
-
-      setLocalCount(data.count || localCount() + 1);
-
-      if (data.terminated) {
-        finished = true;
-        window.location.replace(data.redirect || '/lesson-ukoncena');
+      if (!response.ok || !data.ok) {
+        console.error('Chyba ochrany:', data);
         return;
       }
 
-      if (data.count === 1) {
-        alert(
-          '⚠️ Varování 1/2\n' +
-          'Byl(a) jsi mimo stránku alespoň 15 sekund. ' +
-          'Při třetím opuštění bude lekce automaticky ukončena.'
+      const count = Number(data.count || localCount() + 1);
+      setLocalCount(count);
+
+      if (data.terminated) {
+        finished = true;
+
+        window.location.replace(
+          data.redirect || '/lesson-ukoncena'
         );
-      } else if (data.count === 2) {
+        return;
+      }
+
+      if (count === 1) {
         alert(
-          '⛔ Varování 2/2\n' +
+          '⚠️ Varování 1/2\n\n' +
+          'Byl(a) jsi mimo stránku alespoň 15 sekund.\n' +
+          'Při třetím započítaném opuštění bude lekce ukončena.'
+        );
+      }
+
+      if (count === 2) {
+        alert(
+          '⛔ Varování 2/2\n\n' +
           'Ještě jedno opuštění stránky na alespoň 15 sekund ' +
-          'způsobí automatické ukončení lekce.'
+          'způsobí ukončení lekce.'
         );
       }
     } catch (error) {
-      setLocalCount(Math.min(3, localCount() + 1));
+      console.error('Ochranu se nepodařilo odeslat:', error);
     } finally {
       sending = false;
     }
   }
 
   function startAwayTimer() {
-    if (finished || awayStartedAt !== null) return;
+    if (finished || awayStartedAt !== null) {
+      return;
+    }
+
     awayStartedAt = Date.now();
   }
 
   function finishAwayTimer() {
-    if (finished || awayStartedAt === null) return;
+    if (finished || awayStartedAt === null) {
+      return;
+    }
 
     const awayDuration = Date.now() - awayStartedAt;
     awayStartedAt = null;
@@ -84,6 +109,7 @@
     }
   }
 
+  // Přepnutí na jinou kartu nebo minimalizování prohlížeče.
   document.addEventListener('visibilitychange', () => {
     if (document.hidden) {
       startAwayTimer();
@@ -92,16 +118,19 @@
     }
   });
 
+  // Přepnutí do jiné desktopové aplikace.
   window.addEventListener('blur', () => {
     startAwayTimer();
   });
 
+  // Návrat do okna prohlížeče.
   window.addEventListener('focus', () => {
     if (!document.hidden) {
       finishAwayTimer();
     }
   });
 
+  // Normální odeslání lekce se nepovažuje za opuštění.
   document.addEventListener(
     'submit',
     () => {
@@ -110,6 +139,7 @@
     true
   );
 
+  // Normální kliknutí na odkaz uvnitř aplikace.
   document.addEventListener(
     'click',
     (event) => {
@@ -126,21 +156,27 @@
     true
   );
 
+  // Dokončení interaktivní lekce.
   const originalFetch = window.fetch;
 
   window.fetch = async (...args) => {
     const response = await originalFetch(...args);
 
     try {
-      const url = String(
+      const requestUrl = String(
         args[0] instanceof Request ? args[0].url : args[0]
       );
 
-      if (cfg.kind === 'interactive' && url.includes('/complete')) {
+      if (
+        cfg.kind === 'interactive' &&
+        requestUrl.includes('/complete')
+      ) {
         finished = true;
         sessionStorage.removeItem(storageKey);
       }
-    } catch (_) {}
+    } catch (error) {
+      console.error(error);
+    }
 
     return response;
   };
