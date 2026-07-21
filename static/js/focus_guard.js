@@ -5,7 +5,7 @@
   const storageKey = `ucebnice-focus-${cfg.kind}-${cfg.key}`;
   let finished = false;
   let sending = false;
-  let lastLossAt = 0;
+  let hiddenAt = null;
 
   const localCount = () => Number(sessionStorage.getItem(storageKey) || 0);
   const setLocalCount = (value) => sessionStorage.setItem(storageKey, String(value));
@@ -47,13 +47,38 @@
   }
 
   document.addEventListener('visibilitychange', () => {
-    if (document.hidden) registerLoss();
-  });
+  if (document.hidden) {
+    if (!hiddenAt) {
+      hiddenAt = Date.now();
+    }
+    return;
+  }
 
+  if (hiddenAt) {
+    const secondsAway = (Date.now() - hiddenAt) / 1000;
+    hiddenAt = null;
+
+    if (secondsAway >= 15) {
+      registerLoss();
+    }
+  }
+  });
+  
   window.addEventListener('blur', () => {
-    setTimeout(() => {
-      if (!document.hidden && !document.hasFocus()) registerLoss();
-    }, 250);
+    if (!hiddenAt) {
+      hiddenAt = Date.now();
+    }
+  });
+  
+  window.addEventListener('focus', () => {
+    if (!document.hidden && hiddenAt) {
+      const secondsAway = (Date.now() - hiddenAt) / 1000;
+      hiddenAt = null;
+  
+      if (secondsAway >= 15) {
+        registerLoss();
+      }
+    }
   });
 
   document.addEventListener('submit', () => { finished = true; }, true);
