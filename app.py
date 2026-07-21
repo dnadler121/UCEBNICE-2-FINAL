@@ -789,6 +789,121 @@ def restore_interactive_lessons_from_files():
     return restored
 
 
+
+@app.route('/teacher/interactive/import', methods=['GET', 'POST'])
+def import_interactive_lesson():
+    r = require_teacher()
+    if r:
+        return r
+
+    if request.method == 'GET':
+        return render_template(
+            'import_interactive.html',
+            course=course_from_lesson(None),
+            lesson=None
+        )
+
+    package_file = (
+        request.files.get('package')
+        or request.files.get('zip_file')
+        or request.files.get('lesson_zip')
+        or request.files.get('file')
+    )
+
+    if not package_file or not package_file.filename:
+        flash('Vyber ZIP balíček interaktivní lekce.')
+        return redirect(url_for('import_interactive_lesson'))
+
+    if not package_file.filename.lower().endswith('.zip'):
+        flash('Balíček musí být ve formátu ZIP.')
+        return redirect(url_for('import_interactive_lesson'))
+
+    temp_root = Path(tempfile.mkdtemp(prefix='ucebnice_import_'))
+    try:
+        zip_path = temp_root / secure_filename(package_file.filename)
+        package_file.save(zip_path)
+
+        with zipfile.ZipFile(zip_path, 'r') as archive:
+            extract_dir = temp_root / 'extracted'
+            extract_dir.mkdir(parents=True, exist_ok=True)
+            safe_extract_zip(archive, extract_dir)
+
+        package_root = find_package_root(extract_dir)
+        meta_file = package_root / 'lesson.json'
+        meta = json.loads(meta_file.read_text(encoding='utf-8-sig'))
+
+        subject = normalize_subject(meta.get('subject', ''))
+        if subject not in ('matematika', 'informatika'):
+            raise ValueError('V lesson.json musí být předmět matematika nebo informatika.')
+
+        school = str(meta.get('school', '')).strip()
+        grade_name = str(meta.get('grade', '')).strip()
+        topic = str(meta.get('topic', '')).strip()
+        title = str(meta.get('title', '')).strip()
+
+        if not all((school, grade_name, topic, title)):
+            raise ValueError(
+                'V lesson.json musí být vyplněno school, grade, topic a title.'
+            )
+
+        slug = safe_package_slug(meta.get('slug') or title)
+        if not slug:
+            raise ValueError('Nepodařilo se vytvořit platný název lekce.')
+
+        existing = InteractiveLesson.query.filter_by(slug=slug).first()
+        if existing:
+            raise ValueError(f'Interaktivní lekce se slugem „{slug}“ už existuje.')
+
+        if not (package_root / 'templates' / 'index.html').exists():
+            raise ValueError('Balíček musí obsahovat templates/index.html.')
+
+        if not (package_root / 'lesson_app.py').exists():
+            raise ValueError('Balíček musí obsahovat lesson_app.py.')
+
+        destination = INTERACTIVE_LESSONS / slug
+        if destination.exists():
+            shutil.rmtree(destination)
+        shutil.copytree(package_root, destination)
+
+        item = InteractiveLesson(
+            slug=slug,
+            subject=subject,
+            school=school,
+            grade_name=grade_name,
+            topic=topic,
+            title=title,
+            description=str(meta.get('description', '')).strip(),
+            icon=str(
+                meta.get(
+                    'icon',
+                    '➗' if subject == 'matematika' else '💻'
+                )
+            ).strip(),
+            package_dir=str(destination),
+            is_published=bool(meta.get('is_published', True)),
+            imported_at=datetime.utcnow()
+        )
+        db.session.add(item)
+        db.session.commit()
+
+        flash(f'Interaktivní lekce „{title}“ byla úspěšně importována.')
+        return redirect(url_for('teacher_home'))
+
+    except zipfile.BadZipFile:
+        db.session.rollback()
+        flash('Soubor není platný ZIP balíček.')
+    except (ValueError, json.JSONDecodeError) as exc:
+        db.session.rollback()
+        flash(str(exc))
+    except Exception as exc:
+        db.session.rollback()
+        flash(f'Import se nepodařil: {exc}')
+    finally:
+        shutil.rmtree(temp_root, ignore_errors=True)
+
+    return redirect(url_for('import_interactive_lesson'))
+
+
 @app.route('/interactive/<slug>')
 def interactive_lesson(slug):
     r = require_login()
