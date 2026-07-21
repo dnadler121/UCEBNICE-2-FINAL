@@ -1,4 +1,4 @@
-import os, json, unicodedata, random, html, re, base64, uuid, urllib.parse, zipfile, shutil, importlib.util
+import os, json, unicodedata, random, html, re, base64, uuid, urllib.parse, urllib.request, urllib.error, zipfile, shutil, importlib.util
 from pathlib import Path
 from datetime import datetime
 from flask import Flask, render_template, render_template_string, request, jsonify, session, redirect, url_for, send_from_directory, flash
@@ -14,6 +14,8 @@ UPLOADS = BASE / 'static' / 'uploads'
 UPLOADS.mkdir(parents=True, exist_ok=True)
 INTERACTIVE_LESSONS = BASE / 'interactive_lessons'
 INTERACTIVE_LESSONS.mkdir(parents=True, exist_ok=True)
+CONTENT_BACKUP = BASE / 'content_backup'
+CONTENT_BACKUP.mkdir(parents=True, exist_ok=True)
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'change-me')
@@ -619,6 +621,237 @@ def subject_catalog(kind):
         title=title,
         icon=icon
     )
+
+
+
+def _json_value(value, default):
+    try:
+        return json.loads(value) if value else default
+    except Exception:
+        return default
+
+
+def export_html_lessons_backup():
+    """Vyexportuje biologii a občanku z databáze do verzovaného JSON souboru."""
+    exported = []
+    for lesson_item in Lesson.query.order_by(Lesson.id).all():
+        subject = lesson_item.block.grade.subject
+        grade = lesson_item.block.grade
+        block = lesson_item.block
+        sections = []
+        for sec in sorted(lesson_item.sections, key=lambda x: x.order):
+            sections.append({
+                'heading': sec.heading,
+                'text': sec.text,
+                'interest': sec.interest,
+                'image': sec.image,
+                'activity': sec.activity,
+                'order': sec.order,
+                'inline_images': [
+                    {'file': img.file, 'caption': img.caption, 'order': img.order}
+                    for img in sorted(sec.inline_images, key=lambda x: x.order)
+                ]
+            })
+        questions = []
+        for q in sorted(lesson_item.questions, key=lambda x: (x.area, x.order)):
+            section_order = q.section.order if q.section else None
+            questions.append({
+                'section_order': section_order,
+                'area': q.area,
+                'qtype': q.qtype,
+                'question': q.question,
+                'options': _json_value(q.options_json, []),
+                'correct': _json_value(q.correct_json, 0),
+                'roots': _json_value(q.roots_json, []),
+                'hint': q.hint,
+                'order': q.order,
+            })
+        exported.append({
+            'subject': {'name': subject.name, 'icon': subject.icon},
+            'grade': grade.name,
+            'block': {'title': block.title, 'order': block.order},
+            'lesson': {
+                'title': lesson_item.title,
+                'tip': lesson_item.tip,
+                'hero_image': lesson_item.hero_image,
+                'order': lesson_item.order,
+                'is_published': lesson_item.is_published,
+            },
+            'sections': sections,
+            'questions': questions,
+        })
+    target = CONTENT_BACKUP / 'html_lessons.json'
+    target.write_text(json.dumps({'version': 1, 'lessons': exported}, ensure_ascii=False, indent=2), encoding='utf-8')
+    return target
+
+
+def restore_html_lessons_backup():
+    """Na novém Renderu obnoví chybějící HTML lekce ze souboru v GitHubu."""
+    source = CONTENT_BACKUP / 'html_lessons.json'
+    if not source.exists():
+        return 0
+    try:
+        payload = json.loads(source.read_text(encoding='utf-8'))
+    except Exception:
+        return 0
+    restored = 0
+    for item in payload.get('lessons', []):
+        sub_data = item.get('subject', {})
+        subject_name = str(sub_data.get('name', '')).strip()
+        grade_name = str(item.get('grade', '')).strip()
+        block_data = item.get('block', {})
+        block_title = str(block_data.get('title', '')).strip()
+        lesson_data = item.get('lesson', {})
+        title = str(lesson_data.get('title', '')).strip()
+        if not all((subject_name, grade_name, block_title, title)):
+            continue
+        sub = Subject.query.filter_by(name=subject_name).first()
+        if not sub:
+            sub = Subject(name=subject_name, icon=sub_data.get('icon', '📘'))
+            db.session.add(sub); db.session.flush()
+        gr = Grade.query.filter_by(subject_id=sub.id, name=grade_name).first()
+        if not gr:
+            gr = Grade(subject_id=sub.id, name=grade_name)
+            db.session.add(gr); db.session.flush()
+        bl = Block.query.filter_by(grade_id=gr.id, title=block_title).first()
+        if not bl:
+            bl = Block(grade_id=gr.id, title=block_title, order=int(block_data.get('order', 1) or 1))
+            db.session.add(bl); db.session.flush()
+        existing = Lesson.query.filter_by(block_id=bl.id, title=title).first()
+        if existing:
+            continue
+        les = Lesson(
+            block_id=bl.id, title=title, tip=lesson_data.get('tip', ''),
+            hero_image=lesson_data.get('hero_image', ''), order=int(lesson_data.get('order', 1) or 1),
+            is_published=bool(lesson_data.get('is_published', True))
+        )
+        db.session.add(les); db.session.flush()
+        section_by_order = {}
+        for sec_data in item.get('sections', []):
+            sec = Section(
+                lesson_id=les.id, heading=sec_data.get('heading', 'Výklad'), text=sec_data.get('text', ''),
+                interest=sec_data.get('interest', ''), image=sec_data.get('image', ''),
+                activity=sec_data.get('activity', ''), order=int(sec_data.get('order', 1) or 1)
+            )
+            db.session.add(sec); db.session.flush()
+            section_by_order[sec.order] = sec
+            for img_data in sec_data.get('inline_images', []):
+                db.session.add(InlineImage(
+                    section_id=sec.id, file=img_data.get('file', ''), caption=img_data.get('caption', ''),
+                    order=int(img_data.get('order', 1) or 1)
+                ))
+        for q_data in item.get('questions', []):
+            sec = section_by_order.get(q_data.get('section_order'))
+            db.session.add(Question(
+                lesson_id=les.id, section_id=sec.id if sec else None,
+                area=q_data.get('area', 'study'), qtype=q_data.get('qtype', 'choice'),
+                question=q_data.get('question', ''),
+                options_json=json.dumps(q_data.get('options', []), ensure_ascii=False),
+                correct_json=json.dumps(q_data.get('correct', 0), ensure_ascii=False),
+                roots_json=json.dumps(q_data.get('roots', []), ensure_ascii=False),
+                hint=q_data.get('hint', ''), order=int(q_data.get('order', 1) or 1)
+            ))
+        restored += 1
+    db.session.commit()
+    return restored
+
+
+def restore_interactive_lessons_from_files():
+    restored = 0
+    for meta_file in INTERACTIVE_LESSONS.glob('*/lesson.json'):
+        try:
+            meta = json.loads(meta_file.read_text(encoding='utf-8'))
+            slug = safe_package_slug(meta.get('slug', meta_file.parent.name))
+            if InteractiveLesson.query.filter_by(slug=slug).first():
+                continue
+            subject = normalize_subject(meta.get('subject', ''))
+            if subject not in ('matematika', 'informatika'):
+                continue
+            db.session.add(InteractiveLesson(
+                slug=slug, subject=subject, school=str(meta.get('school', '')).strip(),
+                grade_name=str(meta.get('grade', '')).strip(), topic=str(meta.get('topic', '')).strip(),
+                title=str(meta.get('title', slug)).strip(), description=str(meta.get('description', '')).strip(),
+                icon=str(meta.get('icon', '➗' if subject == 'matematika' else '💻')).strip(),
+                package_dir=str(meta_file.parent.relative_to(BASE)), is_published=bool(meta.get('is_published', True)),
+                imported_at=datetime.utcnow()
+            ))
+            restored += 1
+        except Exception:
+            continue
+    db.session.commit()
+    return restored
+
+
+def github_api(path, method='GET', data=None):
+    token = os.getenv('GITHUB_TOKEN', '').strip()
+    repo = os.getenv('GITHUB_REPO', '').strip()
+    if not token or not repo or '/' not in repo:
+        raise RuntimeError('Na Renderu chybí GITHUB_TOKEN nebo GITHUB_REPO (např. dnadler121/UCEBNICE-2-FINAL).')
+    body = json.dumps(data).encode('utf-8') if data is not None else None
+    req = urllib.request.Request(
+        f'https://api.github.com/repos/{repo}{path}', data=body, method=method,
+        headers={'Authorization': f'Bearer {token}', 'Accept': 'application/vnd.github+json',
+                 'X-GitHub-Api-Version': '2022-11-28', 'Content-Type': 'application/json',
+                 'User-Agent': 'UCEBNICE-2.0'}
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=45) as response:
+            return json.loads(response.read().decode('utf-8'))
+    except urllib.error.HTTPError as exc:
+        detail = exc.read().decode('utf-8', errors='replace')
+        raise RuntimeError(f'GitHub odmítl požadavek ({exc.code}): {detail[:500]}') from exc
+
+
+def files_for_github_sync():
+    roots = [CONTENT_BACKUP, INTERACTIVE_LESSONS, UPLOADS]
+    files = []
+    for root in roots:
+        if not root.exists():
+            continue
+        for file_path in root.rglob('*'):
+            if file_path.is_file() and '__pycache__' not in file_path.parts and file_path.suffix not in ('.pyc',):
+                files.append(file_path)
+    return sorted(files)
+
+
+def push_lessons_to_github():
+    """Pošle všechny soubory lekcí do jediné GitHub revize (commitu)."""
+    export_html_lessons_backup()
+    branch = os.getenv('GITHUB_BRANCH', 'main').strip() or 'main'
+    ref = github_api(f'/git/ref/heads/{urllib.parse.quote(branch)}')
+    parent_sha = ref['object']['sha']
+    parent_commit = github_api(f'/git/commits/{parent_sha}')
+    base_tree = parent_commit['tree']['sha']
+    tree_entries = []
+    for file_path in files_for_github_sync():
+        relative = file_path.relative_to(BASE).as_posix()
+        blob = github_api('/git/blobs', method='POST', data={
+            'content': base64.b64encode(file_path.read_bytes()).decode('ascii'),
+            'encoding': 'base64'
+        })
+        tree_entries.append({'path': relative, 'mode': '100644', 'type': 'blob', 'sha': blob['sha']})
+    if not tree_entries:
+        raise RuntimeError('Nebyl nalezen žádný obsah lekcí k synchronizaci.')
+    tree = github_api('/git/trees', method='POST', data={'base_tree': base_tree, 'tree': tree_entries})
+    commit = github_api('/git/commits', method='POST', data={
+        'message': f'Záloha lekcí z webu {datetime.now().strftime("%Y-%m-%d %H:%M")}',
+        'tree': tree['sha'], 'parents': [parent_sha]
+    })
+    github_api(f'/git/refs/heads/{urllib.parse.quote(branch)}', method='PATCH', data={'sha': commit['sha'], 'force': False})
+    return len(tree_entries), commit['sha'][:7]
+
+
+@app.route('/teacher/sync-github', methods=['POST'])
+def sync_github():
+    r = require_teacher()
+    if r:
+        return r
+    try:
+        count, short_sha = push_lessons_to_github()
+        flash(f'Hotovo: {count} souborů lekcí bylo uloženo na GitHub v jednom commitu {short_sha}. Render nyní může spustit nové nasazení.')
+    except Exception as exc:
+        flash(f'Synchronizace s GitHubem se nepodařila: {exc}')
+    return redirect(url_for('teacher_home'))
 
 
 @app.route('/teacher/import-interactive', methods=['GET', 'POST'])
@@ -1554,6 +1787,8 @@ def ensure_schema_updates():
 def seed():
     db.create_all()
     ensure_schema_updates()
+    restore_html_lessons_backup()
+    restore_interactive_lessons_from_files()
     tu = os.getenv('TEACHER_USERNAME', 'dnadler').lower()
     tp = os.getenv('TEACHER_PASSWORD', 'change-me')
     tn = os.getenv('TEACHER_NAME', 'Učitel')

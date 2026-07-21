@@ -12,6 +12,9 @@
         <a class="switch import-action" href="{{ url_for('import_interactive_lesson') }}">📦 Import aplikace</a>
         <a class="switch" href="{{ url_for('teacher_students') }}">👨‍🎓 Studenti</a>
         <a class="switch" href="{{ url_for('teacher_database') }}">📊 Výsledky</a>
+        <form method="post" action="{{ url_for('sync_github') }}" onsubmit="return confirm('Uložit všechny lekce a obrázky na GitHub?');" style="display:inline;">
+          <button class="switch" type="submit" style="border:0;cursor:pointer;">☁️ Synchronizovat lekce s GitHubem</button>
+        </form>
       </div>
     </div>
 
