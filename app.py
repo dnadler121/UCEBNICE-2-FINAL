@@ -1,4 +1,4 @@
-import os, json, unicodedata, random, html, re, base64, uuid, urllib.parse, urllib.request, urllib.error, zipfile, shutil, importlib.util
+import os, json, unicodedata, random, html, re, base64, uuid, urllib.parse, urllib.request, urllib.error, zipfile, shutil, importlib.util, tempfile, threading
 from pathlib import Path
 from datetime import datetime
 from flask import Flask, render_template, render_template_string, request, jsonify, session, redirect, url_for, send_from_directory, flash
@@ -809,36 +809,111 @@ def files_for_github_sync():
         if not root.exists():
             continue
         for file_path in root.rglob('*'):
-            if file_path.is_file() and '__pycache__' not in file_path.parts and file_path.suffix not in ('.pyc',):
+            if (
+                file_path.is_file()
+                and '__pycache__' not in file_path.parts
+                and file_path.suffix != '.pyc'
+                and file_path.name != 'lessons_backup.zip'
+            ):
                 files.append(file_path)
     return sorted(files)
 
 
-def push_lessons_to_github():
-    """Pošle všechny soubory lekcí do jediné GitHub revize (commitu)."""
+def create_lessons_backup_zip(target_path):
+    """Vytvoří jeden ZIP se všemi lekcemi a obrázky určený pro GitHub."""
     export_html_lessons_backup()
-    branch = os.getenv('GITHUB_BRANCH', 'main').strip() or 'main'
-    ref = github_api(f'/git/ref/heads/{urllib.parse.quote(branch)}')
-    parent_sha = ref['object']['sha']
-    parent_commit = github_api(f'/git/commits/{parent_sha}')
-    base_tree = parent_commit['tree']['sha']
-    tree_entries = []
-    for file_path in files_for_github_sync():
-        relative = file_path.relative_to(BASE).as_posix()
-        blob = github_api('/git/blobs', method='POST', data={
-            'content': base64.b64encode(file_path.read_bytes()).decode('ascii'),
-            'encoding': 'base64'
-        })
-        tree_entries.append({'path': relative, 'mode': '100644', 'type': 'blob', 'sha': blob['sha']})
-    if not tree_entries:
+    files = files_for_github_sync()
+    if not files:
         raise RuntimeError('Nebyl nalezen žádný obsah lekcí k synchronizaci.')
-    tree = github_api('/git/trees', method='POST', data={'base_tree': base_tree, 'tree': tree_entries})
-    commit = github_api('/git/commits', method='POST', data={
-        'message': f'Záloha lekcí z webu {datetime.now().strftime("%Y-%m-%d %H:%M")}',
-        'tree': tree['sha'], 'parents': [parent_sha]
-    })
-    github_api(f'/git/refs/heads/{urllib.parse.quote(branch)}', method='PATCH', data={'sha': commit['sha'], 'force': False})
-    return len(tree_entries), commit['sha'][:7]
+    with zipfile.ZipFile(target_path, 'w', compression=zipfile.ZIP_DEFLATED, compresslevel=6) as archive:
+        for file_path in files:
+            archive.write(file_path, file_path.relative_to(BASE).as_posix())
+    return len(files)
+
+
+def restore_synced_archive():
+    """Po nasazení z GitHubu rozbalí poslední zálohu lekcí do projektu."""
+    archive_path = CONTENT_BACKUP / 'lessons_backup.zip'
+    if not archive_path.exists():
+        return 0
+    try:
+        with zipfile.ZipFile(archive_path, 'r') as archive:
+            allowed = ('content_backup/', 'interactive_lessons/', 'static/uploads/')
+            members = [name for name in archive.namelist() if name.startswith(allowed)]
+            for name in members:
+                destination = (BASE / name).resolve()
+                if BASE.resolve() not in destination.parents and destination != BASE.resolve():
+                    raise ValueError('Neplatná cesta v záloze lekcí.')
+                if name.endswith('/'):
+                    destination.mkdir(parents=True, exist_ok=True)
+                    continue
+                destination.parent.mkdir(parents=True, exist_ok=True)
+                with archive.open(name) as source, open(destination, 'wb') as output:
+                    shutil.copyfileobj(source, output)
+        return len(members)
+    except Exception as exc:
+        print(f'Obnova zálohy lekcí se nepodařila: {exc}', flush=True)
+        return 0
+
+
+def github_existing_file_sha(repo_path, branch):
+    encoded = '/'.join(urllib.parse.quote(part, safe='') for part in repo_path.split('/'))
+    try:
+        payload = github_api(f'/contents/{encoded}?ref={urllib.parse.quote(branch, safe="")}')
+        return payload.get('sha')
+    except RuntimeError as exc:
+        if '(404)' in str(exc):
+            return None
+        raise
+
+
+def push_lessons_to_github():
+    """Nahraje jednu ZIP zálohu přes GitHub Contents API a vytvoří jediný commit."""
+    branch = os.getenv('GITHUB_BRANCH', 'main').strip() or 'main'
+    repo_path = 'content_backup/lessons_backup.zip'
+    with tempfile.TemporaryDirectory(prefix='ucebnice-github-') as temp_dir:
+        archive_path = Path(temp_dir) / 'lessons_backup.zip'
+        file_count = create_lessons_backup_zip(archive_path)
+        size = archive_path.stat().st_size
+        if size > 95 * 1024 * 1024:
+            raise RuntimeError(
+                f'Záloha má {size / 1024 / 1024:.1f} MB a je příliš velká pro GitHub API. '
+                'Je potřeba zmenšit obrázky nebo rozdělit zálohu.'
+            )
+        payload = {
+            'message': f'Záloha lekcí z webu {datetime.now().strftime("%Y-%m-%d %H:%M")}',
+            'content': base64.b64encode(archive_path.read_bytes()).decode('ascii'),
+            'branch': branch,
+        }
+        current_sha = github_existing_file_sha(repo_path, branch)
+        if current_sha:
+            payload['sha'] = current_sha
+        encoded_path = '/'.join(urllib.parse.quote(part, safe='') for part in repo_path.split('/'))
+        result = github_api(f'/contents/{encoded_path}', method='PUT', data=payload)
+        commit_sha = result.get('commit', {}).get('sha', '')
+        return file_count, commit_sha[:7] if commit_sha else 'hotovo', size
+
+
+GITHUB_SYNC_STATE = {'running': False, 'message': '', 'ok': None}
+GITHUB_SYNC_LOCK = threading.Lock()
+
+
+def github_sync_worker():
+    try:
+        with app.app_context():
+            count, short_sha, size = push_lessons_to_github()
+        message = (
+            f'Hotovo: {count} souborů lekcí bylo uloženo do jedné zálohy '
+            f'({size / 1024 / 1024:.1f} MB), commit {short_sha}.'
+        )
+        ok = True
+        print(message, flush=True)
+    except Exception as exc:
+        message = f'Synchronizace s GitHubem se nepodařila: {exc}'
+        ok = False
+        print(message, flush=True)
+    with GITHUB_SYNC_LOCK:
+        GITHUB_SYNC_STATE.update({'running': False, 'message': message, 'ok': ok})
 
 
 @app.route('/teacher/sync-github', methods=['POST'])
@@ -846,12 +921,23 @@ def sync_github():
     r = require_teacher()
     if r:
         return r
-    try:
-        count, short_sha = push_lessons_to_github()
-        flash(f'Hotovo: {count} souborů lekcí bylo uloženo na GitHub v jednom commitu {short_sha}. Render nyní může spustit nové nasazení.')
-    except Exception as exc:
-        flash(f'Synchronizace s GitHubem se nepodařila: {exc}')
+    with GITHUB_SYNC_LOCK:
+        if GITHUB_SYNC_STATE['running']:
+            flash('Synchronizace už právě probíhá. Počkej prosím na její dokončení.')
+            return redirect(url_for('teacher_home'))
+        GITHUB_SYNC_STATE.update({'running': True, 'message': 'Synchronizace probíhá…', 'ok': None})
+    threading.Thread(target=github_sync_worker, daemon=True).start()
+    flash('Synchronizace byla spuštěna na pozadí. Stránku můžeš normálně používat.')
     return redirect(url_for('teacher_home'))
+
+
+@app.route('/teacher/sync-github-status')
+def sync_github_status():
+    r = require_teacher()
+    if r:
+        return jsonify({'running': False, 'ok': False, 'message': 'Nepřihlášený učitel.'}), 401
+    with GITHUB_SYNC_LOCK:
+        return jsonify(dict(GITHUB_SYNC_STATE))
 
 
 @app.route('/teacher/import-interactive', methods=['GET', 'POST'])
@@ -1787,6 +1873,7 @@ def ensure_schema_updates():
 def seed():
     db.create_all()
     ensure_schema_updates()
+    restore_synced_archive()
     restore_html_lessons_backup()
     restore_interactive_lessons_from_files()
     tu = os.getenv('TEACHER_USERNAME', 'dnadler').lower()
