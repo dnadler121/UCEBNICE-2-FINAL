@@ -431,14 +431,60 @@ def get_focus_count(kind, key):
     user = current_user()
     if not user:
         return 0
-    row = LessonFocusSession.query.filter_by(user_id=user.id, lesson_kind=str(kind), lesson_key=str(key)).first()
+    row = LessonFocusSession.query.filter_by(
+        user_id=user.id,
+        lesson_kind=str(kind),
+        lesson_key=str(key)
+    ).first()
     return int(row.count or 0) if row else 0
+
+
+def focus_attempt_marker(kind, key):
+    return f'{str(kind)}:{str(key)}'
+
+
+def begin_focus_attempt(kind, key):
+    """Při prvním otevření lekce v novém přihlášení začne počítání od nuly.
+
+    Přechody mezi částmi stejné lekce ani obnovení stránky počítadlo nemažou.
+    Po automatickém ukončení nebo řádném dokončení může další otevření
+    stejné lekce začít jako nový pokus.
+    """
+    user = current_user()
+    if not user or user.role != 'student':
+        return
+
+    marker = focus_attempt_marker(kind, key)
+    active = list(session.get('focus_active_attempts', []))
+    if marker in active:
+        return
+
+    row = get_focus_session(kind, key, create=False)
+    if row:
+        db.session.delete(row)
+        db.session.flush()
+
+    active.append(marker)
+    session['focus_active_attempts'] = active
+    session.modified = True
+    db.session.commit()
+
+
+def end_focus_attempt(kind, key):
+    marker = focus_attempt_marker(kind, key)
+    active = list(session.get('focus_active_attempts', []))
+    if marker in active:
+        active.remove(marker)
+        session['focus_active_attempts'] = active
+        session.modified = True
+
 
 def consume_focus_count(kind, key):
     row = get_focus_session(kind, key, create=False)
     count = int(row.count) if row else 0
     if row:
         db.session.delete(row)
+    end_focus_attempt(kind, key)
     return count
 
 
@@ -484,6 +530,7 @@ def api_focus_lost():
                     percent=0, grade=5, focus_lost=3,
                     status='ukončeno po 3 opuštěních'
                 ))
+        end_focus_attempt(kind, key)
         db.session.commit()
         return jsonify({'ok': True, 'count': 3, 'terminated': True,
                         'redirect': url_for('focus_terminated')})
@@ -668,6 +715,9 @@ def interactive_lesson(slug):
     if not lesson_item:
         return 'Interaktivní lekce nebyla nalezena.', 404
 
+    if current_user().role == 'student':
+        begin_focus_attempt('interactive', slug)
+
     template_file = BASE / lesson_item.package_dir / 'templates' / 'index.html'
     if not template_file.exists():
         return 'Balíček lekce neobsahuje templates/index.html.', 500
@@ -792,6 +842,8 @@ def lesson(lesson_id):
     if r: return r
     lesson = db.session.get(Lesson, lesson_id)
     if not lesson: return 'Lekce nenalezena', 404
+    if current_user().role == 'student':
+        begin_focus_attempt('html', lesson.id)
     step = int(request.args.get('step',0))
     data = lesson_to_dict(lesson)
     step = max(0, min(step, len(data['sections'])-1))
@@ -806,6 +858,8 @@ def final_test(lesson_id):
     if r: return r
     lesson = db.session.get(Lesson, lesson_id)
     if not lesson: return 'Lekce nenalezena', 404
+    if current_user().role == 'student':
+        begin_focus_attempt('html', lesson.id)
     if not lesson_ready_for_test(lesson):
         flash('Nejdřív dokonči otázky k výkladu a aktivitu. Test se odemkne až potom.')
         return redirect(url_for('lesson', lesson_id=lesson.id))
