@@ -10,19 +10,26 @@ from dotenv import load_dotenv
 
 BASE = Path(__file__).resolve().parent
 load_dotenv(BASE / '.env')
-UPLOADS = BASE / 'static' / 'uploads'
+
+# Na Renderu ukládáme všechna uživatelská data na Persistent Disk.
+# Při lokálním spuštění zůstávají data ve složce projektu.
+DATA_DIR = Path('/var/data') if Path('/var/data').is_dir() else BASE
+DATA_DIR.mkdir(parents=True, exist_ok=True)
+
+UPLOADS = DATA_DIR / 'uploads'
 UPLOADS.mkdir(parents=True, exist_ok=True)
-INTERACTIVE_LESSONS = BASE / 'interactive_lessons'
+
+INTERACTIVE_LESSONS = DATA_DIR / 'interactive_lessons'
 INTERACTIVE_LESSONS.mkdir(parents=True, exist_ok=True)
-CONTENT_BACKUP = BASE / 'content_backup'
-CONTENT_BACKUP.mkdir(parents=True, exist_ok=True)
+
+DB_PATH = DATA_DIR / 'montessori.db'
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'change-me')
 # Nový název cookie odřízne staré přihlášení z předchozích testovacích verzí.
 # Když aplikaci spustíš poprvé, vždy tě pošle na přihlášení.
 app.config['SESSION_COOKIE_NAME'] = 'montessori_engine_v1_2_role_login'
-app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///' + str(BASE / 'montessori.db')
+app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///" + str(DB_PATH)
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 db = SQLAlchemy(app)
 
@@ -772,7 +779,7 @@ def restore_interactive_lessons_from_files():
                 grade_name=str(meta.get('grade', '')).strip(), topic=str(meta.get('topic', '')).strip(),
                 title=str(meta.get('title', slug)).strip(), description=str(meta.get('description', '')).strip(),
                 icon=str(meta.get('icon', '➗' if subject == 'matematika' else '💻')).strip(),
-                package_dir=str(meta_file.parent.relative_to(BASE)), is_published=bool(meta.get('is_published', True)),
+                package_dir=str(meta_file.parent), is_published=bool(meta.get('is_published', True)),
                 imported_at=datetime.utcnow()
             ))
             restored += 1
@@ -780,249 +787,6 @@ def restore_interactive_lessons_from_files():
             continue
     db.session.commit()
     return restored
-
-
-def github_api(path, method='GET', data=None):
-    token = os.getenv('GITHUB_TOKEN', '').strip()
-    repo = os.getenv('GITHUB_REPO', '').strip()
-    if not token or not repo or '/' not in repo:
-        raise RuntimeError('Na Renderu chybí GITHUB_TOKEN nebo GITHUB_REPO (např. dnadler121/UCEBNICE-2-FINAL).')
-    body = json.dumps(data).encode('utf-8') if data is not None else None
-    req = urllib.request.Request(
-        f'https://api.github.com/repos/{repo}{path}', data=body, method=method,
-        headers={'Authorization': f'Bearer {token}', 'Accept': 'application/vnd.github+json',
-                 'X-GitHub-Api-Version': '2022-11-28', 'Content-Type': 'application/json',
-                 'User-Agent': 'UCEBNICE-2.0'}
-    )
-    try:
-        with urllib.request.urlopen(req, timeout=45) as response:
-            return json.loads(response.read().decode('utf-8'))
-    except urllib.error.HTTPError as exc:
-        detail = exc.read().decode('utf-8', errors='replace')
-        raise RuntimeError(f'GitHub odmítl požadavek ({exc.code}): {detail[:500]}') from exc
-
-
-def files_for_github_sync():
-    roots = [CONTENT_BACKUP, INTERACTIVE_LESSONS, UPLOADS]
-    files = []
-    for root in roots:
-        if not root.exists():
-            continue
-        for file_path in root.rglob('*'):
-            if (
-                file_path.is_file()
-                and '__pycache__' not in file_path.parts
-                and file_path.suffix != '.pyc'
-                and file_path.name != 'lessons_backup.zip'
-            ):
-                files.append(file_path)
-    return sorted(files)
-
-
-def create_lessons_backup_zip(target_path):
-    """Vytvoří jeden ZIP se všemi lekcemi a obrázky určený pro GitHub."""
-    export_html_lessons_backup()
-    files = files_for_github_sync()
-    if not files:
-        raise RuntimeError('Nebyl nalezen žádný obsah lekcí k synchronizaci.')
-    with zipfile.ZipFile(target_path, 'w', compression=zipfile.ZIP_DEFLATED, compresslevel=6) as archive:
-        for file_path in files:
-            archive.write(file_path, file_path.relative_to(BASE).as_posix())
-    return len(files)
-
-
-def restore_synced_archive():
-    """Po nasazení z GitHubu rozbalí poslední zálohu lekcí do projektu."""
-    archive_path = CONTENT_BACKUP / 'lessons_backup.zip'
-    if not archive_path.exists():
-        return 0
-    try:
-        with zipfile.ZipFile(archive_path, 'r') as archive:
-            allowed = ('content_backup/', 'interactive_lessons/', 'static/uploads/')
-            members = [name for name in archive.namelist() if name.startswith(allowed)]
-            for name in members:
-                destination = (BASE / name).resolve()
-                if BASE.resolve() not in destination.parents and destination != BASE.resolve():
-                    raise ValueError('Neplatná cesta v záloze lekcí.')
-                if name.endswith('/'):
-                    destination.mkdir(parents=True, exist_ok=True)
-                    continue
-                destination.parent.mkdir(parents=True, exist_ok=True)
-                with archive.open(name) as source, open(destination, 'wb') as output:
-                    shutil.copyfileobj(source, output)
-        return len(members)
-    except Exception as exc:
-        print(f'Obnova zálohy lekcí se nepodařila: {exc}', flush=True)
-        return 0
-
-
-def github_existing_file_sha(repo_path, branch):
-    encoded = '/'.join(urllib.parse.quote(part, safe='') for part in repo_path.split('/'))
-    try:
-        payload = github_api(f'/contents/{encoded}?ref={urllib.parse.quote(branch, safe="")}')
-        return payload.get('sha')
-    except RuntimeError as exc:
-        if '(404)' in str(exc):
-            return None
-        raise
-
-
-def push_lessons_to_github():
-    """Nahraje jednu ZIP zálohu přes GitHub Contents API a vytvoří jediný commit."""
-    branch = os.getenv('GITHUB_BRANCH', 'main').strip() or 'main'
-    repo_path = 'content_backup/lessons_backup.zip'
-    with tempfile.TemporaryDirectory(prefix='ucebnice-github-') as temp_dir:
-        archive_path = Path(temp_dir) / 'lessons_backup.zip'
-        file_count = create_lessons_backup_zip(archive_path)
-        size = archive_path.stat().st_size
-        if size > 95 * 1024 * 1024:
-            raise RuntimeError(
-                f'Záloha má {size / 1024 / 1024:.1f} MB a je příliš velká pro GitHub API. '
-                'Je potřeba zmenšit obrázky nebo rozdělit zálohu.'
-            )
-        payload = {
-            'message': f'Záloha lekcí z webu {datetime.now().strftime("%Y-%m-%d %H:%M")}',
-            'content': base64.b64encode(archive_path.read_bytes()).decode('ascii'),
-            'branch': branch,
-        }
-        current_sha = github_existing_file_sha(repo_path, branch)
-        if current_sha:
-            payload['sha'] = current_sha
-        encoded_path = '/'.join(urllib.parse.quote(part, safe='') for part in repo_path.split('/'))
-        result = github_api(f'/contents/{encoded_path}', method='PUT', data=payload)
-        commit_sha = result.get('commit', {}).get('sha', '')
-        return file_count, commit_sha[:7] if commit_sha else 'hotovo', size
-
-
-GITHUB_SYNC_STATE = {'running': False, 'message': '', 'ok': None}
-GITHUB_SYNC_LOCK = threading.Lock()
-
-
-def github_sync_worker():
-    try:
-        with app.app_context():
-            count, short_sha, size = push_lessons_to_github()
-        message = (
-            f'Hotovo: {count} souborů lekcí bylo uloženo do jedné zálohy '
-            f'({size / 1024 / 1024:.1f} MB), commit {short_sha}.'
-        )
-        ok = True
-        print(message, flush=True)
-    except Exception as exc:
-        message = f'Synchronizace s GitHubem se nepodařila: {exc}'
-        ok = False
-        print(message, flush=True)
-    with GITHUB_SYNC_LOCK:
-        GITHUB_SYNC_STATE.update({'running': False, 'message': message, 'ok': ok})
-
-
-@app.route('/teacher/sync-github', methods=['POST'])
-def sync_github():
-    r = require_teacher()
-    if r:
-        return r
-    with GITHUB_SYNC_LOCK:
-        if GITHUB_SYNC_STATE['running']:
-            flash('Synchronizace už právě probíhá. Počkej prosím na její dokončení.')
-            return redirect(url_for('teacher_home'))
-        GITHUB_SYNC_STATE.update({'running': True, 'message': 'Synchronizace probíhá…', 'ok': None})
-    threading.Thread(target=github_sync_worker, daemon=True).start()
-    flash('Synchronizace byla spuštěna na pozadí. Stránku můžeš normálně používat.')
-    return redirect(url_for('teacher_home'))
-
-
-@app.route('/teacher/sync-github-status')
-def sync_github_status():
-    r = require_teacher()
-    if r:
-        return jsonify({'running': False, 'ok': False, 'message': 'Nepřihlášený učitel.'}), 401
-    with GITHUB_SYNC_LOCK:
-        return jsonify(dict(GITHUB_SYNC_STATE))
-
-
-@app.route('/teacher/import-interactive', methods=['GET', 'POST'])
-def import_interactive_lesson():
-    r = require_teacher()
-    if r:
-        return r
-
-    if request.method == 'POST':
-        uploaded = request.files.get('package')
-        if not uploaded or not uploaded.filename.lower().endswith('.zip'):
-            flash('Vyber ZIP balíček interaktivní lekce.')
-            return redirect(url_for('import_interactive_lesson'))
-
-        temp_dir = BASE / '_lesson_import_tmp' / uuid.uuid4().hex
-        temp_dir.mkdir(parents=True, exist_ok=True)
-
-        try:
-            archive_path = temp_dir / 'package.zip'
-            uploaded.save(archive_path)
-
-            with zipfile.ZipFile(archive_path, 'r') as zf:
-                safe_extract_zip(zf, temp_dir / 'content')
-
-            package_root = find_package_root(temp_dir / 'content')
-            meta = json.loads((package_root / 'lesson.json').read_text(encoding='utf-8'))
-
-            required = ['subject', 'school', 'grade', 'topic', 'title', 'slug']
-            missing = [key for key in required if not str(meta.get(key, '')).strip()]
-            if missing:
-                raise ValueError('V lesson.json chybí: ' + ', '.join(missing))
-
-            subject = normalize_subject(meta['subject'])
-            if subject not in ('matematika', 'informatika'):
-                raise ValueError('Interaktivní balíček může být pouze matematika nebo informatika.')
-
-            slug = safe_package_slug(meta['slug'])
-            if slug != str(meta['slug']).strip():
-                raise ValueError('slug musí obsahovat jen malá písmena, čísla a pomlčky.')
-
-            if not (package_root / 'templates' / 'index.html').exists():
-                raise ValueError('Balíček musí obsahovat templates/index.html.')
-
-            existing = InteractiveLesson.query.filter_by(slug=slug).first()
-            destination = INTERACTIVE_LESSONS / slug
-
-            if destination.exists():
-                shutil.rmtree(destination)
-            shutil.copytree(package_root, destination)
-
-            if not existing:
-                existing = InteractiveLesson(slug=slug)
-                db.session.add(existing)
-
-            existing.subject = subject
-            existing.school = str(meta['school']).strip()
-            existing.grade_name = str(meta['grade']).strip()
-            existing.topic = str(meta['topic']).strip()
-            existing.title = str(meta['title']).strip()
-            existing.description = str(meta.get('description', '')).strip()
-            existing.icon = str(meta.get('icon', '➗' if subject == 'matematika' else '💻')).strip()
-            existing.package_dir = str(destination.relative_to(BASE))
-            existing.is_published = bool(meta.get('is_published', True))
-            existing.imported_at = datetime.utcnow()
-            db.session.commit()
-
-            flash(
-                f'Lekce „{existing.title}“ byla importována do '
-                f'{existing.school} → {existing.grade_name} → {existing.topic}.'
-            )
-            return redirect(url_for('subject_catalog', kind=subject))
-
-        except (ValueError, json.JSONDecodeError, zipfile.BadZipFile) as exc:
-            flash(f'Import se nepodařil: {exc}')
-        except Exception as exc:
-            db.session.rollback()
-            flash(f'Import se nepodařil: {exc}')
-        finally:
-            shutil.rmtree(temp_dir, ignore_errors=True)
-
-    return render_template(
-        'import_interactive.html',
-        course={'subject': 'Import lekce', 'grade': '', 'block': '', 'icon': '📦'},
-        lesson=None
-    )
 
 
 @app.route('/interactive/<slug>')
@@ -1684,7 +1448,7 @@ def import_html_to_lesson_html(html_file, asset_files):
 
     Učitel si připraví výklad mimo aplikaci (např. převod DOCX -> HTML přes pandoc/Word).
     V aplikaci vybere HTML soubor a případně obrázky ze stejné složky.
-    Funkce zkopíruje obrázky do static/uploads a přepíše cesty v HTML.
+    Funkce zkopíruje obrázky do trvalého úložiště uploads a přepíše cesty v HTML.
     """
     if not html_file or not html_file.filename:
         return None
@@ -1795,7 +1559,7 @@ def save_upload(file):
 def save_question_images():
     """Uloží obrázky vložené přímo u otázek.
     V JSONu editor používá odkaz ve tvaru __file__:nazev_pole.
-    Tady ho převedeme na reálně uložený soubor v static/uploads.
+    Tady ho převedeme na reálně uložený soubor v trvalém úložišti uploads.
     """
     image_map = {}
     for field_name, f in request.files.items():
@@ -1873,8 +1637,6 @@ def ensure_schema_updates():
 def seed():
     db.create_all()
     ensure_schema_updates()
-    restore_synced_archive()
-    restore_html_lessons_backup()
     restore_interactive_lessons_from_files()
     tu = os.getenv('TEACHER_USERNAME', 'dnadler').lower()
     tp = os.getenv('TEACHER_PASSWORD', 'change-me')

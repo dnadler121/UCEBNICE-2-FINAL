@@ -12,10 +12,6 @@
         <a class="switch import-action" href="{{ url_for('import_interactive_lesson') }}">📦 Import aplikace</a>
         <a class="switch" href="{{ url_for('teacher_students') }}">👨‍🎓 Studenti</a>
         <a class="switch" href="{{ url_for('teacher_database') }}">📊 Výsledky</a>
-        <form method="post" action="{{ url_for('sync_github') }}" onsubmit="return confirm('Uložit všechny lekce a obrázky na GitHub?');" style="display:inline;">
-          <button class="switch" type="submit" style="border:0;cursor:pointer;">☁️ Synchronizovat lekce s GitHubem</button>
-        </form>
-        <span id="github-sync-status" style="font-size:.85rem;"></span>
       </div>
     </div>
 
@@ -101,27 +97,5 @@
   </main>
 </div>
 
-<script>
-(function () {
-  const status = document.getElementById('github-sync-status');
-  if (!status) return;
-  async function checkSync() {
-    try {
-      const response = await fetch('{{ url_for("sync_github_status") }}', {cache: 'no-store'});
-      if (!response.ok) return;
-      const data = await response.json();
-      if (data.running) {
-        status.textContent = '⏳ Synchronizace probíhá…';
-        setTimeout(checkSync, 3000);
-      } else if (data.message) {
-        status.textContent = (data.ok ? '✅ ' : '⚠️ ') + data.message;
-      }
-    } catch (error) {
-      status.textContent = '';
-    }
-  }
-  checkSync();
-})();
-</script>
 
 {% endblock %}
