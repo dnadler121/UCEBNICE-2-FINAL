@@ -8,6 +8,42 @@
   </div>
 
 
+
+  {% if kind == 'informatika' and informatics_lessons %}
+    <section class="catalog-subject">
+      <div class="catalog-subject-name"><span>💻</span><h2>Praktické lekce</h2></div>
+      <div class="grade-grid">
+      {% set ns = namespace(last_key='') %}
+      {% for l in informatics_lessons %}
+        {% set key = l.school ~ '|' ~ l.grade_name %}
+        <article class="grade-card">
+          <div class="grade-card-head"><span>{{l.school}}</span><h3>{{l.grade_name}}</h3></div>
+          <div class="topic-group"><h4>{{l.topic}}</h4><div class="topic-lessons">
+            <a href="{{url_for('informatics_lesson',lesson_id=l.id)}}">💻 {{l.title}} <span>→</span></a>
+          </div></div>
+        </article>
+      {% endfor %}
+      </div>
+    </section>
+  {% endif %}
+
+
+  {% if kind == 'matematika' and math_lessons %}
+    <section class="catalog-subject">
+      <div class="catalog-subject-name"><span>➗</span><h2>Krokové lekce</h2></div>
+      <div class="grade-grid">
+      {% for l in math_lessons %}
+        <article class="grade-card">
+          <div class="grade-card-head"><span>{{l.school}}</span><h3>{{l.grade_name}}</h3></div>
+          <div class="topic-group"><h4>{{l.topic}}</h4><div class="topic-lessons">
+            <a href="{{url_for('math_lesson',lesson_id=l.id)}}">➗ {{l.title}} <span>→</span></a>
+          </div></div>
+        </article>
+      {% endfor %}
+      </div>
+    </section>
+  {% endif %}
+
   {% if interactive_groups %}
     <section class="catalog-subject">
       <div class="catalog-subject-name"><span>{{ icon }}</span><h2>Interaktivní lekce</h2></div>
@@ -64,7 +100,7 @@
         </div>
       </section>
     {% endfor %}
-  {% elif not interactive_groups %}
+  {% elif not interactive_groups and not informatics_lessons and not math_lessons %}
     <section class="empty-catalog">
       <div>{{ icon }}</div><h2>Zatím tu není žádná lekce</h2>
       <p>Jakmile učitel vytvoří nebo později importuje první lekci, automaticky se zde zobrazí pod správným ročníkem a tématem.</p>

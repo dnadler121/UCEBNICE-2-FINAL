@@ -1,0 +1,37 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="layout dashboard-layout"><main class="main-card">
+  <div class="title-row"><div><h1>💻 Tvůrce informatické lekce</h1><p>Vlož učitelský vzor. UČEBNICE 2.0 podle typu souboru navrhne, co lze u práce studenta automaticky kontrolovat.</p></div><a class="switch" href="{{ url_for('teacher_home') }}">← Učitelská administrace</a></div>
+  {% with messages=get_flashed_messages() %}{% if messages %}<div class="notice">{% for m in messages %}<p>{{m}}</p>{% endfor %}</div>{% endif %}{% endwith %}
+  <section class="course-card">
+    <h2>1. Vzorový soubor učitele</h2>
+    <form method="post" enctype="multipart/form-data">
+      <label>Název lekce</label><input name="title" required placeholder="např. Excel – kalkulace ceny">
+      <label>Ročník</label><input name="grade_name" placeholder="např. 1. ročník">
+      <label>Téma</label><input name="topic" placeholder="např. Tabulkový procesor">
+      <label>Soubor</label><input type="file" name="source_file" required accept=".docx,.xlsx,.xlsm,.pptx,.py,.zip">
+      <p><small>Word DOCX · Excel XLSX/XLSM · PowerPoint PPTX · Python PY · Python projekt ZIP</small></p>
+      <button class="switch" type="submit">🔎 Analyzovat a navrhnout kontroly</button>
+    </form>
+  </section>
+  {% if analysis %}
+  <section class="course-card">
+    <h2>2. Návrh kontrol – {{ analysis.type }}</h2>
+    <p>Aplikace rozpoznala <b>{{ analysis.name }}</b>. Vyber kontroly, které mají být v této lekci povinné.</p>
+    <form method="post" enctype="multipart/form-data">
+      <input type="hidden" name="confirm_save" value="1">
+      <label>Název lekce</label><input name="title" required value="{{ request.form.get('title','') }}">
+      <label>Ročník</label><input name="grade_name" value="{{ request.form.get('grade_name','') }}">
+      <label>Téma</label><input name="topic" value="{{ request.form.get('topic','') }}">
+      <label>Znovu vyber stejný vzorový soubor pro uložení návrhu</label><input type="file" name="source_file" required accept=".docx,.xlsx,.xlsm,.pptx,.py,.zip">
+      <div style="margin:18px 0">
+      {% for key,label in suggested %}<label style="display:block;padding:9px 0"><input type="checkbox" name="checks" value="{{key}}" checked> <b>{{label}}</b></label>{% endfor %}
+      </div>
+      <button class="switch" type="submit">💾 Uložit návrh lekce</button>
+    </form>
+  </section>{% endif %}
+  <section class="course-card"><h2>Uložené návrhy informatiky</h2>
+  {% if drafts %}{% for d in drafts %}<div class="lesson-row big"><b>{{d.title}}</b><small>{{d.file_type}} · {{d.grade_name}} · {{d.topic}}</small></div>{% endfor %}{% else %}<p>Zatím není uložen žádný návrh.</p>{% endif %}
+  </section>
+</main></div>
+{% endblock %}

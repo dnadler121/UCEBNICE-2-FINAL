@@ -19,7 +19,7 @@
 
     <section class="course-card">
       <div class="database-title-row">
-        <div><h2>📊 Výsledky aktuální hodiny</h2><p>Biologie a občanka ukládají závěrečný test. Matematika a informatika ukládají dokončení interaktivní lekce.</p></div>
+        <div><h2>📊 Výsledky aktuální hodiny</h2><p>Biologie a občanka ukládají závěrečný test. Matematika ukládá dokončení interaktivní lekce a praktická Informatika ukládá každé odevzdání souboru.</p></div>
         <form method="post" action="{{ url_for('delete_all_results') }}" onsubmit="return confirm('Smazat všechny výsledky? Studenti a trvalý pokrok zůstanou zachováni.');">
           <button class="link-button danger" type="submit">🗑️ Smazat všechny výsledky</button>
         </form>
@@ -59,7 +59,35 @@
                 <td><form method="post" action="{{ url_for('delete_interactive_result', result_id=r.id) }}"><button class="link-button danger">Smazat</button></form></td>
               </tr>
             {% endfor %}
-            {% if not html_results and not interactive_results %}
+            {% for r in informatics_results %}
+              <tr>
+                <td><b>{{ r.user.name }}</b><br><small>{{ r.user.username }}</small></td>
+                <td>Informatika</td>
+                <td>{{ r.task.lesson.school }} · {{ r.task.lesson.grade_name }}</td>
+                <td>{{ r.task.lesson.topic }}</td>
+                <td>{{ r.task.lesson.title }}<br><small>{{ r.task.title }}</small></td>
+                <td>{{ r.percent }} %<br><small>odevzdaný soubor</small></td>
+                <td><b>{{ 1 if r.percent >= 95 else 2 if r.percent >= 90 else 3 if r.percent >= 85 else 4 if r.percent >= 80 else 5 }}</b></td>
+                <td>—</td>
+                <td>{{ r.created_at.strftime('%d.%m.%Y %H:%M') }}</td>
+                <td><form method="post" action="{{ url_for('delete_informatics_result', result_id=r.id) }}"><button class="link-button danger">Smazat</button></form></td>
+              </tr>
+            {% endfor %}
+            {% for r in math_results %}
+              <tr>
+                <td><b>{{ r.user.name }}</b><br><small>{{ r.user.username }}</small></td>
+                <td>Matematika</td>
+                <td>{{ r.lesson.school }} · {{ r.lesson.grade_name }}</td>
+                <td>{{ r.lesson.topic }}</td>
+                <td>{{ r.lesson.title }}</td>
+                <td>{{ r.percent }} %<br><small>{{ r.status }}</small></td>
+                <td><b>{{ r.grade }}</b></td>
+                <td><b>{{ r.focus_lost or 0 }}×</b></td>
+                <td>{{ r.updated_at.strftime('%d.%m.%Y %H:%M') }}</td>
+                <td>—</td>
+              </tr>
+            {% endfor %}
+            {% if not html_results and not interactive_results and not informatics_results and not math_results %}
               <tr><td colspan="10" class="muted">Zatím není uložen žádný výsledek.</td></tr>
             {% endif %}
           </tbody>

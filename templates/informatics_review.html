@@ -1,0 +1,52 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="layout dashboard-layout"><main class="main-card">
+<div class="title-row"><div><h1>💻 Vyber kontroly</h1>
+<p><b>{{data.title}}</b> · {{data.school}} · {{data.grade_name}} · {{data.topic}}</p>
+<p>Aplikace sama poznala typ souboru. Ty vybereš kontroly a ke každé doplníš vlastní otázku i vlastní nápovědu.</p></div></div>
+
+<form method="post">
+{% for t in data.tasks %}{% set ti=loop.index0 %}
+<section class="course-card" style="padding:22px;margin-bottom:18px">
+<h2>Úkol {{loop.index}} – {{t.title}}</h2>
+<p><b>Soubor:</b> {{t.source_original}} · <b>Rozpoznáno:</b> {{t.analysis.type}}</p>
+<label><b>Název úkolu</b><input name="task_title_{{ti}}" value="{{t.title}}"></label>
+
+{% if t.preview %}
+<div style="margin:18px 0">
+<h3>Náhled hotového souboru</h3>
+{% if t.preview.kind=='table' %}
+<div style="overflow:auto"><table style="border-collapse:collapse;width:100%">
+{% for row in t.preview.rows %}<tr>{% for cell in row %}<td style="border:1px solid #ccd5df;padding:7px">{{cell if cell is not none else ''}}</td>{% endfor %}</tr>{% endfor %}
+</table></div>
+{% elif t.preview.kind=='code' %}
+<pre style="white-space:pre-wrap;overflow:auto;background:#f5f7fa;padding:14px;border-radius:12px">{{t.preview.text}}</pre>
+{% else %}
+<div style="white-space:pre-line;background:#f8fafc;padding:14px;border-radius:12px">{{t.preview.text}}</div>
+{% endif %}
+</div>
+{% endif %}
+
+<details style="margin:16px 0">
+<summary><b>Automaticky navržené instrukce</b></summary>
+<textarea name="assignment_{{ti}}" rows="8">{{t.assignment}}</textarea>
+</details>
+
+<h3>Možné kontroly nalezené v souboru</h3>
+{% for c in t.suggested %}
+<div style="padding:14px 0;border-bottom:1px solid #e5eaf0">
+<label style="display:flex;gap:10px;align-items:center;font-weight:700">
+<input type="checkbox" name="checks_{{ti}}" value="{{c.code}}"> {{c.label}}
+</label>
+<label>Otázka / úkol pro studenta
+<input name="question_{{ti}}_{{c.code}}" placeholder="Např. Vytvoř součet cen pomocí funkce SUM."></label>
+<label>Moje nápověda
+<input name="hint_{{ti}}_{{c.code}}" placeholder="Např. Podívej se na funkce pro sčítání buněk."></label>
+</div>
+{% endfor %}
+</section>
+{% endfor %}
+<button class="testbtn submit" type="submit">💾 Uložit a zveřejnit lekci</button>
+</form>
+</main></div>
+{% endblock %}

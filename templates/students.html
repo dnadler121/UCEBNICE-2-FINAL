@@ -43,17 +43,29 @@
                 <td><b>{{ row.student.name }}</b></td>
                 <td>{{ row.student.username }}</td>
                 <td>
-                  {% if row.progress %}
+                  {% if row.math %}
+                    ➗ {{ row.math.lesson.title }}<br>
+                    <small>{{ row.math.status }} · {{ row.math.percent }} %</small>
+                  {% elif row.informatics %}
+                    💻 {{ row.informatics.task.lesson.title }}<br>
+                    <small>{{ row.informatics.task.title }} · {{ row.informatics.percent }} %</small>
+                  {% elif row.progress %}
                     {{ row.progress.lesson.title }}<br><small>{{ row.progress.status }}</small>
                   {% else %}
                     <span class="muted">zatím nezačal/a</span>
                   {% endif %}
                 </td>
                 <td>
-                  {% if row.result %}
+                  {% if row.math %}
+                    <b>Známka {{ row.math.grade }}</b><br>
+                    <small>{{ row.math.percent }} % · {{ row.math.lesson.title }}</small>
+                  {% elif row.informatics %}
+                    <b>Známka {{ row.informatics_grade }}</b><br>
+                    <small>{{ row.informatics.percent }} % · {{ row.informatics.task.lesson.title }} / {{ row.informatics.task.title }}</small>
+                  {% elif row.result %}
                     <b>Známka {{ row.result.grade }}</b><br><small>{{ row.result.percent }} % · {{ row.result.lesson.title }}</small>
                   {% else %}
-                    <span class="muted">bez testu</span>
+                    <span class="muted">bez výsledku</span>
                   {% endif %}
                 </td>
                 <td class="right-cell">

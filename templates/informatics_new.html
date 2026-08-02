@@ -1,0 +1,68 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="layout dashboard-layout"><main class="main-card">
+<div class="title-row"><div>
+  <h1>💻 Nová informatická lekce</h1>
+  <p>Vyplň zařazení lekce, jednou nahraj společný HTML výklad a potom přidávej úkoly. U každého úkolu nahraješ jen jeden svůj hotový soubor.</p>
+</div><a class="switch" href="{{url_for('teacher_home')}}">← Administrace</a></div>
+
+{% with messages=get_flashed_messages() %}{% if messages %}<div class="notice">{% for m in messages %}<p>{{m}}</p>{% endfor %}</div>{% endif %}{% endwith %}
+
+<form method="post" enctype="multipart/form-data">
+<section class="course-card" style="padding:22px">
+<h2>1. Zařazení lekce</h2>
+<div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px">
+<label><b>Škola / třída</b><input name="school" required placeholder="např. SOŠ – Kuchař číšník"></label>
+<label><b>Ročník</b><input name="grade_name" required placeholder="např. 1. ročník"></label>
+<label><b>Téma</b><input name="topic" required placeholder="např. Excel – tabulky"></label>
+<label><b>Název lekce</b><input name="title" required placeholder="např. Jídelní lístek"></label>
+</div>
+<label><b>Krátký úvod (volitelné)</b><textarea name="intro" rows="3"></textarea></label>
+<label><b>Společný HTML soubor pro celou lekci – nahraje se jen jednou</b>
+<input type="file" name="lesson_html" accept=".html,.htm">
+<small>Stejný HTML výklad se zobrazí u celé lekce, ne u každého úkolu zvlášť.</small></label>
+</section>
+
+<section class="course-card" style="padding:22px;margin-top:18px">
+<h2>2. Úkoly</h2>
+<p>U každého úkolu stačí název a jeden hotový soubor učitele. Typ aplikace pozná engine sám podle přípony.</p>
+<div id="infTasks"></div>
+<button type="button" class="switch" onclick="addInfTask()">＋ Přidat další úkol</button>
+<div style="margin-top:22px"><button class="testbtn submit" type="submit">🔎 Analyzovat soubory a nabídnout kontroly</button></div>
+</section>
+</form>
+
+{% if lessons %}
+<section class="course-card" style="padding:22px;margin-top:18px">
+<h2>Existující informatické lekce</h2>
+{% for l in lessons %}
+<a class="lesson-row big" href="{{url_for('informatics_lesson',lesson_id=l.id)}}">
+<b>{{l.title}}</b><small>{{l.school}} · {{l.grade_name}} · {{l.topic}}</small>
+</a>
+{% endfor %}
+</section>
+{% endif %}
+</main></div>
+
+<script>
+let no=0;
+function addInfTask(){
+  no++;
+  const d=document.createElement('div');
+  d.className='course-card';
+  d.style='padding:18px;margin:14px 0;background:#fafcff';
+  d.innerHTML=`
+  <div style="display:flex;justify-content:space-between;align-items:center">
+    <h3 style="margin:0">Úkol ${no}</h3>
+    <button type="button" class="link-button danger" onclick="this.closest('.course-card').remove()">✕ Odebrat</button>
+  </div>
+  <label><b>Název úkolu</b><input name="task_titles" required placeholder="např. Vytvoř tabulku jídel"></label>
+  <label><b>Tvůj hotový soubor</b>
+    <input type="file" name="task_files" accept=".xlsx,.xlsm,.docx,.pptx,.py" required>
+    <small>Excel, Word, PowerPoint nebo Python. Typ rozpozná aplikace sama.</small>
+  </label>`;
+  document.getElementById('infTasks').appendChild(d);
+}
+addInfTask();
+</script>
+{% endblock %}

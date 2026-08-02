@@ -157,6 +157,97 @@ class InteractiveProgress(db.Model):
     interactive_lesson = db.relationship('InteractiveLesson')
 
 
+class InformaticsLesson(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    school = db.Column(db.String(160), default='')
+    grade_name = db.Column(db.String(120), default='')
+    topic = db.Column(db.String(180), default='')
+    title = db.Column(db.String(220), nullable=False)
+    intro = db.Column(db.Text, default='')
+    html_original = db.Column(db.String(255), default='')
+    html_stored = db.Column(db.String(255), default='')
+    is_published = db.Column(db.Boolean, default=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+
+class InformaticsTask(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    lesson_id = db.Column(db.Integer, db.ForeignKey('informatics_lesson.id'), nullable=False)
+    order = db.Column(db.Integer, default=1)
+    title = db.Column(db.String(220), nullable=False)
+    assignment = db.Column(db.Text, default='')
+    source_original = db.Column(db.String(255), nullable=False)
+    source_stored = db.Column(db.String(255), nullable=False)
+    file_type = db.Column(db.String(40), default='')
+    analysis_json = db.Column(db.Text, default='{}')
+    checks_json = db.Column(db.Text, default='[]')
+    image_file = db.Column(db.String(255), default='')
+    lesson = db.relationship('InformaticsLesson', backref='tasks')
+
+
+class InformaticsSubmission(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    task_id = db.Column(db.Integer, db.ForeignKey('informatics_task.id'), nullable=False)
+    original_name = db.Column(db.String(255), nullable=False)
+    stored_name = db.Column(db.String(255), nullable=False)
+    feedback_json = db.Column(db.Text, default='[]')
+    percent = db.Column(db.Integer, default=0)
+    grade = db.Column(db.Integer, default=5)
+    status = db.Column(db.String(60), default='kontrola')
+    focus_lost = db.Column(db.Integer, default=0)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    user = db.relationship('User')
+    task = db.relationship('InformaticsTask')
+
+
+class MathLesson(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    school = db.Column(db.String(160), default='')
+    grade_name = db.Column(db.String(120), default='')
+    topic = db.Column(db.String(180), default='')
+    title = db.Column(db.String(220), nullable=False)
+    html_original = db.Column(db.String(255), default='')
+    html_stored = db.Column(db.String(255), default='')
+    is_published = db.Column(db.Boolean, default=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+
+class MathExample(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    lesson_id = db.Column(db.Integer, db.ForeignKey('math_lesson.id'), nullable=False)
+    order = db.Column(db.Integer, default=1)
+    title = db.Column(db.String(220), default='')
+    problem = db.Column(db.Text, nullable=False)
+    lesson = db.relationship('MathLesson', backref='examples')
+
+
+class MathStep(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    example_id = db.Column(db.Integer, db.ForeignKey('math_example.id'), nullable=False)
+    order = db.Column(db.Integer, default=1)
+    instruction = db.Column(db.Text, nullable=False)
+    expected = db.Column(db.Text, nullable=False)
+    hint = db.Column(db.Text, default='')
+    example = db.relationship('MathExample', backref='steps')
+
+
+class MathAttempt(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    lesson_id = db.Column(db.Integer, db.ForeignKey('math_lesson.id'), nullable=False)
+    completed_steps = db.Column(db.Integer, default=0)
+    total_steps = db.Column(db.Integer, default=0)
+    percent = db.Column(db.Integer, default=0)
+    grade = db.Column(db.Integer, default=5)
+    status = db.Column(db.String(60), default='rozpracováno')
+    focus_lost = db.Column(db.Integer, default=0)
+    answers_json = db.Column(db.Text, default='[]')
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow)
+    user = db.relationship('User')
+    lesson = db.relationship('MathLesson')
+
+
 class LessonFocusSession(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
@@ -176,6 +267,22 @@ class StudentProgress(db.Model):
     updated_at = db.Column(db.DateTime, default=datetime.utcnow)
     user = db.relationship('User')
     lesson = db.relationship('Lesson')
+
+def ensure_informatics_columns():
+    """Doplní nové sloupce do starší lokální/Render databáze bez mazání dat."""
+    try:
+        insp = inspect(db.engine)
+        if 'informatics_lesson' not in insp.get_table_names():
+            return
+        cols = {c['name'] for c in insp.get_columns('informatics_lesson')}
+        with db.engine.begin() as conn:
+            if 'html_original' not in cols:
+                conn.execute(text("ALTER TABLE informatics_lesson ADD COLUMN html_original VARCHAR(255) DEFAULT ''"))
+            if 'html_stored' not in cols:
+                conn.execute(text("ALTER TABLE informatics_lesson ADD COLUMN html_stored VARCHAR(255) DEFAULT ''"))
+    except Exception as exc:
+        print('Informatics migration warning:', exc)
+
 
 def strip_accents(s):
     return ''.join(c for c in unicodedata.normalize('NFD', str(s).lower()) if unicodedata.category(c) != 'Mn').strip()
@@ -211,12 +318,34 @@ def last_result_for_student(user_id):
 def current_progress_for_student(user_id):
     return StudentProgress.query.filter_by(user_id=user_id).order_by(StudentProgress.updated_at.desc()).first()
 
+def last_informatics_submission_for_student(user_id):
+    return InformaticsSubmission.query.filter(
+        InformaticsSubmission.user_id == user_id,
+        InformaticsSubmission.status != 'kontrola'
+    ).order_by(InformaticsSubmission.created_at.desc()).first()
+
+def last_math_attempt_for_student(user_id):
+    return MathAttempt.query.filter(
+        MathAttempt.user_id == user_id,
+        MathAttempt.status != 'rozpracováno'
+    ).order_by(MathAttempt.updated_at.desc()).first()
+
 def student_overview_rows():
     rows = []
     for stu in User.query.filter_by(role='student').order_by(User.name).all():
         pr = current_progress_for_student(stu.id)
         res = last_result_for_student(stu.id)
-        rows.append({'student': stu, 'progress': pr, 'result': res})
+        inf = last_informatics_submission_for_student(stu.id)
+        math = last_math_attempt_for_student(stu.id)
+        inf_grade = informatics_grade_from_percent(inf.percent) if inf else None
+        rows.append({
+            'student': stu,
+            'progress': pr,
+            'result': res,
+            'informatics': inf,
+            'informatics_grade': inf_grade,
+            'math': math,
+        })
     return rows
 
 def require_login():
@@ -509,7 +638,7 @@ def api_focus_lost():
     data = request.get_json(silent=True) or {}
     kind = str(data.get('kind', '')).strip()
     key = str(data.get('key', '')).strip()
-    if kind not in ('html', 'interactive') or not key:
+    if kind not in ('html', 'interactive', 'informatics', 'math') or not key:
         return jsonify({'ok': False, 'error': 'Neplatná lekce.'}), 400
 
     row = get_focus_session(kind, key, create=True)
@@ -531,7 +660,7 @@ def api_focus_lost():
                     focus_lost=3, status='ukončeno po 3 opuštěních'
                 ))
                 touch_progress(lesson_item.id, 0, 'ukončeno po 3 opuštěních')
-        else:
+        elif kind == 'interactive':
             lesson_item = InteractiveLesson.query.filter_by(slug=key).first()
             if lesson_item:
                 db.session.add(InteractiveResult(
@@ -539,6 +668,38 @@ def api_focus_lost():
                     percent=0, grade=5, focus_lost=3,
                     status='ukončeno po 3 opuštěních'
                 ))
+        elif kind == 'informatics':
+            task_item = db.session.get(InformaticsTask, int(key)) if str(key).isdigit() else None
+            if task_item:
+                last = InformaticsSubmission.query.filter_by(
+                    user_id=user.id, task_id=task_item.id
+                ).order_by(InformaticsSubmission.created_at.desc()).first()
+                percent = last.percent if last else 0
+                db.session.add(InformaticsSubmission(
+                    user_id=user.id, task_id=task_item.id,
+                    original_name=(last.original_name if last else 'bez_souboru'),
+                    stored_name=(last.stored_name if last else ''),
+                    feedback_json=(last.feedback_json if last else '[]'),
+                    percent=percent, grade=informatics_grade_from_percent(percent),
+                    status='ukončeno po 3 opuštěních', focus_lost=3
+                ))
+        elif kind == 'math':
+            lesson_item = db.session.get(MathLesson, int(key)) if str(key).isdigit() else None
+            if lesson_item:
+                total = MathStep.query.join(MathExample).filter(MathExample.lesson_id == lesson_item.id).count()
+                attempt = MathAttempt.query.filter_by(user_id=user.id, lesson_id=lesson_item.id).first()
+                done = attempt.completed_steps if attempt else 0
+                percent = round(done / max(total,1) * 100)
+                if not attempt:
+                    attempt = MathAttempt(user_id=user.id, lesson_id=lesson_item.id)
+                    db.session.add(attempt)
+                attempt.completed_steps = done
+                attempt.total_steps = total
+                attempt.percent = percent
+                attempt.grade = informatics_grade_from_percent(percent)
+                attempt.status = 'ukončeno po 3 opuštěních'
+                attempt.focus_lost = 3
+                attempt.updated_at = datetime.utcnow()
         end_focus_attempt(kind, key)
         db.session.commit()
         return jsonify({'ok': True, 'count': 3, 'terminated': True,
@@ -591,10 +752,12 @@ def portal():
         ).count(),
         'matematika': Lesson.query.join(Block).join(Grade).join(Subject).filter(
             Subject.name.ilike('%matemat%'), Lesson.is_published.is_(True)
-        ).count() + InteractiveLesson.query.filter_by(subject='matematika', is_published=True).count(),
+        ).count() + InteractiveLesson.query.filter_by(subject='matematika', is_published=True).count()
+        + MathLesson.query.filter_by(is_published=True).count(),
         'informatika': Lesson.query.join(Block).join(Grade).join(Subject).filter(
             Subject.name.ilike('%informat%'), Lesson.is_published.is_(True)
-        ).count() + InteractiveLesson.query.filter_by(subject='informatika', is_published=True).count(),
+        ).count() + InteractiveLesson.query.filter_by(subject='informatika', is_published=True).count()
+        + InformaticsLesson.query.filter_by(is_published=True).count(),
     }
     return render_template('portal.html', course=course_from_lesson(None), lesson=None, counts=counts)
 
@@ -618,12 +781,20 @@ def subject_catalog(kind):
     }
     title, icon = titles[kind]
     interactive_groups = interactive_groups_for(kind) if kind in ('matematika', 'informatika') else []
+    informatics_lessons = InformaticsLesson.query.filter_by(is_published=True).order_by(
+        InformaticsLesson.school, InformaticsLesson.grade_name, InformaticsLesson.topic, InformaticsLesson.title
+    ).all() if kind == 'informatika' else []
+    math_lessons = MathLesson.query.filter_by(is_published=True).order_by(
+        MathLesson.school, MathLesson.grade_name, MathLesson.topic, MathLesson.title
+    ).all() if kind == 'matematika' else []
     return render_template(
         'catalog.html',
         course={'subject': title, 'grade':'', 'block':'', 'icon':icon},
         lesson=None,
         subjects=subjects,
         interactive_groups=interactive_groups,
+        informatics_lessons=informatics_lessons,
+        math_lessons=math_lessons,
         kind=kind,
         title=title,
         icon=icon
@@ -1203,6 +1374,1175 @@ def api_section_complete():
     touch_progress(lesson_id, step, 'splněná část lekce')
     return jsonify({'ok': True, 'ready_for_test': lesson_ready_for_test(lesson)})
 
+
+# ============================================================
+# INFORMATIKA – UNIVERZÁLNÍ ENGINE
+# Učitel nahraje hotový referenční soubor pouze pro analýzu.
+# Student jej nikdy nedostane a vytváří vlastní nový soubor od nuly.
+# ============================================================
+
+INFORMATICS_SOURCE_DIR = DATA_DIR / 'informatics_sources'
+INFORMATICS_SUBMISSION_DIR = DATA_DIR / 'informatics_submissions'
+INFORMATICS_SOURCE_DIR.mkdir(parents=True, exist_ok=True)
+INFORMATICS_SUBMISSION_DIR.mkdir(parents=True, exist_ok=True)
+
+
+def informatics_grade_from_percent(percent):
+    percent = int(percent or 0)
+    if percent >= 95: return 1
+    if percent >= 90: return 2
+    if percent >= 85: return 3
+    if percent >= 80: return 4
+    return 5
+
+
+def render_informatics_html(filename):
+    if not filename:
+        return ''
+    path = INFORMATICS_SOURCE_DIR / filename
+    if not path.exists():
+        return ''
+    try:
+        return path.read_text(encoding='utf-8', errors='replace')
+    except Exception:
+        return ''
+
+
+def _safe_json(value, default):
+    try:
+        return json.loads(value or '')
+    except Exception:
+        return default
+
+
+def _save_uploaded_file(file_storage, folder, prefix='file'):
+    ext = Path(file_storage.filename or '').suffix.lower()
+    name = f'{prefix}_{uuid.uuid4().hex}{ext}'
+    folder.mkdir(parents=True, exist_ok=True)
+    file_storage.save(folder / name)
+    return name
+
+
+def analyze_informatics_file(path, original_name):
+    """Vrátí strukturu souboru a seznam kontrol, které lze studentovi nabídnout."""
+    ext = Path(original_name).suffix.lower()
+    info = {'extension': ext, 'name': original_name}
+    checks = []
+
+    if ext in ('.xlsx', '.xlsm'):
+        info['type'] = 'Excel'
+        try:
+            import openpyxl
+            wb = openpyxl.load_workbook(path, data_only=False)
+            info['sheets'] = wb.sheetnames
+            total_nonempty = 0
+            total_formulas = 0
+            functions = set()
+            chart_count = 0
+            sheet_specs = []
+            for ws in wb.worksheets:
+                nonempty = 0
+                formulas = []
+                max_row = min(ws.max_row or 1, 500)
+                max_col = min(ws.max_column or 1, 50)
+                headers = []
+                for c in ws[1][:max_col]:
+                    if c.value not in (None, ''):
+                        headers.append(str(c.value))
+                for row in ws.iter_rows(min_row=1, max_row=max_row, max_col=max_col):
+                    for cell in row:
+                        if cell.value not in (None, ''):
+                            nonempty += 1
+                        if isinstance(cell.value, str) and cell.value.startswith('='):
+                            total_formulas += 1
+                            formulas.append({'cell': cell.coordinate, 'formula': cell.value})
+                            for fn in re.findall(r'([A-ZÁ-Ž][A-ZÁ-Ž0-9_.]*)\s*\(', cell.value.upper()):
+                                functions.add(fn)
+                total_nonempty += nonempty
+                chart_count += len(getattr(ws, '_charts', []) or [])
+                sheet_specs.append({
+                    'name': ws.title,
+                    'rows': ws.max_row or 0,
+                    'cols': ws.max_column or 0,
+                    'headers': headers,
+                    'nonempty': nonempty,
+                    'formulas': formulas[:40]
+                })
+            info.update({
+                'sheet_specs': sheet_specs,
+                'nonempty_count': total_nonempty,
+                'formula_count': total_formulas,
+                'formula_functions': sorted(functions),
+                'chart_count': chart_count,
+            })
+        except Exception as exc:
+            info['analysis_error'] = str(exc)
+
+        checks = [
+            {'code':'excel_sheets','label':'Počet a názvy listů'},
+            {'code':'excel_headers','label':'Záhlaví tabulky'},
+            {'code':'excel_size','label':'Rozsah tabulky / počet řádků a sloupců'},
+            {'code':'excel_filled','label':'Vyplněné části tabulky'},
+            {'code':'excel_formulas','label':'Použití vzorců'},
+            {'code':'excel_functions','label':'Použití konkrétních funkcí (např. SUM, IF, AVERAGE)'},
+            {'code':'excel_chart','label':'Graf, pokud je v učitelském souboru'},
+        ]
+
+    elif ext == '.docx':
+        info['type'] = 'Word'
+        try:
+            from docx import Document
+            doc = Document(path)
+            paragraphs = [p for p in doc.paragraphs if p.text.strip()]
+            headings = [p.text.strip() for p in paragraphs if str(p.style.name).lower().startswith(('heading','nadpis'))]
+            words = [w for p in paragraphs for w in p.text.split()]
+            info.update({
+                'paragraph_count': len(paragraphs),
+                'word_count': len(words),
+                'heading_count': len(headings),
+                'headings': headings[:30],
+                'table_count': len(doc.tables),
+                'image_count': len(doc.inline_shapes),
+            })
+        except Exception as exc:
+            info['analysis_error'] = str(exc)
+
+        checks = [
+            {'code':'word_length','label':'Rozsah dokumentu'},
+            {'code':'word_headings','label':'Nadpisy'},
+            {'code':'word_table','label':'Tabulky'},
+            {'code':'word_images','label':'Obrázky'},
+        ]
+
+    elif ext == '.pptx':
+        info['type'] = 'PowerPoint'
+        try:
+            from pptx import Presentation
+            prs = Presentation(path)
+            titles = []
+            image_count = 0
+            for slide in prs.slides:
+                if slide.shapes.title and slide.shapes.title.text.strip():
+                    titles.append(slide.shapes.title.text.strip())
+                for shape in slide.shapes:
+                    if getattr(shape, 'shape_type', None) == 13:  # picture
+                        image_count += 1
+            info.update({
+                'slide_count': len(prs.slides),
+                'titles': titles[:50],
+                'title_count': len(titles),
+                'image_count': image_count,
+            })
+        except Exception as exc:
+            info['analysis_error'] = str(exc)
+
+        checks = [
+            {'code':'ppt_slides','label':'Počet snímků'},
+            {'code':'ppt_titles','label':'Nadpisy snímků'},
+            {'code':'ppt_images','label':'Obrázky'},
+        ]
+
+    elif ext == '.py':
+        info['type'] = 'Python'
+        try:
+            import ast
+            source = Path(path).read_text(encoding='utf-8', errors='replace')
+            tree = ast.parse(source)
+            functions = [n.name for n in ast.walk(tree) if isinstance(n, ast.FunctionDef)]
+            variables = sorted({n.id for n in ast.walk(tree) if isinstance(n, ast.Name) and isinstance(n.ctx, ast.Store)})
+            imports = []
+            for n in ast.walk(tree):
+                if isinstance(n, ast.Import):
+                    imports.extend(a.name for a in n.names)
+                elif isinstance(n, ast.ImportFrom):
+                    imports.append(n.module or '')
+            calls = [getattr(n.func, 'id', '') for n in ast.walk(tree) if isinstance(n, ast.Call)]
+            info.update({
+                'functions': functions,
+                'variables': variables[:80],
+                'imports': sorted(set(x for x in imports if x)),
+                'has_if': any(isinstance(n, ast.If) for n in ast.walk(tree)),
+                'has_loop': any(isinstance(n, (ast.For, ast.While)) for n in ast.walk(tree)),
+                'has_input': 'input' in calls,
+                'has_print': 'print' in calls,
+                'line_count': len(source.splitlines()),
+            })
+        except Exception as exc:
+            info['syntax_error'] = str(exc)
+
+        checks = [
+            {'code':'py_syntax','label':'Program bez syntaktické chyby'},
+            {'code':'py_function','label':'Vlastní funkce'},
+            {'code':'py_condition','label':'Podmínka if'},
+            {'code':'py_loop','label':'Cyklus for / while'},
+            {'code':'py_io','label':'Vstup a výstup programu'},
+            {'code':'py_imports','label':'Použité knihovny'},
+            {'code':'py_required_names','label':'Názvy funkcí podle učitelského řešení'},
+        ]
+    else:
+        info['type'] = 'Soubor'
+        checks = [{'code':'file_type','label':'Správný typ souboru'}]
+
+    return info, checks
+
+
+def generated_assignment(info):
+    """Návrh instrukcí. Učitel ho před zveřejněním může libovolně přepsat."""
+    ext = info.get('extension','')
+    lines = []
+
+    if ext in ('.xlsx','.xlsm'):
+        specs = info.get('sheet_specs') or []
+        lines.append('Vytvoř nový prázdný sešit v Excelu a zpracuj jej podle následujících požadavků:')
+        if info.get('sheets'):
+            if len(info['sheets']) == 1:
+                lines.append(f'• Pracuj v jednom listu. List pojmenuj „{info["sheets"][0]}“.')
+            else:
+                lines.append('• Vytvoř listy: ' + ', '.join(info['sheets']) + '.')
+        for sp in specs[:5]:
+            headers = [x for x in sp.get('headers',[]) if x]
+            if headers:
+                lines.append(f'• V listu „{sp["name"]}“ vytvoř záhlaví: ' + ' | '.join(headers) + '.')
+            if sp.get('rows',0) > 1:
+                lines.append(f'• Tabulka v listu „{sp["name"]}“ má mít přibližně {sp["rows"]} řádků včetně záhlaví.')
+        funcs = info.get('formula_functions') or []
+        if funcs:
+            lines.append('• Pro výpočty použij funkce: ' + ', '.join(funcs) + '.')
+        elif info.get('formula_count',0):
+            lines.append(f'• Použij alespoň {info["formula_count"]} vzorec/vzorce.')
+        if info.get('chart_count',0):
+            lines.append(f'• Vytvoř {info["chart_count"]} graf/grafy.')
+        lines.append('• Soubor ulož ve formátu Excel a nahraj ho do lekce ke kontrole.')
+
+    elif ext == '.docx':
+        lines.append('Vytvoř nový prázdný dokument ve Wordu a zpracuj jej podle následujících požadavků:')
+        if info.get('heading_count',0):
+            lines.append(f'• Použij alespoň {info["heading_count"]} nadpis/nadpisy.')
+        if info.get('paragraph_count',0):
+            lines.append(f'• Dokument rozděl přibližně do {info["paragraph_count"]} odstavců.')
+        if info.get('word_count',0):
+            lines.append(f'• Rozsah dokumentu má být přibližně {info["word_count"]} slov.')
+        if info.get('table_count',0):
+            lines.append(f'• Vlož {info["table_count"]} tabulku/tabulky.')
+        if info.get('image_count',0):
+            lines.append(f'• Vlož alespoň {info["image_count"]} obrázek/obrázky.')
+        lines.append('• Hotový dokument ulož jako DOCX a nahraj ho do lekce.')
+
+    elif ext == '.pptx':
+        lines.append('Vytvoř novou prázdnou prezentaci v PowerPointu:')
+        if info.get('slide_count',0):
+            lines.append(f'• Prezentace má mít {info["slide_count"]} snímků.')
+        if info.get('title_count',0):
+            lines.append(f'• Použij nadpisy alespoň na {info["title_count"]} snímcích.')
+        if info.get('image_count',0):
+            lines.append(f'• Vlož alespoň {info["image_count"]} obrázek/obrázky.')
+        lines.append('• Hotovou prezentaci ulož jako PPTX a nahraj ji do lekce.')
+
+    elif ext == '.py':
+        lines.append('Vytvoř nový Python soubor od nuly a naprogramuj řešení podle těchto požadavků:')
+        funcs = info.get('functions') or []
+        if funcs:
+            lines.append('• Vytvoř funkci/funkce: ' + ', '.join(funcs) + '.')
+        if info.get('has_if'):
+            lines.append('• Použij podmínku if/else.')
+        if info.get('has_loop'):
+            lines.append('• Použij cyklus for nebo while.')
+        if info.get('has_input'):
+            lines.append('• Program má načíst vstup od uživatele.')
+        if info.get('has_print'):
+            lines.append('• Program má zobrazit výsledek uživateli.')
+        if info.get('imports'):
+            lines.append('• Použij knihovnu/knihovny: ' + ', '.join(info['imports']) + '.')
+        lines.append('• Program ulož jako .py a nahraj ho do lekce.')
+
+    else:
+        lines.append('Vytvoř nový soubor podle zadání učitele a nahraj ho do lekce.')
+
+    return '\n'.join(lines)
+
+
+def check_hint(code):
+    return {
+        'excel_sheets':'Podívej se dole v Excelu na názvy a počet záložek listů.',
+        'excel_headers':'Zkontroluj první řádek tabulky. Názvy sloupců musí odpovídat zadání.',
+        'excel_size':'Zkontroluj, jestli má tabulka požadovaný počet řádků a sloupců.',
+        'excel_filled':'Zkontroluj, zda v tabulce nezůstala místa, která mají být vyplněná.',
+        'excel_formulas':'Výpočet v Excelu musí být vzorec – nezačínej výsledkem, ale znakem =.',
+        'excel_functions':'Podívej se na funkci ve vzorci. Může jít například o SUM, AVERAGE nebo IF.',
+        'excel_chart':'Označ vhodná data a zkus kartu Vložení → Graf.',
+        'word_length':'Zkontroluj, zda dokument není kratší než požadovaný rozsah.',
+        'word_headings':'Použij styl Nadpis, ne pouze větší nebo tučné písmo.',
+        'word_table':'Tabulku vložíš přes Vložit → Tabulka.',
+        'word_images':'Zkontroluj, zda jsou v dokumentu vložené požadované obrázky.',
+        'ppt_slides':'Spočítej snímky v levém panelu PowerPointu.',
+        'ppt_titles':'Zkontroluj, zda mají požadované snímky skutečný nadpis.',
+        'ppt_images':'Zkontroluj, zda jsi vložil požadované obrázky.',
+        'py_syntax':'Spusť program. Python ti v první chybové hlášce ukáže řádek, kde je problém.',
+        'py_function':'Vlastní funkce začíná klíčovým slovem def.',
+        'py_condition':'Podmínku vytvoříš pomocí if, případně elif a else.',
+        'py_loop':'Pro opakování použij for nebo while.',
+        'py_io':'Zkontroluj práci se vstupem a výstupem, například input() a print().',
+        'py_imports':'Zkontroluj importy na začátku programu.',
+        'py_required_names':'Porovnej názvy svých funkcí se zadáním.',
+    }.get(code, 'Vrať se k zadání a zkontroluj tuto část práce krok po kroku.')
+
+
+def evaluate_informatics_file(student_path, student_name, task):
+    teacher = _safe_json(task.analysis_json, {})
+    raw_checks = _safe_json(task.checks_json, [])
+    checks = []
+    for item in raw_checks:
+        if isinstance(item, str):
+            checks.append({'code': item, 'question': ''})
+        elif isinstance(item, dict) and item.get('code'):
+            checks.append(item)
+    student, _ = analyze_informatics_file(student_path, student_name)
+    results = []
+
+    for check in checks:
+        code = check.get('code','')
+        question = check.get('question','')
+        custom_hint = check.get('hint','')
+        ok = True
+        label = code
+
+        if code == 'excel_sheets':
+            want = teacher.get('sheets') or []
+            have = student.get('sheets') or []
+            ok = want == have
+            label = 'Počet a názvy listů'
+        elif code == 'excel_headers':
+            want = teacher.get('sheet_specs') or []
+            have = student.get('sheet_specs') or []
+            if len(have) < len(want):
+                ok = False
+            else:
+                for i, sp in enumerate(want):
+                    if (sp.get('headers') or []) != (have[i].get('headers') or []):
+                        ok = False; break
+            label = 'Záhlaví tabulky'
+        elif code == 'excel_size':
+            want = teacher.get('sheet_specs') or []
+            have = student.get('sheet_specs') or []
+            ok = len(have) >= len(want)
+            if ok:
+                for i, sp in enumerate(want):
+                    if have[i].get('rows',0) < sp.get('rows',0) or have[i].get('cols',0) < sp.get('cols',0):
+                        ok=False; break
+            label = 'Rozsah tabulky'
+        elif code == 'excel_filled':
+            ok = int(student.get('nonempty_count',0) or 0) >= int(teacher.get('nonempty_count',0) or 0)
+            label = 'Vyplněné části tabulky'
+        elif code == 'excel_formulas':
+            ok = int(student.get('formula_count',0) or 0) >= int(teacher.get('formula_count',0) or 0)
+            label = 'Použití vzorců'
+        elif code == 'excel_functions':
+            ok = set(teacher.get('formula_functions') or []).issubset(set(student.get('formula_functions') or []))
+            label = 'Požadované funkce'
+        elif code == 'excel_chart':
+            ok = int(student.get('chart_count',0) or 0) >= int(teacher.get('chart_count',0) or 0)
+            label = 'Graf'
+        elif code == 'word_length':
+            ok = int(student.get('word_count',0) or 0) >= int(teacher.get('word_count',0) or 0)
+            label = 'Rozsah dokumentu'
+        elif code == 'word_headings':
+            ok = int(student.get('heading_count',0) or 0) >= int(teacher.get('heading_count',0) or 0)
+            label = 'Nadpisy'
+        elif code == 'word_table':
+            ok = int(student.get('table_count',0) or 0) >= int(teacher.get('table_count',0) or 0)
+            label = 'Tabulky'
+        elif code == 'word_images':
+            ok = int(student.get('image_count',0) or 0) >= int(teacher.get('image_count',0) or 0)
+            label = 'Obrázky'
+        elif code == 'ppt_slides':
+            ok = int(student.get('slide_count',0) or 0) >= int(teacher.get('slide_count',0) or 0)
+            label = 'Počet snímků'
+        elif code == 'ppt_titles':
+            ok = int(student.get('title_count',0) or 0) >= int(teacher.get('title_count',0) or 0)
+            label = 'Nadpisy snímků'
+        elif code == 'ppt_images':
+            ok = int(student.get('image_count',0) or 0) >= int(teacher.get('image_count',0) or 0)
+            label = 'Obrázky'
+        elif code == 'py_syntax':
+            ok = not student.get('syntax_error')
+            label = 'Program bez syntaktické chyby'
+        elif code == 'py_function':
+            ok = len(student.get('functions') or []) >= len(teacher.get('functions') or [])
+            label = 'Vlastní funkce'
+        elif code == 'py_condition':
+            ok = (not teacher.get('has_if')) or bool(student.get('has_if'))
+            label = 'Podmínka if'
+        elif code == 'py_loop':
+            ok = (not teacher.get('has_loop')) or bool(student.get('has_loop'))
+            label = 'Cyklus'
+        elif code == 'py_io':
+            ok = ((not teacher.get('has_input')) or student.get('has_input')) and ((not teacher.get('has_print')) or student.get('has_print'))
+            label = 'Vstup a výstup'
+        elif code == 'py_imports':
+            ok = set(teacher.get('imports') or []).issubset(set(student.get('imports') or []))
+            label = 'Použité knihovny'
+        elif code == 'py_required_names':
+            ok = set(teacher.get('functions') or []).issubset(set(student.get('functions') or []))
+            label = 'Názvy funkcí'
+
+        results.append({
+            'code':code, 'label':label, 'question':question,
+            'ok':bool(ok), 'hint':custom_hint or check_hint(code)
+        })
+
+    return results
+
+
+def informatics_preview(path, original_name):
+    ext = Path(original_name).suffix.lower()
+    if ext in ('.xlsx','.xlsm'):
+        try:
+            import openpyxl
+            wb = openpyxl.load_workbook(path, data_only=False)
+            ws = wb[wb.sheetnames[0]]
+            rows = []
+            for row in ws.iter_rows(min_row=1, max_row=min(ws.max_row,25), max_col=min(ws.max_column,12)):
+                rows.append([c.value for c in row])
+            return {'kind':'table','title':ws.title,'rows':rows}
+        except Exception as exc:
+            return {'kind':'text','text':f'Náhled se nepodařilo vytvořit: {exc}'}
+    if ext == '.docx':
+        try:
+            from docx import Document
+            doc = Document(path)
+            text_value = '\n'.join(p.text for p in doc.paragraphs if p.text.strip())
+            return {'kind':'text','text':text_value[:18000]}
+        except Exception as exc:
+            return {'kind':'text','text':f'Náhled se nepodařilo vytvořit: {exc}'}
+    if ext == '.pptx':
+        try:
+            from pptx import Presentation
+            prs = Presentation(path)
+            lines = []
+            for i, slide in enumerate(prs.slides[:25],1):
+                texts = [sh.text.strip() for sh in slide.shapes if hasattr(sh,'text') and sh.text.strip()]
+                lines.append(f'Snímek {i}: ' + ' | '.join(texts))
+            return {'kind':'text','text':'\n'.join(lines)}
+        except Exception as exc:
+            return {'kind':'text','text':f'Náhled se nepodařilo vytvořit: {exc}'}
+    if ext == '.py':
+        return {'kind':'code','text':Path(path).read_text(encoding='utf-8', errors='replace')[:18000]}
+    return {'kind':'text','text':'Soubor byl nahrán. Pro tento typ souboru zatím není náhled.'}
+
+
+def informatics_task_unlocked(task):
+    u = current_user()
+    if not u or u.role == 'teacher' or task.order <= 1:
+        return True
+    previous = InformaticsTask.query.filter_by(lesson_id=task.lesson_id, order=task.order-1).first()
+    if not previous:
+        return True
+    last = InformaticsSubmission.query.filter_by(
+        user_id=u.id, task_id=previous.id, status='odevzdáno'
+    ).order_by(InformaticsSubmission.created_at.desc()).first()
+    return bool(last and last.percent == 100)
+
+
+@app.route('/teacher/informatics/new', methods=['GET','POST'])
+def new_informatics_lesson():
+    r = require_teacher()
+    if r: return r
+
+    if request.method == 'POST':
+        school = request.form.get('school','').strip()
+        grade_name = request.form.get('grade_name','').strip()
+        topic = request.form.get('topic','').strip()
+        title = request.form.get('title','').strip()
+        intro = request.form.get('intro','').strip()
+        html_file = request.files.get('lesson_html')
+        html_original = ''
+        html_stored = ''
+        if html_file and html_file.filename:
+            if Path(html_file.filename).suffix.lower() not in ('.html', '.htm'):
+                flash('Společný výklad musí být HTML soubor.')
+                return redirect(url_for('new_informatics_lesson'))
+            html_original = html_file.filename
+            html_stored = _save_uploaded_file(html_file, INFORMATICS_SOURCE_DIR, 'lesson_html')
+
+        if not all((school, grade_name, topic, title)):
+            flash('Vyplň školu/třídu, ročník, téma a název lekce.')
+            return redirect(url_for('new_informatics_lesson'))
+
+        source_files = request.files.getlist('task_files')
+        task_titles = request.form.getlist('task_titles')
+        valid = [(i,f) for i,f in enumerate(source_files) if f and f.filename]
+        if not valid:
+            flash('Přidej alespoň jeden hotový učitelský soubor k analýze.')
+            return redirect(url_for('new_informatics_lesson'))
+
+        allowed = {'.xlsx','.xlsm','.docx','.pptx','.py'}
+        prepared = []
+        for i, f in valid:
+            ext = Path(f.filename).suffix.lower()
+            if ext not in allowed:
+                flash(f'{f.filename}: podporovaný je Excel, Word, PowerPoint nebo Python.')
+                return redirect(url_for('new_informatics_lesson'))
+            stored = _save_uploaded_file(f, INFORMATICS_SOURCE_DIR, 'teacher')
+            analysis, suggested = analyze_informatics_file(INFORMATICS_SOURCE_DIR/stored, f.filename)
+            prepared.append({
+                'title': (task_titles[i].strip() if i < len(task_titles) else '') or f'Úkol {len(prepared)+1}',
+                'source_original': f.filename,
+                'source_stored': stored,
+                'analysis': analysis,
+                'suggested': suggested,
+                'assignment': generated_assignment(analysis),
+            })
+
+        session['informatics_builder'] = {
+            'school':school,'grade_name':grade_name,'topic':topic,'title':title,'intro':intro,
+            'html_original':html_original,'html_stored':html_stored,
+            'tasks':prepared
+        }
+        session.modified = True
+        return redirect(url_for('review_informatics_lesson'))
+
+    lessons = InformaticsLesson.query.order_by(InformaticsLesson.created_at.desc()).all()
+    return render_template('informatics_new.html', course=course_from_lesson(None), lesson=None, lessons=lessons)
+
+
+@app.route('/teacher/informatics/review', methods=['GET','POST'])
+def review_informatics_lesson():
+    r = require_teacher()
+    if r: return r
+    data = session.get('informatics_builder')
+    if not data:
+        flash('Nejdřív nahraj soubory k analýze.')
+        return redirect(url_for('new_informatics_lesson'))
+
+    if request.method == 'POST':
+        lesson_row = InformaticsLesson(
+            school=data['school'], grade_name=data['grade_name'], topic=data['topic'],
+            title=data['title'], intro=data.get('intro',''),
+            html_original=data.get('html_original',''), html_stored=data.get('html_stored',''),
+            is_published=True
+        )
+        db.session.add(lesson_row); db.session.flush()
+
+        for i, t in enumerate(data['tasks']):
+            selected_codes = request.form.getlist(f'checks_{i}')
+            check_items = []
+            for code in selected_codes:
+                q = request.form.get(f'question_{i}_{code}', '').strip()
+                hint = request.form.get(f'hint_{i}_{code}', '').strip()
+                if not q:
+                    label = next((c.get('label','') for c in t.get('suggested',[]) if c.get('code') == code), code)
+                    q = f'Splň požadavek: {label}.'
+                if not hint:
+                    hint = check_hint(code)
+                check_items.append({'code': code, 'question': q, 'hint': hint})
+            assignment = request.form.get(f'assignment_{i}', t['assignment']).strip()
+            task_title = request.form.get(f'task_title_{i}', t['title']).strip() or t['title']
+            db.session.add(InformaticsTask(
+                lesson_id=lesson_row.id, order=i+1, title=task_title, assignment=assignment,
+                source_original=t['source_original'], source_stored=t['source_stored'],
+                file_type=t['analysis'].get('type',''),
+                analysis_json=json.dumps(t['analysis'], ensure_ascii=False),
+                checks_json=json.dumps(check_items, ensure_ascii=False),
+                image_file=''
+            ))
+
+        db.session.commit()
+        session.pop('informatics_builder', None)
+        flash('Informatická lekce byla vytvořena a zveřejněna.')
+        return redirect(url_for('informatics_lesson', lesson_id=lesson_row.id))
+
+    for t in data.get('tasks', []):
+        source_path = INFORMATICS_SOURCE_DIR / t.get('source_stored','')
+        t['preview'] = informatics_preview(source_path, t.get('source_original','')) if source_path.exists() else None
+    return render_template('informatics_review.html', course=course_from_lesson(None), lesson=None, data=data)
+
+
+@app.route('/teacher/informatics/<int:lesson_id>/delete', methods=['POST'])
+def delete_informatics_lesson(lesson_id):
+    r = require_teacher()
+    if r:
+        return r
+
+    item = db.session.get(InformaticsLesson, lesson_id)
+    if not item:
+        flash('Informatická lekce už neexistuje.')
+        return redirect(url_for('teacher_home'))
+
+    try:
+        # Načteme si úkoly jako ORM objekty a mažeme je postupně.
+        tasks = list(
+            InformaticsTask.query.filter_by(lesson_id=item.id)
+            .order_by(InformaticsTask.order)
+            .all()
+        )
+
+        for task in tasks:
+            # Nejprve všechny studentské výsledky k úkolu.
+            submissions = list(
+                InformaticsSubmission.query.filter_by(task_id=task.id).all()
+            )
+            for submission in submissions:
+                db.session.delete(submission)
+
+            db.session.flush()
+            db.session.delete(task)
+
+        db.session.flush()
+        db.session.delete(item)
+        db.session.commit()
+
+        flash('Informatická lekce byla smazána.')
+    except Exception:
+        db.session.rollback()
+        raise
+
+    return redirect(url_for('teacher_home'))
+
+
+@app.route('/informatics-lesson/<int:lesson_id>')
+def informatics_lesson(lesson_id):
+    r = require_login()
+    if r: return r
+    item = db.session.get(InformaticsLesson, lesson_id)
+    if not item or (not item.is_published and current_user().role != 'teacher'):
+        return 'Lekce nebyla nalezena.', 404
+    tasks = sorted(item.tasks, key=lambda x:x.order)
+    states = []
+    for task in tasks:
+        last = None
+        if current_user().role == 'student':
+            last = InformaticsSubmission.query.filter_by(user_id=current_user().id, task_id=task.id).order_by(InformaticsSubmission.created_at.desc()).first()
+        states.append({'task':task,'unlocked':informatics_task_unlocked(task),'last':last})
+    course = {'subject':'Informatika','grade':item.grade_name,'block':item.topic,'icon':'💻'}
+    lesson_obj = {'title':item.title,'block':item.topic}
+    html_content = render_informatics_html(item.html_stored)
+    return render_template('informatics_lesson.html', course=course, lesson=lesson_obj, item=item, states=states, html_content=html_content)
+
+
+@app.route('/informatics-task/<int:task_id>', methods=['GET','POST'])
+def informatics_task(task_id):
+    r = require_login()
+    if r: return r
+    task = db.session.get(InformaticsTask, task_id)
+    if not task:
+        return 'Úkol nebyl nalezen.', 404
+    if not informatics_task_unlocked(task):
+        flash('Nejdřív dokonči předchozí úkol na 100 %.')
+        return redirect(url_for('informatics_lesson', lesson_id=task.lesson_id))
+
+    if current_user().role == 'student':
+        begin_focus_attempt('informatics', task.id)
+
+    feedback = None
+    preview = None
+    percent = None
+    grade = None
+    checked_submission = None
+
+    if request.method == 'POST':
+        if current_user().role != 'student':
+            flash('Soubor odevzdává student.')
+            return redirect(url_for('informatics_task', task_id=task.id))
+
+        action = request.form.get('action','check')
+
+        if action == 'submit_existing':
+            sid = int(request.form.get('submission_id',0) or 0)
+            row = InformaticsSubmission.query.filter_by(
+                id=sid, user_id=current_user().id, task_id=task.id, status='kontrola'
+            ).first()
+            if not row:
+                flash('Nejdřív svůj soubor zkontroluj.')
+                return redirect(url_for('informatics_task', task_id=task.id))
+            row.status = 'odevzdáno'
+            row.grade = informatics_grade_from_percent(row.percent)
+            row.focus_lost = consume_focus_count('informatics', task.id)
+            row.created_at = datetime.utcnow()
+            db.session.commit()
+            flash(f'Úkol byl odevzdán: {row.percent} %, známka {row.grade}.')
+            return redirect(url_for('informatics_lesson', lesson_id=task.lesson_id))
+
+        f = request.files.get('student_file')
+        if not f or not f.filename:
+            flash('Vyber svůj hotový soubor.')
+        else:
+            expected = Path(task.source_original).suffix.lower()
+            got = Path(f.filename).suffix.lower()
+            if got != expected:
+                flash(f'Nahraj soubor typu {expected}. Vybral jsi {got or "soubor bez přípony"}.')
+            else:
+                user_dir = INFORMATICS_SUBMISSION_DIR / str(current_user().id)
+                stored = _save_uploaded_file(f, user_dir, f'task{task.id}')
+                path = user_dir / stored
+                feedback = evaluate_informatics_file(path, f.filename, task)
+                ok_count = sum(1 for x in feedback if x['ok'])
+                percent = round(ok_count / max(len(feedback),1) * 100)
+                grade = informatics_grade_from_percent(percent)
+                preview = informatics_preview(path, f.filename)
+                checked_submission = InformaticsSubmission(
+                    user_id=current_user().id, task_id=task.id, original_name=f.filename,
+                    stored_name=stored, feedback_json=json.dumps(feedback, ensure_ascii=False),
+                    percent=percent, grade=grade, status='kontrola',
+                    focus_lost=get_focus_count('informatics', task.id)
+                )
+                db.session.add(checked_submission)
+                db.session.commit()
+
+    if current_user().role == 'student' and feedback is None:
+        last = InformaticsSubmission.query.filter_by(
+            user_id=current_user().id, task_id=task.id, status='kontrola'
+        ).order_by(InformaticsSubmission.created_at.desc()).first()
+        if last:
+            feedback = _safe_json(last.feedback_json, [])
+            percent = last.percent
+            grade = informatics_grade_from_percent(percent)
+            checked_submission = last
+            p = INFORMATICS_SUBMISSION_DIR / str(current_user().id) / last.stored_name
+            if p.exists():
+                preview = informatics_preview(p, last.original_name)
+
+    item = task.lesson
+    course = {'subject':'Informatika','grade':item.grade_name,'block':item.topic,'icon':'💻'}
+    lesson_obj = {'title':item.title,'block':item.topic}
+    teacher_preview = None
+    teacher_source = INFORMATICS_SOURCE_DIR / task.source_stored
+    if teacher_source.exists():
+        teacher_preview = informatics_preview(teacher_source, task.source_original)
+    html_content = render_informatics_html(item.html_stored)
+    return render_template('informatics_task.html', course=course, lesson=lesson_obj,
+                           item=item, task=task, feedback=feedback, preview=preview,
+                           teacher_preview=teacher_preview, percent=percent, grade=grade,
+                           checked_submission=checked_submission, html_content=html_content)
+
+
+
+# ============================================================
+# MATEMATIKA – KROKOVÝ ENGINE
+# ============================================================
+
+def normalize_math_answer(value):
+    value = str(value or '').strip().lower()
+    value = value.replace(' ', '').replace(',', '.')
+    value = value.replace('−','-').replace('–','-')
+
+    # Mocniny: přijímáme x^2 i x**2.
+    value = value.replace('^', '**')
+
+    # Odmocniny:
+    # √x      -> sqrt(x)
+    # √(x+1)  -> sqrt(x+1)
+    # sqrt(x) zůstává beze změny.
+    import re as _re
+
+    # √(něco)
+    value = _re.sub(r'√\(([^()]*)\)', r'sqrt(\1)', value)
+
+    # √číslo nebo √proměnná
+    value = _re.sub(r'√([a-zA-Z0-9_.]+)', r'sqrt(\1)', value)
+
+    return value
+
+
+def math_answers_equivalent(student_value, expected_value):
+    """Porovnává matematický význam, ne přesný text.
+
+    Příklady, které uzná jako ekvivalentní:
+    x + 3 = 4   ↔   3 + x = 4
+    x = 1       ↔   -1 = -x
+    2*x = 2     ↔   x = 1
+
+    Když SymPy výraz neumí bezpečně zpracovat, použije se původní
+    normalizované textové porovnání.
+    """
+    a = normalize_math_answer(student_value)
+    b = normalize_math_answer(expected_value)
+
+    if a == b:
+        return True
+
+    try:
+        import sympy as sp
+        from sympy.parsing.sympy_parser import (
+            parse_expr,
+            standard_transformations,
+            implicit_multiplication_application,
+        )
+
+        transformations = standard_transformations + (implicit_multiplication_application,)
+
+        def parse_side(txt):
+            local_dict = {
+                'sqrt': sp.sqrt,
+            }
+            return parse_expr(
+                txt,
+                transformations=transformations,
+                evaluate=True,
+                local_dict=local_dict
+            )
+
+        def relation_to_expr(txt):
+            # Rovnici převedeme na výraz levá - pravá = 0.
+            if '=' in txt:
+                left, right = txt.split('=', 1)
+                return sp.simplify(parse_side(left) - parse_side(right)), True
+            return sp.simplify(parse_side(txt)), False
+
+        expr_a, is_eq_a = relation_to_expr(a)
+        expr_b, is_eq_b = relation_to_expr(b)
+
+        # Rovnici s výrazem nemícháme.
+        if is_eq_a != is_eq_b:
+            return False
+
+        # Běžné algebraické přeuspořádání.
+        if sp.simplify(expr_a - expr_b) == 0:
+            return True
+
+        if not is_eq_a:
+            return bool(sp.simplify(expr_a - expr_b) == 0)
+
+        # U rovnic uznáme i násobek celé rovnice nenulovou konstantou:
+        # 2x=2 je totéž jako x=1.
+        if expr_b != 0:
+            ratio = sp.simplify(expr_a / expr_b)
+            if ratio != 0 and not getattr(ratio, 'free_symbols', set()):
+                return True
+
+        # Poslední kontrola: porovnáme množinu řešení pro všechny proměnné.
+        symbols = sorted(expr_a.free_symbols | expr_b.free_symbols, key=lambda x: x.name)
+        if len(symbols) == 1:
+            x = symbols[0]
+            sol_a = sp.solveset(expr_a, x, domain=sp.S.Reals)
+            sol_b = sp.solveset(expr_b, x, domain=sp.S.Reals)
+            return sol_a == sol_b
+
+    except Exception:
+        pass
+
+    return a == b
+
+
+def math_lesson_total_steps(lesson_id):
+    return MathStep.query.join(MathExample).filter(MathExample.lesson_id == lesson_id).count()
+
+
+def get_math_attempt(user_id, lesson_id, create=False):
+    row = MathAttempt.query.filter_by(user_id=user_id, lesson_id=lesson_id).first()
+    if not row and create:
+        row = MathAttempt(user_id=user_id, lesson_id=lesson_id)
+        db.session.add(row)
+        db.session.flush()
+    return row
+
+
+def math_current_position(lesson, user_id):
+    examples = sorted(lesson.examples, key=lambda x:x.order)
+    flat = []
+    for ex in examples:
+        for st in sorted(ex.steps, key=lambda x:x.order):
+            flat.append((ex, st))
+    attempt = get_math_attempt(user_id, lesson.id, create=True)
+    idx = min(int(attempt.completed_steps or 0), len(flat))
+    return flat, attempt, idx
+
+
+@app.route('/teacher/math/new', methods=['GET','POST'])
+def new_math_lesson():
+    r = require_teacher()
+    if r: return r
+    if request.method == 'POST':
+        school=request.form.get('school','').strip()
+        grade_name=request.form.get('grade_name','').strip()
+        topic=request.form.get('topic','').strip()
+        title=request.form.get('title','').strip()
+        if not all((school,grade_name,topic,title)):
+            flash('Vyplň školu/třídu, ročník, téma a název lekce.')
+            return redirect(url_for('new_math_lesson'))
+
+        html_file=request.files.get('lesson_html')
+        html_original=''; html_stored=''
+        if html_file and html_file.filename:
+            if Path(html_file.filename).suffix.lower() not in ('.html','.htm'):
+                flash('Výklad musí být HTML soubor.')
+                return redirect(url_for('new_math_lesson'))
+            html_original=html_file.filename
+            html_stored=_save_uploaded_file(html_file, INFORMATICS_SOURCE_DIR, 'math_html')
+
+        lesson_row=MathLesson(
+            school=school, grade_name=grade_name, topic=topic, title=title,
+            html_original=html_original, html_stored=html_stored, is_published=True
+        )
+        db.session.add(lesson_row); db.session.flush()
+
+        # Data přicházejí jako JSON z dynamického editoru.
+        try:
+            payload=json.loads(request.form.get('examples_json','[]') or '[]')
+        except Exception:
+            payload=[]
+        if not payload:
+            db.session.rollback()
+            flash('Přidej alespoň jeden příklad.')
+            return redirect(url_for('new_math_lesson'))
+
+        previous_steps=[]
+        for ei, ex in enumerate(payload,1):
+            ex_row=MathExample(
+                lesson_id=lesson_row.id, order=ei,
+                title=str(ex.get('title') or f'Příklad {ei}'),
+                problem=str(ex.get('problem') or '').strip()
+            )
+            db.session.add(ex_row); db.session.flush()
+            steps=ex.get('steps') or []
+            if ex.get('copy_previous') and previous_steps and not steps:
+                steps=[dict(x) for x in previous_steps]
+            if not steps:
+                db.session.rollback()
+                flash(f'Příklad {ei} nemá žádné kroky.')
+                return redirect(url_for('new_math_lesson'))
+            previous_steps=[]
+            for si, st in enumerate(steps,1):
+                item={
+                    'instruction':str(st.get('instruction') or '').strip(),
+                    'expected':str(st.get('expected') or '').strip(),
+                    'hint':str(st.get('hint') or '').strip()
+                }
+                previous_steps.append(item)
+                db.session.add(MathStep(
+                    example_id=ex_row.id, order=si,
+                    instruction=item['instruction'], expected=item['expected'], hint=item['hint']
+                ))
+        db.session.commit()
+        flash('Matematická lekce byla vytvořena.')
+        return redirect(url_for('math_lesson', lesson_id=lesson_row.id))
+
+    lessons=MathLesson.query.order_by(MathLesson.created_at.desc()).all()
+    return render_template('math_new.html', course=course_from_lesson(None), lesson=None, lessons=lessons)
+
+
+@app.route('/math-lesson/<int:lesson_id>', methods=['GET','POST'])
+def math_lesson(lesson_id):
+    r=require_login()
+    if r:return r
+    item=db.session.get(MathLesson,lesson_id)
+    if not item:return 'Matematická lekce nebyla nalezena.',404
+
+    if current_user().role=='student':
+        begin_focus_attempt('math', item.id)
+
+    examples=sorted(item.examples,key=lambda x:x.order)
+    html_content=render_informatics_html(item.html_stored)
+    current=None; attempt=None; idx=0; total=0; message=None; hint=None
+    if current_user().role=='student':
+        flat,attempt,idx=math_current_position(item,current_user().id)
+        total=len(flat)
+        if idx < total:
+            current=flat[idx]
+        if request.method=='POST':
+            action=request.form.get('action','check')
+            if action=='submit':
+                percent=round((attempt.completed_steps or 0)/max(total,1)*100)
+                attempt.total_steps=total; attempt.percent=percent
+                attempt.grade=informatics_grade_from_percent(percent)
+                attempt.status='odevzdáno'
+                attempt.focus_lost=consume_focus_count('math',item.id)
+                attempt.updated_at=datetime.utcnow()
+                db.session.commit()
+                flash(f'Lekce byla odevzdána: {percent} %, známka {attempt.grade}.')
+                return redirect(url_for('subject_catalog',kind='matematika'))
+
+            if current:
+                answer=request.form.get('answer','')
+                ex,step=current
+                if math_answers_equivalent(answer, step.expected):
+                    answers = _safe_json(attempt.answers_json, [])
+                    answers.append({
+                        'example_id': ex.id,
+                        'step_id': step.id,
+                        'answer': str(answer).strip()
+                    })
+                    attempt.answers_json = json.dumps(answers, ensure_ascii=False)
+                    attempt.completed_steps=int(attempt.completed_steps or 0)+1
+                    attempt.total_steps=total
+                    attempt.percent=round(attempt.completed_steps/max(total,1)*100)
+                    attempt.grade=informatics_grade_from_percent(attempt.percent)
+                    attempt.status='rozpracováno'
+                    attempt.focus_lost=get_focus_count('math',item.id)
+                    attempt.updated_at=datetime.utcnow()
+                    db.session.commit()
+                    message='✅ Správně. Odemkl se další krok.'
+                    flat,attempt,idx=math_current_position(item,current_user().id)
+                    current=flat[idx] if idx < len(flat) else None
+                else:
+                    message='❌ Tento krok ještě není správně.'
+                    hint=step.hint
+        percent=round((attempt.completed_steps or 0)/max(total,1)*100) if attempt else 0
+        grade=informatics_grade_from_percent(percent)
+    else:
+        percent=0;grade=None
+
+    history_by_example = {}
+    if attempt:
+        for saved in _safe_json(attempt.answers_json, []):
+            history_by_example.setdefault(str(saved.get('example_id')), []).append(saved.get('answer',''))
+
+    current_example_number = current[0].order if current else (len(examples) if examples else 0)
+    current_step_number = current[1].order if current else None
+
+    course={'subject':'Matematika','grade':item.grade_name,'block':item.topic,'icon':'➗'}
+    lesson_obj={'title':item.title,'block':item.topic}
+    return render_template('math_lesson_engine.html',course=course,lesson=lesson_obj,item=item,
+        examples=examples,current=current,attempt=attempt,total=total,idx=idx,
+        percent=percent,grade=grade,message=message,hint=hint,html_content=html_content,
+        history_by_example=history_by_example,
+        current_example_number=current_example_number,
+        current_step_number=current_step_number)
+
+
+
+
+@app.route('/teacher/math/<int:lesson_id>/edit', methods=['GET','POST'])
+def edit_math_lesson(lesson_id):
+    r = require_teacher()
+    if r: return r
+
+    item = db.session.get(MathLesson, lesson_id)
+    if not item:
+        return 'Matematická lekce nebyla nalezena.', 404
+
+    if request.method == 'POST':
+        item.school = request.form.get('school', item.school).strip()
+        item.grade_name = request.form.get('grade_name', item.grade_name).strip()
+        item.topic = request.form.get('topic', item.topic).strip()
+        item.title = request.form.get('title', item.title).strip()
+
+        html_file = request.files.get('lesson_html')
+        if html_file and html_file.filename:
+            if Path(html_file.filename).suffix.lower() not in ('.html','.htm'):
+                flash('Výklad musí být HTML soubor.')
+                return redirect(url_for('edit_math_lesson', lesson_id=item.id))
+            item.html_original = html_file.filename
+            item.html_stored = _save_uploaded_file(html_file, INFORMATICS_SOURCE_DIR, 'math_html')
+
+        try:
+            payload = json.loads(request.form.get('examples_json','[]') or '[]')
+        except Exception:
+            payload = []
+
+        if not payload:
+            flash('Lekce musí obsahovat alespoň jeden příklad.')
+            return redirect(url_for('edit_math_lesson', lesson_id=item.id))
+
+        old_example_ids = [e.id for e in item.examples]
+        if old_example_ids:
+            MathStep.query.filter(MathStep.example_id.in_(old_example_ids)).delete(synchronize_session=False)
+            MathExample.query.filter(MathExample.id.in_(old_example_ids)).delete(synchronize_session=False)
+        db.session.flush()
+
+        previous_steps = []
+        for ei, ex in enumerate(payload, 1):
+            ex_row = MathExample(
+                lesson_id=item.id,
+                order=ei,
+                title=str(ex.get('title') or f'Příklad {ei}'),
+                problem=str(ex.get('problem') or '').strip()
+            )
+            db.session.add(ex_row)
+            db.session.flush()
+
+            steps = ex.get('steps') or []
+            if ex.get('copy_previous') and previous_steps and not steps:
+                steps = [dict(x) for x in previous_steps]
+
+            if not steps:
+                db.session.rollback()
+                flash(f'Příklad {ei} nemá žádné kroky.')
+                return redirect(url_for('edit_math_lesson', lesson_id=item.id))
+
+            previous_steps = []
+            for si, st in enumerate(steps, 1):
+                step_data = {
+                    'instruction': str(st.get('instruction') or '').strip(),
+                    'expected': str(st.get('expected') or '').strip(),
+                    'hint': str(st.get('hint') or '').strip(),
+                }
+                previous_steps.append(step_data)
+                db.session.add(MathStep(
+                    example_id=ex_row.id,
+                    order=si,
+                    instruction=step_data['instruction'],
+                    expected=step_data['expected'],
+                    hint=step_data['hint'],
+                ))
+
+        # Při změně struktury lekce vynulujeme staré rozpracované pokusy,
+        # aby jejich počet kroků neodkazoval na starou strukturu.
+        MathAttempt.query.filter_by(lesson_id=item.id).delete()
+        db.session.commit()
+        flash('Matematická lekce byla upravena.')
+        return redirect(url_for('math_lesson', lesson_id=item.id))
+
+    examples_data = []
+    for ex in sorted(item.examples, key=lambda x:x.order):
+        examples_data.append({
+            'title': ex.title,
+            'problem': ex.problem,
+            'steps': [
+                {
+                    'instruction': st.instruction,
+                    'expected': st.expected,
+                    'hint': st.hint,
+                }
+                for st in sorted(ex.steps, key=lambda x:x.order)
+            ]
+        })
+
+    return render_template(
+        'math_edit.html',
+        course=course_from_lesson(None),
+        lesson=None,
+        item=item,
+        examples_json=json.dumps(examples_data, ensure_ascii=False)
+    )
+
+@app.route('/teacher/math/<int:lesson_id>/delete', methods=['POST'])
+def delete_math_lesson(lesson_id):
+    r = require_teacher()
+    if r:
+        return r
+
+    item = db.session.get(MathLesson, lesson_id)
+    if not item:
+        flash('Matematická lekce už neexistuje.')
+        return redirect(url_for('teacher_home'))
+
+    try:
+        # Nejdřív smažeme výsledky/pokusy studentů.
+        MathAttempt.query.filter_by(lesson_id=item.id).delete(synchronize_session=False)
+
+        # Kroky a příklady mažeme jako načtené ORM objekty.
+        # Tím zabráníme StaleDataError při následném smazání lekce.
+        examples = list(MathExample.query.filter_by(lesson_id=item.id).order_by(MathExample.order).all())
+
+        for example in examples:
+            steps = list(MathStep.query.filter_by(example_id=example.id).all())
+            for step in steps:
+                db.session.delete(step)
+            db.session.flush()
+            db.session.delete(example)
+
+        db.session.flush()
+        db.session.delete(item)
+        db.session.commit()
+
+        flash('Matematická lekce byla smazána.')
+    except Exception:
+        db.session.rollback()
+        raise
+
+    return redirect(url_for('teacher_home'))
+
+
 @app.route('/teacher')
 def teacher_home():
     r=require_teacher();
@@ -1216,13 +2556,24 @@ def teacher_home():
         InteractiveLesson.topic,
         InteractiveLesson.title
     ).all()
+    informatics_lessons = InformaticsLesson.query.order_by(
+        InformaticsLesson.school,
+        InformaticsLesson.grade_name,
+        InformaticsLesson.topic,
+        InformaticsLesson.title
+    ).all()
+    math_lessons = MathLesson.query.order_by(
+        MathLesson.school, MathLesson.grade_name, MathLesson.topic, MathLesson.title
+    ).all()
     return render_template(
         'teacher.html',
         course=course_from_lesson(None),
         subjects=subjects,
         students=students,
         student_rows=student_overview_rows(),
-        interactive_lessons=interactive_lessons
+        interactive_lessons=interactive_lessons,
+        informatics_lessons=informatics_lessons,
+        math_lessons=math_lessons
     )
 
 @app.route('/teacher/students', methods=['GET','POST'])
@@ -1255,12 +2606,20 @@ def teacher_database():
     if r: return r
     html_results = Result.query.order_by(Result.created_at.desc()).all()
     interactive_results = InteractiveResult.query.order_by(InteractiveResult.completed_at.desc()).all()
+    informatics_results = InformaticsSubmission.query.filter(
+        InformaticsSubmission.status != 'kontrola'
+    ).order_by(InformaticsSubmission.created_at.desc()).all()
+    math_results = MathAttempt.query.filter(
+        MathAttempt.status != 'rozpracováno'
+    ).order_by(MathAttempt.updated_at.desc()).all()
     return render_template(
         'database.html',
         course=course_from_lesson(None),
         student_rows=student_overview_rows(),
         html_results=html_results,
-        interactive_results=interactive_results
+        interactive_results=interactive_results,
+        informatics_results=informatics_results,
+        math_results=math_results
     )
 
 
@@ -1289,12 +2648,27 @@ def delete_interactive_result(result_id):
     return redirect(url_for('teacher_database'))
 
 
+@app.route('/teacher/informatics-result/<int:result_id>/delete', methods=['POST'])
+def delete_informatics_result(result_id):
+    r = require_teacher()
+    if r:
+        return r
+    result = db.session.get(InformaticsSubmission, result_id)
+    if result:
+        db.session.delete(result)
+        db.session.commit()
+        flash('Výsledek informatického úkolu byl smazán.')
+    return redirect(url_for('teacher_database'))
+
+
 @app.route('/teacher/results/delete-all', methods=['POST'])
 def delete_all_results():
     r=require_teacher()
     if r: return r
     Result.query.delete()
     InteractiveResult.query.delete()
+    InformaticsSubmission.query.delete()
+    MathAttempt.query.delete()
     db.session.commit()
     flash('Všechny výsledky byly smazány. Studenti a jejich průběžný pokrok ve všech předmětech zůstali zachováni.')
     return redirect(url_for('teacher_database'))
@@ -1309,6 +2683,8 @@ def delete_student(user_id):
         StudentProgress.query.filter_by(user_id=stu.id).delete()
         InteractiveResult.query.filter_by(user_id=stu.id).delete()
         InteractiveProgress.query.filter_by(user_id=stu.id).delete()
+        InformaticsSubmission.query.filter_by(user_id=stu.id).delete()
+        MathAttempt.query.filter_by(user_id=stu.id).delete()
         db.session.delete(stu)
         db.session.commit()
         flash('Student byl smazán včetně jeho uloženého postupu a výsledků.')
@@ -1737,6 +3113,14 @@ def ensure_schema_updates():
         'interactive_result': {
             'focus_lost': 'INTEGER DEFAULT 0',
             'status': "VARCHAR(60) DEFAULT 'dokončeno'"
+        },
+        'informatics_submission': {
+            'grade': 'INTEGER DEFAULT 5',
+            'status': "VARCHAR(60) DEFAULT 'kontrola'",
+            'focus_lost': 'INTEGER DEFAULT 0'
+        },
+        'math_attempt': {
+            'answers_json': "TEXT DEFAULT '[]'"
         }
     }
     for table_name, columns in required.items():
@@ -1751,6 +3135,7 @@ def ensure_schema_updates():
 
 def seed():
     db.create_all()
+    ensure_informatics_columns()
     ensure_schema_updates()
     restore_interactive_lessons_from_files()
     tu = os.getenv('TEACHER_USERNAME', 'dnadler').lower()

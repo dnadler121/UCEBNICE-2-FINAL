@@ -1,0 +1,72 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="layout dashboard-layout"><main class="main-card">
+<div class="title-row"><div><h1>➗ Upravit matematickou lekci</h1>
+<p>Můžeš měnit zadání, kroky, správné odpovědi i vlastní nápovědy.</p></div>
+<a class="switch" href="{{url_for('teacher_home')}}">← Administrace</a></div>
+
+{% with messages=get_flashed_messages() %}{% if messages %}<div class="notice">{% for m in messages %}<p>{{m}}</p>{% endfor %}</div>{% endif %}{% endwith %}
+
+<form method="post" enctype="multipart/form-data" id="mathForm">
+<section class="course-card" style="padding:22px">
+<h2>Zařazení lekce</h2>
+<div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px">
+<label><b>Škola / třída</b><input name="school" required value="{{item.school}}"></label>
+<label><b>Ročník</b><input name="grade_name" required value="{{item.grade_name}}"></label>
+<label><b>Téma</b><input name="topic" required value="{{item.topic}}"></label>
+<label><b>Název lekce</b><input name="title" required value="{{item.title}}"></label>
+</div>
+<label><b>Nahradit HTML výklad (volitelné)</b><input type="file" name="lesson_html" accept=".html,.htm">
+<small>Současný soubor: {{item.html_original or 'žádný'}}</small></label>
+</section>
+
+<section class="course-card" style="padding:22px;margin-top:18px">
+<h2>Příklady a kroky</h2>
+<div id="examples"></div>
+<button type="button" class="switch" onclick="addExample(false)">＋ Nový příklad</button>
+<button type="button" class="switch" onclick="addExample(true)">⧉ Podobný příklad podle předchozího</button>
+<input type="hidden" name="examples_json" id="examples_json">
+<div style="margin-top:22px"><button class="testbtn submit" type="submit">💾 Uložit změny</button></div>
+</section>
+</form>
+</main></div>
+
+<script>
+let examples={{ examples_json|safe }};
+function esc(v){return (v||"").replace(/&/g,"&amp;").replace(/"/g,"&quot;").replace(/</g,"&lt;").replace(/>/g,"&gt;")}
+function render(){
+ const box=document.getElementById("examples"); box.innerHTML="";
+ examples.forEach((ex,ei)=>{
+   const wrap=document.createElement("div"); wrap.className="course-card"; wrap.style="padding:18px;margin:14px 0;background:#fafcff";
+   wrap.innerHTML=`<div style="display:flex;justify-content:space-between"><h3>Příklad ${ei+1}</h3><button type="button" class="link-button danger" onclick="removeExample(${ei})">✕</button></div>
+   <label>Název příkladu<input value="${esc(ex.title)}" oninput="examples[${ei}].title=this.value"></label>
+   <label>Zadání příkladu<textarea rows="2" oninput="examples[${ei}].problem=this.value">${ex.problem||""}</textarea></label>
+   <h4>Kroky</h4><div id="steps-${ei}"></div>
+   <button type="button" class="switch" onclick="addStep(${ei})">＋ Přidat krok</button>`;
+   box.appendChild(wrap);
+   const sb=wrap.querySelector(`#steps-${ei}`);
+   ex.steps.forEach((st,si)=>{
+      const d=document.createElement("div"); d.style="padding:12px;margin:10px 0;border:1px solid #e0e6ec;border-radius:10px;background:white";
+      d.innerHTML=`<b>Krok ${si+1}</b>
+      <label>Co má student udělat<input value="${esc(st.instruction)}" oninput="examples[${ei}].steps[${si}].instruction=this.value"></label>
+      <label>Správný stav / odpověď<input value="${esc(st.expected)}" oninput="examples[${ei}].steps[${si}].expected=this.value"></label>
+      <label>Moje nápověda<input value="${esc(st.hint)}" oninput="examples[${ei}].steps[${si}].hint=this.value"></label>
+      <button type="button" class="link-button danger" onclick="removeStep(${ei},${si})">Odebrat krok</button>`;
+      sb.appendChild(d);
+   });
+ });
+}
+function addExample(copy){
+ let steps=[{instruction:"",expected:"",hint:""}];
+ if(copy && examples.length){
+   steps=examples[examples.length-1].steps.map(s=>({instruction:s.instruction,expected:"",hint:s.hint}));
+ }
+ examples.push({title:"",problem:"",steps:steps}); render();
+}
+function removeExample(i){examples.splice(i,1);render()}
+function addStep(ei){examples[ei].steps.push({instruction:"",expected:"",hint:""});render()}
+function removeStep(ei,si){examples[ei].steps.splice(si,1);render()}
+document.getElementById("mathForm").addEventListener("submit",()=>{document.getElementById("examples_json").value=JSON.stringify(examples)});
+render();
+</script>
+{% endblock %}

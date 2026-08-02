@@ -4,3 +4,8 @@ python-dotenv
 werkzeug
 gunicorn
 
+
+openpyxl
+python-docx
+python-pptx
+sympy
