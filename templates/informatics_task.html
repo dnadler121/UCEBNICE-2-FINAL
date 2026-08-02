@@ -37,7 +37,12 @@
 
 {% if user.role=='student' %}
 <section class="course-card" style="padding:22px;margin-top:18px">
-<h2>1. Nejdřív práci zkontroluj</h2>
+<h2>1. Stáhni si svůj pracovní soubor</h2>
+<p>Pracuj pouze v tomto souboru. Je vytvořen přímo pro tvůj přihlášený účet a při odevzdání se ověří jeho původ. Soubor spolužáka systém nepřijme.</p>
+<a class="testbtn submit" href="{{url_for('download_informatics_workfile', task_id=task.id)}}">⬇️ Stáhnout můj pracovní soubor</a>
+</section>
+<section class="course-card" style="padding:22px;margin-top:18px">
+<h2>2. Nejdřív práci zkontroluj</h2>
 <p>Nahrání ke kontrole ještě není finální odevzdání. Můžeš opravovat tak dlouho, jak potřebuješ.</p>
 <form method="post" enctype="multipart/form-data">
 <input type="hidden" name="action" value="check">

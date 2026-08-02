@@ -48,7 +48,7 @@
     <h3 style="margin:4px 0 12px">{{ex.title or 'Příklad ' ~ ex.order}}</h3>
 
     <div style="font-size:1.3rem;font-weight:700;padding:8px 0">
-      {{ex.problem}}
+      {{math_variants.get(ex.id, {}).get('problem', ex.problem)}}
     </div>
 
     {% for answer in saved %}
@@ -61,7 +61,7 @@
     {% if is_current %}
       <div style="margin-top:15px;padding-top:15px;border-top:1px dashed #ccd5df">
         <div style="font-size:.9rem;color:#65717d">DALŠÍ KROK {{current[1].order}}</div>
-        <p style="font-size:1.08rem"><b>{{current[1].instruction}}</b></p>
+        <p style="font-size:1.08rem"><b>{{math_variants.get(ex.id, {}).get('steps', {}).get(current[1].id, {}).get('instruction', current[1].instruction)}}</b></p>
       </div>
     {% else %}
       <div style="margin-top:10px"><b>✅ Příklad dokončen</b></div>

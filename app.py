@@ -1,7 +1,7 @@
-import os, json, unicodedata, random, html, re, base64, uuid, urllib.parse, urllib.request, urllib.error, zipfile, shutil, importlib.util, tempfile, threading
+import os, json, unicodedata, random, html, re, base64, uuid, urllib.parse, urllib.request, urllib.error, zipfile, shutil, importlib.util, tempfile, threading, hmac, hashlib
 from pathlib import Path
 from datetime import datetime
-from flask import Flask, render_template, render_template_string, request, jsonify, session, redirect, url_for, send_from_directory, flash
+from flask import Flask, render_template, render_template_string, request, jsonify, session, redirect, url_for, send_from_directory, send_file, flash
 from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy import inspect, text
 from werkzeug.security import generate_password_hash, check_password_hash
@@ -183,6 +183,18 @@ class InformaticsTask(db.Model):
     checks_json = db.Column(db.Text, default='[]')
     image_file = db.Column(db.String(255), default='')
     lesson = db.relationship('InformaticsLesson', backref='tasks')
+
+
+class InformaticsWorkFile(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    task_id = db.Column(db.Integer, db.ForeignKey('informatics_task.id'), nullable=False)
+    token = db.Column(db.String(255), nullable=False, unique=True)
+    original_name = db.Column(db.String(255), nullable=False)
+    stored_name = db.Column(db.String(255), nullable=False)
+    downloaded_at = db.Column(db.DateTime, default=datetime.utcnow)
+    user = db.relationship('User')
+    task = db.relationship('InformaticsTask')
 
 
 class InformaticsSubmission(db.Model):
@@ -1830,6 +1842,130 @@ def informatics_preview(path, original_name):
     return {'kind':'text','text':'Soubor byl nahrán. Pro tento typ souboru zatím není náhled.'}
 
 
+def _informatics_signature(user_id, task_id, nonce):
+    secret = str(app.config.get('SECRET_KEY') or 'change-me').encode('utf-8')
+    msg = f'{user_id}:{task_id}:{nonce}'.encode('utf-8')
+    return hmac.new(secret, msg, hashlib.sha256).hexdigest()
+
+
+def _informatics_make_token(user_id, task_id):
+    nonce = uuid.uuid4().hex
+    sig = _informatics_signature(user_id, task_id, nonce)
+    return f'UCEBNICE2:{user_id}:{task_id}:{nonce}:{sig}'
+
+
+def _informatics_verify_token(token, user_id, task_id):
+    try:
+        prefix, uid, tid, nonce, sig = str(token or '').strip().split(':', 4)
+        if prefix != 'UCEBNICE2' or int(uid) != int(user_id) or int(tid) != int(task_id):
+            return False
+        return hmac.compare_digest(sig, _informatics_signature(uid, tid, nonce))
+    except Exception:
+        return False
+
+
+def _embed_work_token(path, ext, token):
+    ext = ext.lower()
+    if ext in ('.xlsx', '.xlsm'):
+        import openpyxl
+        wb = openpyxl.load_workbook(path, keep_vba=(ext == '.xlsm'))
+        ws = wb['__UCEBNICE_ID__'] if '__UCEBNICE_ID__' in wb.sheetnames else wb.create_sheet('__UCEBNICE_ID__')
+        ws['A1'] = token
+        ws.sheet_state = 'veryHidden'
+        wb.save(path)
+        return
+    if ext == '.docx':
+        from docx import Document
+        doc = Document(path)
+        doc.core_properties.keywords = token
+        doc.save(path)
+        return
+    if ext == '.pptx':
+        from pptx import Presentation
+        prs = Presentation(path)
+        prs.core_properties.keywords = token
+        prs.save(path)
+        return
+    if ext == '.py':
+        text = Path(path).read_text(encoding='utf-8', errors='replace')
+        Path(path).write_text(f'# UCEBNICE2-ID: {token}\n' + text, encoding='utf-8')
+
+
+def _extract_work_token(path, ext):
+    ext = ext.lower()
+    try:
+        if ext in ('.xlsx', '.xlsm'):
+            import openpyxl
+            wb = openpyxl.load_workbook(path, read_only=False, data_only=False, keep_vba=(ext == '.xlsm'))
+            if '__UCEBNICE_ID__' not in wb.sheetnames:
+                return ''
+            return str(wb['__UCEBNICE_ID__']['A1'].value or '').strip()
+        if ext == '.docx':
+            from docx import Document
+            return str(Document(path).core_properties.keywords or '').strip()
+        if ext == '.pptx':
+            from pptx import Presentation
+            return str(Presentation(path).core_properties.keywords or '').strip()
+        if ext == '.py':
+            head = Path(path).read_text(encoding='utf-8', errors='replace')[:1000]
+            m = re.search(r'UCEBNICE2-ID:\s*(UCEBNICE2:[^\s]+)', head)
+            return m.group(1) if m else ''
+    except Exception:
+        return ''
+    return ''
+
+
+def _create_student_work_file(task, user):
+    ext = Path(task.source_original).suffix.lower()
+    user_dir = INFORMATICS_SUBMISSION_DIR / str(user.id) / 'workfiles'
+    user_dir.mkdir(parents=True, exist_ok=True)
+    safe_base = secure_filename(Path(task.source_original).stem) or f'ukol_{task.id}'
+    filename = f'{safe_base}_student_{user.id}{ext}'
+    path = user_dir / filename
+
+    # Student dostává čistý pracovní soubor stejného typu, nikoli učitelovo hotové řešení.
+    if ext in ('.xlsx', '.xlsm'):
+        import openpyxl
+        wb = openpyxl.Workbook()
+        wb.active.title = 'List1'
+        wb.save(path)
+    elif ext == '.docx':
+        from docx import Document
+        Document().save(path)
+    elif ext == '.pptx':
+        from pptx import Presentation
+        Presentation().save(path)
+    elif ext == '.py':
+        path.write_text('# Pracovní soubor – vypracuj zadání níže.\n', encoding='utf-8')
+    else:
+        raise ValueError('Nepodporovaný typ pracovního souboru.')
+
+    token = _informatics_make_token(user.id, task.id)
+    _embed_work_token(path, ext, token)
+    row = InformaticsWorkFile.query.filter_by(user_id=user.id, task_id=task.id).first()
+    if not row:
+        row = InformaticsWorkFile(user_id=user.id, task_id=task.id, token=token, original_name=filename, stored_name=filename)
+        db.session.add(row)
+    else:
+        row.token = token; row.original_name = filename; row.stored_name = filename; row.downloaded_at = datetime.utcnow()
+    db.session.commit()
+    return path, filename
+
+
+@app.route('/informatics-task/<int:task_id>/download-workfile')
+def download_informatics_workfile(task_id):
+    r = require_login()
+    if r: return r
+    user = current_user()
+    if not user or user.role != 'student':
+        return 'Pracovní soubor stahuje student.', 403
+    task = db.session.get(InformaticsTask, task_id)
+    if not task or not informatics_task_unlocked(task):
+        return 'Úkol není dostupný.', 404
+    path, filename = _create_student_work_file(task, user)
+    return send_file(path, as_attachment=True, download_name=filename)
+
+
 def informatics_task_unlocked(task):
     u = current_user()
     if not u or u.role == 'teacher' or task.order <= 1:
@@ -2074,6 +2210,13 @@ def informatics_task(task_id):
                 user_dir = INFORMATICS_SUBMISSION_DIR / str(current_user().id)
                 stored = _save_uploaded_file(f, user_dir, f'task{task.id}')
                 path = user_dir / stored
+                token = _extract_work_token(path, got)
+                work_row = InformaticsWorkFile.query.filter_by(user_id=current_user().id, task_id=task.id).first()
+                if not token or not work_row or token != work_row.token or not _informatics_verify_token(token, current_user().id, task.id):
+                    try: path.unlink(missing_ok=True)
+                    except Exception: pass
+                    flash('Tento soubor nepochází z tvého pracovního souboru staženého z této stránky. Stáhni si svůj soubor tlačítkem „Stáhnout můj pracovní soubor“ a pracuj v něm.')
+                    return redirect(url_for('informatics_task', task_id=task.id))
                 feedback = evaluate_informatics_file(path, f.filename, task)
                 ok_count = sum(1 for x in feedback if x['ok'])
                 percent = round(ok_count / max(len(feedback),1) * 100)
@@ -2223,6 +2366,50 @@ def math_answers_equivalent(student_value, expected_value):
     return a == b
 
 
+def generated_math_variant(example, user_id):
+    """Z jednoduché lineární rovnice ax±b=c vytvoří stabilní variantu pro konkrétního žáka.
+    Když vzor nerozpozná, vrátí původní zadání a kroky beze změny.
+    """
+    problem = str(example.problem or '')
+    compact = normalize_math_answer(problem).replace('**', '^')
+    m = re.fullmatch(r'([+-]?\d*)\*?x([+-]\d+)=([+-]?\d+)', compact)
+    if not m:
+        return {'problem': problem, 'steps': {st.id:{'instruction':st.instruction,'expected':st.expected,'hint':st.hint} for st in example.steps}}
+    a_txt, b_txt, c_txt = m.groups()
+    if a_txt in ('', '+'): a0 = 1
+    elif a_txt == '-': a0 = -1
+    else: a0 = int(a_txt)
+    b0, c0 = int(b_txt), int(c_txt)
+    if a0 == 0 or (c0 - b0) % a0 != 0:
+        return {'problem': problem, 'steps': {st.id:{'instruction':st.instruction,'expected':st.expected,'hint':st.hint} for st in example.steps}}
+    x0 = (c0 - b0) // a0
+
+    seed_src = f'{app.config.get("SECRET_KEY")}:{user_id}:{example.id}:math-variant'
+    seed = int(hashlib.sha256(seed_src.encode()).hexdigest()[:16], 16)
+    rng = random.Random(seed)
+    a = rng.randint(2, 9) * (-1 if a0 < 0 else 1)
+    x = rng.randint(2, 12)
+    b_abs = rng.randint(1, 15)
+    b = b_abs if b0 >= 0 else -b_abs
+    c = a*x + b
+    ax = a*x
+
+    # Hodnoty z učitelova vzoru nahradíme odpovídajícími hodnotami nové varianty.
+    mapping = {a0:a, b0:b, c0:c, a0*x0:ax, x0:x}
+    # Delší čísla první, aby např. 31 nebylo částečně nahrazeno jako 3 a 1.
+    def transform(text_value):
+        out = str(text_value or '')
+        for old, new in sorted(mapping.items(), key=lambda kv: len(str(abs(kv[0]))), reverse=True):
+            out = re.sub(rf'(?<![\d.]){re.escape(str(old))}(?![\d.])', str(new), out)
+        return out
+
+    sign = '+' if b >= 0 else '-'
+    aa = '' if a == 1 else ('-' if a == -1 else str(a))
+    new_problem = f'{aa}x {sign} {abs(b)} = {c}'
+    steps = {st.id:{'instruction':transform(st.instruction),'expected':transform(st.expected),'hint':transform(st.hint)} for st in example.steps}
+    return {'problem':new_problem, 'steps':steps}
+
+
 def math_lesson_total_steps(lesson_id):
     return MathStep.query.join(MathExample).filter(MathExample.lesson_id == lesson_id).count()
 
@@ -2331,6 +2518,7 @@ def math_lesson(lesson_id):
         begin_focus_attempt('math', item.id)
 
     examples=sorted(item.examples,key=lambda x:x.order)
+    math_variants = {ex.id: generated_math_variant(ex, current_user().id) for ex in examples} if current_user().role=='student' else {}
     html_content=render_informatics_html(item.html_stored)
     current=None; attempt=None; idx=0; total=0; message=None; hint=None
     if current_user().role=='student':
@@ -2354,7 +2542,8 @@ def math_lesson(lesson_id):
             if current:
                 answer=request.form.get('answer','')
                 ex,step=current
-                if math_answers_equivalent(answer, step.expected):
+                expected_now = math_variants.get(ex.id, {}).get('steps', {}).get(step.id, {}).get('expected', step.expected)
+                if math_answers_equivalent(answer, expected_now):
                     answers = _safe_json(attempt.answers_json, [])
                     answers.append({
                         'example_id': ex.id,
@@ -2396,7 +2585,8 @@ def math_lesson(lesson_id):
         percent=percent,grade=grade,message=message,hint=hint,html_content=html_content,
         history_by_example=history_by_example,
         current_example_number=current_example_number,
-        current_step_number=current_step_number)
+        current_step_number=current_step_number,
+        math_variants=math_variants)
 
 
 
