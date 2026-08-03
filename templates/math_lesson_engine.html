@@ -90,8 +90,8 @@
 
 <form method="post">
 <input type="hidden" name="action" value="check">
-<label>Tvoje další úprava
-<input name="answer" autocomplete="off" required autofocus placeholder="Zapiš celý nový stav příkladu"></label>
+<div class="math-entry-label"><b>Doplň jednotlivé matematické znaky</b><small>Každá číslice, písmeno i operace má vlastní políčko. Odmocnítko a zlomková čára jsou připravené.</small></div>
+{{ current_input_html }}
 <button class="testbtn submit" type="submit">Zkontrolovat a pokračovat →</button>
 </form>
 </section>
@@ -114,6 +114,30 @@
 </main></div>
 
 {% if user.role=='student' %}
+<style>
+.math-entry-label{display:flex;flex-direction:column;gap:4px;margin:12px 0}.math-entry-label small{color:#65717d}
+.math-input-line{display:flex;align-items:center;gap:5px;flex-wrap:wrap;padding:18px 12px;margin:12px 0 18px;background:#fff;border:2px solid #dfe6ed;border-radius:14px;font-size:1.45rem;min-height:70px}
+.math-char{width:38px;height:44px;text-align:center;font-size:1.25rem;font-weight:700;border:2px solid #aebccc;border-radius:8px;padding:0}.math-char:focus{outline:3px solid rgba(37,99,235,.18);border-color:#2563eb}
+.math-char-super{width:30px;height:34px;font-size:1rem;align-self:flex-start;margin-top:-8px}
+.math-fixed{font-size:1.8rem;font-weight:700;padding:0 2px}
+.math-fraction{display:inline-flex;flex-direction:column;vertical-align:middle;align-items:stretch;margin:0 4px}.math-num,.math-den{display:flex;justify-content:center;gap:3px;padding:3px 2px}.math-num{border-bottom:2px solid #111}
+.math-fraction .math-char{width:34px;height:38px}
+</style>
+<script>
+document.addEventListener('DOMContentLoaded',()=>{
+ const fields=[...document.querySelectorAll('.math-char')];
+ if(fields.length) fields[0].focus();
+ fields.forEach((el,i)=>{
+   el.addEventListener('input',()=>{ if(el.value.length && fields[i+1]) fields[i+1].focus(); });
+   el.addEventListener('keydown',e=>{ if(e.key==='Backspace' && !el.value && fields[i-1]) fields[i-1].focus(); });
+   el.addEventListener('paste',e=>{
+     e.preventDefault(); const text=(e.clipboardData||window.clipboardData).getData('text').replace(/\s/g,'');
+     for(let j=0;j<text.length && i+j<fields.length;j++) fields[i+j].value=text[j];
+     const target=fields[Math.min(i+text.length,fields.length-1)]; if(target) target.focus();
+   });
+ });
+});
+</script>
 <script>window.UCEBNICE_FOCUS_GUARD={{ {'kind':'math','key':item.id}|tojson }};</script>
 <script src="{{url_for('static',filename='js/focus_guard.js')}}"></script>
 {% endif %}

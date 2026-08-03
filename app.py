@@ -6,6 +6,7 @@ from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy import inspect, text
 from werkzeug.security import generate_password_hash, check_password_hash
 from werkzeug.utils import secure_filename
+from markupsafe import Markup, escape
 from dotenv import load_dotenv
 
 BASE = Path(__file__).resolve().parent
@@ -2269,6 +2270,8 @@ def normalize_math_answer(value):
     value = value.replace('−','-').replace('–','-')
 
     # Mocniny: přijímáme x^2 i x**2.
+    supers = str.maketrans({'⁰':'0','¹':'1','²':'2','³':'3','⁴':'4','⁵':'5','⁶':'6','⁷':'7','⁸':'8','⁹':'9'})
+    value = re.sub(r'([a-zA-Z0-9_)])([⁰¹²³⁴⁵⁶⁷⁸⁹]+)', lambda m: m.group(1) + '**' + m.group(2).translate(supers), value)
     value = value.replace('^', '**')
 
     # Odmocniny:
@@ -2284,6 +2287,96 @@ def normalize_math_answer(value):
     value = _re.sub(r'√([a-zA-Z0-9_.]+)', r'sqrt(\1)', value)
 
     return value
+
+
+def validate_math_expression(value):
+    """Ověří, že učitelův matematický zápis umíme přečíst."""
+    txt = normalize_math_answer(value)
+    if not txt:
+        return False, 'zápis je prázdný'
+    try:
+        import sympy as sp
+        from sympy.parsing.sympy_parser import parse_expr, standard_transformations, implicit_multiplication_application
+        transformations = standard_transformations + (implicit_multiplication_application,)
+        local_dict = {'sqrt': sp.sqrt}
+        parts = txt.split('=', 1) if '=' in txt else [txt]
+        if any(not part for part in parts):
+            return False, 'chybí část výrazu před nebo za ='
+        for part in parts:
+            parse_expr(part, transformations=transformations, evaluate=False, local_dict=local_dict)
+        return True, ''
+    except Exception:
+        return False, 'tomuto matematickému zápisu aplikace nerozumí'
+
+
+def math_input_layout(expected):
+    """Popis políček bez správných znaků. Jednoduché a/b vykreslí jako skutečný zlomek."""
+    raw = str(expected or '').replace('−', '-').replace('–', '-')
+    compact = ''.join(ch for ch in raw if not ch.isspace())
+    tokens=[]; field_index=0; i=0; superscript=False
+    super_chars=set('²³⁰¹⁴⁵⁶⁷⁸⁹')
+
+    def make_fields(count, super_flags=None):
+        nonlocal field_index
+        out=[]
+        for n in range(count):
+            out.append({'kind':'field','index':field_index,'super':bool(super_flags and super_flags[n])})
+            field_index += 1
+        return out
+
+    while i < len(compact):
+        # Jednoduchý zlomek 12/18, x/3 apod. – čára je pevná, obsah jsou políčka.
+        fm = re.match(r'([A-Za-z0-9]+)/(?!/)([A-Za-z0-9]+)', compact[i:])
+        if fm:
+            num, den = fm.group(1), fm.group(2)
+            tokens.append({'kind':'fraction','num':make_fields(len(num)),'den':make_fields(len(den))})
+            i += len(fm.group(0)); continue
+        ch=compact[i]
+        if ch == '√':
+            tokens.append({'kind':'fixed','text':'√'}); i+=1; continue
+        if ch == '/':
+            tokens.append({'kind':'fixed','text':'/'}); i+=1; continue
+        if ch == '^':
+            superscript=True; i+=1; continue
+        if ch in super_chars:
+            tokens.extend(make_fields(1,[True])); i+=1; continue
+        tokens.extend(make_fields(1,[superscript])); superscript=False; i+=1
+    return {'tokens':tokens,'field_count':field_index}
+
+
+def math_answer_from_fields(expected, form):
+    """Složí studentova jednotlivá políčka zpět do matematického zápisu."""
+    raw = str(expected or '').replace('−','-').replace('–','-')
+    compact = ''.join(ch for ch in raw if not ch.isspace())
+    out=[]; idx=0; i=0
+    super_map={'²':'2','³':'3','⁰':'0','¹':'1','⁴':'4','⁵':'5','⁶':'6','⁷':'7','⁸':'8','⁹':'9'}
+    while i < len(compact):
+        ch=compact[i]
+        if ch in ('√','/'):
+            out.append(ch); i+=1; continue
+        if ch == '^':
+            out.append('^'); i+=1; continue
+        val=(form.get(f'math_char_{idx}') or '').strip()
+        out.append(val[:1]); idx+=1; i+=1
+    return ''.join(out)
+
+
+def render_math_input_layout(layout):
+    """Vykreslí samostatná políčka, horní indexy, odmocniny a skutečné zlomky."""
+    def field_html(tok):
+        cls='math-char math-char-super' if tok.get('super') else 'math-char'
+        return f'<input class="{cls}" name="math_char_{tok["index"]}" maxlength="1" autocomplete="off" required aria-label="matematický znak {tok["index"]+1}">'
+    parts=[]
+    for tok in layout.get('tokens',[]):
+        if tok['kind']=='fixed':
+            parts.append(f'<span class="math-fixed">{escape(tok["text"])}</span>')
+        elif tok['kind']=='fraction':
+            num=''.join(field_html(x) for x in tok['num'])
+            den=''.join(field_html(x) for x in tok['den'])
+            parts.append(f'<span class="math-fraction"><span class="math-num">{num}</span><span class="math-den">{den}</span></span>')
+        else:
+            parts.append(field_html(tok))
+    return Markup('<div class="math-input-line">'+''.join(parts)+'</div>')
 
 
 def math_answers_equivalent(student_value, expected_value):
@@ -2410,6 +2503,18 @@ def generated_math_variant(example, user_id):
     return {'problem':new_problem, 'steps':steps}
 
 
+def validate_math_payload(payload):
+    for ei, ex in enumerate(payload, 1):
+        ok, why = validate_math_expression(ex.get("problem", ""))
+        if not ok:
+            return f"Příklad {ei}: {why}. Oprav zadání a zkus to znovu."
+        for si, st in enumerate(ex.get("steps") or [], 1):
+            ok, why = validate_math_expression(st.get("expected", ""))
+            if not ok:
+                return f"Příklad {ei}, krok {si}: {why}. Oprav správný stav a zkus to znovu."
+    return None
+
+
 def math_lesson_total_steps(lesson_id):
     return MathStep.query.join(MathExample).filter(MathExample.lesson_id == lesson_id).count()
 
@@ -2470,6 +2575,11 @@ def new_math_lesson():
         if not payload:
             db.session.rollback()
             flash('Přidej alespoň jeden příklad.')
+            return redirect(url_for('new_math_lesson'))
+        math_error = validate_math_payload(payload)
+        if math_error:
+            db.session.rollback()
+            flash('❌ ' + math_error)
             return redirect(url_for('new_math_lesson'))
 
         previous_steps=[]
@@ -2540,9 +2650,9 @@ def math_lesson(lesson_id):
                 return redirect(url_for('subject_catalog',kind='matematika'))
 
             if current:
-                answer=request.form.get('answer','')
                 ex,step=current
                 expected_now = math_variants.get(ex.id, {}).get('steps', {}).get(step.id, {}).get('expected', step.expected)
+                answer = math_answer_from_fields(expected_now, request.form)
                 if math_answers_equivalent(answer, expected_now):
                     answers = _safe_json(attempt.answers_json, [])
                     answers.append({
@@ -2578,6 +2688,12 @@ def math_lesson(lesson_id):
     current_example_number = current[0].order if current else (len(examples) if examples else 0)
     current_step_number = current[1].order if current else None
 
+    current_input_html = None
+    if current and current_user().role == 'student':
+        ex_now, st_now = current
+        expected_now = math_variants.get(ex_now.id, {}).get('steps', {}).get(st_now.id, {}).get('expected', st_now.expected)
+        current_input_html = render_math_input_layout(math_input_layout(expected_now))
+
     course={'subject':'Matematika','grade':item.grade_name,'block':item.topic,'icon':'➗'}
     lesson_obj={'title':item.title,'block':item.topic}
     return render_template('math_lesson_engine.html',course=course,lesson=lesson_obj,item=item,
@@ -2586,7 +2702,7 @@ def math_lesson(lesson_id):
         history_by_example=history_by_example,
         current_example_number=current_example_number,
         current_step_number=current_step_number,
-        math_variants=math_variants)
+        math_variants=math_variants,current_input_html=current_input_html)
 
 
 
@@ -2621,6 +2737,11 @@ def edit_math_lesson(lesson_id):
 
         if not payload:
             flash('Lekce musí obsahovat alespoň jeden příklad.')
+            return redirect(url_for('edit_math_lesson', lesson_id=item.id))
+        math_error = validate_math_payload(payload)
+        if math_error:
+            db.session.rollback()
+            flash('❌ ' + math_error)
             return redirect(url_for('edit_math_lesson', lesson_id=item.id))
 
         old_example_ids = [e.id for e in item.examples]
