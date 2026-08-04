@@ -2323,6 +2323,18 @@ def validate_math_expression(value):
         return False, 'tomuto matematickému zápisu aplikace nerozumí'
 
 
+def format_math_display(value):
+    """Pouze vizuální převod učitelského zápisu pro studenta."""
+    text = str(value or '')
+    text = re.sub(r'(\d+(?:[.,]\d+)?)\s*deg\b', lambda m: m.group(1) + '°', text, flags=re.IGNORECASE)
+    text = re.sub(r'\balpha\b', 'α', text, flags=re.IGNORECASE)
+    # U běžných goniometrických funkcí odstraníme jen vnější závorky kolem jednoduchého úhlu.
+    text = re.sub(r'\b(sin|cos|tan)\(([^()]+)\)', r'\1 \2', text, flags=re.IGNORECASE)
+    return text
+
+app.jinja_env.filters['math_display'] = format_math_display
+
+
 def math_input_layout(expected):
     """Vytvoří strom studentských políček.
 
@@ -2390,7 +2402,7 @@ def math_input_layout(expected):
             if text.startswith('alpha',i) and (i+5==len(text) or not text[i+5].isalpha()):
                 nodes.append({'kind':'fixed','display':'α','answer':'alpha'}); i+=5; continue
             # Stupně: učitel píše např. 30deg, 45deg, 60deg. Celý úhel je pevný.
-            dm=re.match(r'(\d+(?:[.,]\d+)?)deg', text[i:], re.IGNORECASE)
+            dm=re.match(r'(\d+(?:[.,]\d+)?)\s*deg\b', text[i:], re.IGNORECASE)
             if dm:
                 shown=dm.group(1).replace('.', ',')+'°'
                 nodes.append({'kind':'fixed','display':shown,'answer':dm.group(1)+'deg'})

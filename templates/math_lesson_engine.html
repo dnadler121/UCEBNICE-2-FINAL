@@ -21,7 +21,7 @@
 <h3>{{loop.index}}. {{ex.title or 'Příklad ' ~ loop.index}}</h3>
 <div style="font-size:1.15rem;font-weight:700;margin:8px 0">{{ex.problem}}</div>
 {% for st in ex.steps|sort(attribute='order') %}
-<div style="padding:8px 0">{{loop.index}}. {{st.instruction}} <small>→ {{st.expected}} · nápověda: {{st.hint}}</small></div>
+<div style="padding:8px 0">{{loop.index}}. {{st.instruction}} <small>→ {{st.expected|math_display}} · nápověda: {{st.hint}}</small></div>
 {% endfor %}
 </div>
 {% endfor %}
