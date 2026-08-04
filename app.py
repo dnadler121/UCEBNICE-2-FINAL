@@ -2399,11 +2399,18 @@ def math_input_layout(expected):
             # Řecký úhel alpha je speciální pevný symbol.
             if text.startswith('alpha',i) and (i+5==len(text) or not text[i+5].isalpha()):
                 nodes.append({'kind':'fixed','display':'α','answer':'alpha'}); i+=5; continue
-            # Stupně: učitel píše např. 30deg, 45deg, 60deg. Celý úhel je pevný.
+            # Stupně ve SPRÁVNÉ ODPOVĚDI: číslo vyplní student, znak ° je pevný.
+            # Např. 30deg -> [3][0]° a 117deg -> [1][1][7]°.
             dm=re.match(r'(\d+(?:[.,]\d+)?)\s*deg\b', text[i:], re.IGNORECASE)
             if dm:
-                shown=dm.group(1).replace('.', ',')+'°'
-                nodes.append({'kind':'fixed','display':shown,'answer':dm.group(1)+'deg'})
+                number=dm.group(1)
+                for digit in number:
+                    if digit in '.,':
+                        # desetinný oddělovač zůstává součástí odpovědi jako běžné políčko
+                        nodes.append(field(digit, super_mode))
+                    else:
+                        nodes.append(field(digit, super_mode))
+                nodes.append({'kind':'fixed','display':'°','answer':'deg'})
                 i+=len(dm.group(0)); continue
             # Mocnina: ** je pevná konstrukce a exponent je horní index s inputy.
             if text.startswith('**',i):
