@@ -2328,6 +2328,7 @@ def math_input_layout(expected):
     compact = ''.join(ch for ch in raw if not ch.isspace())
     # Učitelský zápis jednoduché odmocniny x**(1/2) převedeme na sqrt(x).
     compact = re.sub(r'([A-Za-z0-9_.]+)\*\*\(1/2\)', r'sqrt(\1)', compact)
+    # Učitelský zápis úhlů: 30deg -> 30°. Úhel i znak stupně jsou pro studenta pevné.
     field_index = 0
 
     def field(ch, super_=False):
@@ -2379,6 +2380,15 @@ def math_input_layout(expected):
                     i=close+1; continue
             if text.startswith('pi',i) and (i+2==len(text) or not text[i+2].isalpha()):
                 nodes.append({'kind':'fixed','display':'π','answer':'pi'}); i+=2; continue
+            # Řecký úhel alpha je speciální pevný symbol.
+            if text.startswith('alpha',i) and (i+5==len(text) or not text[i+5].isalpha()):
+                nodes.append({'kind':'fixed','display':'α','answer':'alpha'}); i+=5; continue
+            # Stupně: učitel píše např. 30deg, 45deg, 60deg. Celý úhel je pevný.
+            dm=re.match(r'(\d+(?:[.,]\d+)?)deg', text[i:], re.IGNORECASE)
+            if dm:
+                shown=dm.group(1).replace('.', ',')+'°'
+                nodes.append({'kind':'fixed','display':shown,'answer':dm.group(1)+'deg'})
+                i+=len(dm.group(0)); continue
             # Mocnina: ** je pevná konstrukce a exponent je horní index s inputy.
             if text.startswith('**',i):
                 i+=2
