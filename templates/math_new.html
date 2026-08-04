@@ -6,6 +6,24 @@
 <a class="switch" href="{{url_for('teacher_home')}}">← Administrace</a></div>
 {% with messages=get_flashed_messages() %}{% if messages %}<div class="notice">{% for m in messages %}<p>{{m}}</p>{% endfor %}</div>{% endif %}{% endwith %}
 
+
+<section class="course-card math-help" style="padding:18px;margin-top:18px">
+<details open><summary><b>📐 Jak zapisovat matematiku – rychlá nápověda</b></summary>
+<p style="margin:10px 0 8px">Ty píšeš jednoduchý zápis. Student uvidí skutečnou matematickou konstrukci; speciální značky má pevně a doplňuje jen čísla, proměnné a běžné operátory.</p>
+<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:7px 18px;font-size:.95rem">
+<div><code>x**3</code> → mocnina x³</div><div><code>x**(1/2)</code> → √x</div>
+<div><code>12/18</code> → zlomek</div><div><code>abs(x)</code> → |x|</div>
+<div><code>log(x)</code> → log(x)</div><div><code>ln(x)</code> → ln(x)</div>
+<div><code>log(x,2)</code> → logaritmus se základem 2</div><div><code>pi</code> → π</div>
+<div><code>sin(x)</code> → sin(x)</div><div><code>cos(x)</code> → cos(x)</div>
+<div><code>tan(x)</code> → tan(x)</div><div><code>diff(x**2,x)</code> → derivace</div>
+<div><code>diff(x**3,x,2)</code> → 2. derivace</div><div><code>integrate(x**2,x)</code> → integrál</div>
+<div><code>+ - * / : &lt; &gt; = &lt;= &gt;= !=</code> → běžné operátory</div>
+</div>
+<p style="margin:10px 0 0"><small>Pokud aplikace zápisu nerozumí, lekci neuloží a vyzve tě k opravě.</small></p>
+</details>
+</section>
+
 <form method="post" enctype="multipart/form-data" id="mathForm">
 <section class="course-card" style="padding:22px">
 <h2>1. Zařazení lekce</h2>

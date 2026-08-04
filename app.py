@@ -2267,7 +2267,7 @@ def informatics_task(task_id):
 def normalize_math_answer(value):
     value = str(value or '').strip().lower()
     value = value.replace(' ', '').replace(',', '.')
-    value = value.replace('−','-').replace('–','-')
+    value = value.replace('−','-').replace('–','-').replace(':','/')
 
     # Mocniny: přijímáme x^2 i x**2.
     supers = str.maketrans({'⁰':'0','¹':'1','²':'2','³':'3','⁴':'4','⁵':'5','⁶':'6','⁷':'7','⁸':'8','⁹':'9'})
@@ -2298,8 +2298,16 @@ def validate_math_expression(value):
         import sympy as sp
         from sympy.parsing.sympy_parser import parse_expr, standard_transformations, implicit_multiplication_application
         transformations = standard_transformations + (implicit_multiplication_application,)
-        local_dict = {'sqrt': sp.sqrt}
-        parts = txt.split('=', 1) if '=' in txt else [txt]
+        local_dict = {
+            'sqrt': sp.sqrt, 'log': sp.log, 'ln': sp.log,
+            'sin': sp.sin, 'cos': sp.cos, 'tan': sp.tan,
+            'asin': sp.asin, 'acos': sp.acos, 'atan': sp.atan,
+            'abs': sp.Abs, 'pi': sp.pi,
+            'diff': sp.diff, 'integrate': sp.integrate,
+        }
+        # Samostatné '=' bereme jako rovnici; <=, >=, != necháme SymPy jako relaci.
+        eq = re.search(r'(?<![<>=!])=(?!=)', txt)
+        parts = [txt[:eq.start()], txt[eq.end():]] if eq else [txt]
         if any(not part for part in parts):
             return False, 'chybí část výrazu před nebo za ='
         for part in parts:
@@ -2310,74 +2318,156 @@ def validate_math_expression(value):
 
 
 def math_input_layout(expected):
-    """Popis políček bez správných znaků. Jednoduché a/b vykreslí jako skutečný zlomek."""
+    """Vytvoří strom studentských políček.
+
+    Student píše pouze číslice, proměnné a běžné operátory. Speciální
+    matematické konstrukce (odmocniny, funkce, integrály, derivace, | |,
+    pí, závorky, zlomková čára) vykresluje aplikace napevno.
+    """
     raw = str(expected or '').replace('−', '-').replace('–', '-')
     compact = ''.join(ch for ch in raw if not ch.isspace())
-    tokens=[]; field_index=0; i=0; superscript=False
-    super_chars=set('²³⁰¹⁴⁵⁶⁷⁸⁹')
+    # Učitelský zápis jednoduché odmocniny x**(1/2) převedeme na sqrt(x).
+    compact = re.sub(r'([A-Za-z0-9_.]+)\*\*\(1/2\)', r'sqrt(\1)', compact)
+    field_index = 0
 
-    def make_fields(count, super_flags=None):
+    def field(ch, super_=False):
         nonlocal field_index
-        out=[]
-        for n in range(count):
-            out.append({'kind':'field','index':field_index,'super':bool(super_flags and super_flags[n])})
-            field_index += 1
-        return out
+        node={'kind':'field','index':field_index,'expected':ch,'super':super_}
+        field_index += 1
+        return node
 
-    while i < len(compact):
-        # Jednoduchý zlomek 12/18, x/3 apod. – čára je pevná, obsah jsou políčka.
-        fm = re.match(r'([A-Za-z0-9]+)/(?!/)([A-Za-z0-9]+)', compact[i:])
-        if fm:
-            num, den = fm.group(1), fm.group(2)
-            tokens.append({'kind':'fraction','num':make_fields(len(num)),'den':make_fields(len(den))})
-            i += len(fm.group(0)); continue
-        ch=compact[i]
-        if ch == '√':
-            tokens.append({'kind':'fixed','text':'√'}); i+=1; continue
-        if ch == '/':
-            tokens.append({'kind':'fixed','text':'/'}); i+=1; continue
-        if ch == '^':
-            superscript=True; i+=1; continue
-        if ch in super_chars:
-            tokens.extend(make_fields(1,[True])); i+=1; continue
-        tokens.extend(make_fields(1,[superscript])); superscript=False; i+=1
-    return {'tokens':tokens,'field_count':field_index}
+    def split_args(text):
+        args=[]; depth=0; last=0
+        for j,ch in enumerate(text):
+            if ch=='(': depth+=1
+            elif ch==')': depth-=1
+            elif ch==',' and depth==0:
+                args.append(text[last:j]); last=j+1
+        args.append(text[last:])
+        return args
+
+    def matching_paren(text, pos):
+        depth=0
+        for j in range(pos,len(text)):
+            if text[j]=='(': depth+=1
+            elif text[j]==')':
+                depth-=1
+                if depth==0: return j
+        return -1
+
+    special={'sqrt','log','ln','sin','cos','tan','asin','acos','atan','abs','integrate','diff'}
+
+    def parse(text, super_mode=False):
+        nodes=[]; i=0
+        while i < len(text):
+            # Speciální funkce: název a konstrukce jsou pevné, argumenty se dále rozloží.
+            m=re.match(r'([A-Za-z]+)\(', text[i:])
+            if m and m.group(1).lower() in special:
+                name=m.group(1).lower(); op=i+len(m.group(1)); close=matching_paren(text,op)
+                if close!=-1:
+                    args=split_args(text[op+1:close])
+                    if name=='sqrt' and args:
+                        nodes.append({'kind':'sqrt','body':parse(args[0])})
+                    elif name=='abs' and args:
+                        nodes.append({'kind':'abs','body':parse(args[0])})
+                    elif name=='integrate' and args:
+                        nodes.append({'kind':'integral','body':parse(args[0]),'var':parse(args[1]) if len(args)>1 else []})
+                    elif name=='diff' and args:
+                        nodes.append({'kind':'derivative','body':parse(args[0]),'var':parse(args[1]) if len(args)>1 else [],'order':parse(args[2], True) if len(args)>2 else []})
+                    else:
+                        nodes.append({'kind':'function','name':name,'args':[parse(a) for a in args]})
+                    i=close+1; continue
+            if text.startswith('pi',i) and (i+2==len(text) or not text[i+2].isalpha()):
+                nodes.append({'kind':'fixed','display':'π','answer':'pi'}); i+=2; continue
+            # Mocnina: ** je pevná konstrukce a exponent je horní index s inputy.
+            if text.startswith('**',i):
+                i+=2
+                if i<len(text) and text[i]=='(':
+                    close=matching_paren(text,i)
+                    exp=text[i+1:close] if close!=-1 else text[i+1:]
+                    i=(close+1 if close!=-1 else len(text))
+                    nodes.append({'kind':'power','exp':parse(exp, True),'paren':True})
+                else:
+                    mexp=re.match(r'[A-Za-z0-9.+\-]+',text[i:])
+                    exp=mexp.group(0) if mexp else (text[i:i+1] or '')
+                    i+=len(exp)
+                    nodes.append({'kind':'power','exp':parse(exp, True),'paren':False})
+                continue
+            # Jednoduchý zlomek: čára je pevná.
+            fm=re.match(r'([A-Za-z0-9]+)/(?!/)([A-Za-z0-9]+)',text[i:])
+            if fm:
+                nodes.append({'kind':'fraction','num':parse(fm.group(1)),'den':parse(fm.group(2))})
+                i+=len(fm.group(0)); continue
+            ch=text[i]
+            if ch in '(),[]{}':
+                nodes.append({'kind':'fixed','display':ch,'answer':ch}); i+=1; continue
+            # Operátory a relační znaky student doplňuje sám.
+            if ch in '+-*/:<>=!':
+                nodes.append(field(ch,super_mode)); i+=1; continue
+            if ch=='√':
+                nodes.append({'kind':'fixed','display':'√','answer':'√'}); i+=1; continue
+            # Každá číslice a každé písmeno/proměnná = vlastní input.
+            nodes.append(field(ch,super_mode)); i+=1
+        return nodes
+
+    return {'tokens':parse(compact),'field_count':field_index}
 
 
-def math_answer_from_fields(expected, form):
-    """Složí studentova jednotlivá políčka zpět do matematického zápisu."""
-    raw = str(expected or '').replace('−','-').replace('–','-')
-    compact = ''.join(ch for ch in raw if not ch.isspace())
-    out=[]; idx=0; i=0
-    super_map={'²':'2','³':'3','⁰':'0','¹':'1','⁴':'4','⁵':'5','⁶':'6','⁷':'7','⁸':'8','⁹':'9'}
-    while i < len(compact):
-        ch=compact[i]
-        if ch in ('√','/'):
-            out.append(ch); i+=1; continue
-        if ch == '^':
-            out.append('^'); i+=1; continue
-        val=(form.get(f'math_char_{idx}') or '').strip()
-        out.append(val[:1]); idx+=1; i+=1
+def _math_answer_nodes(nodes, form):
+    out=[]
+    for tok in nodes:
+        k=tok['kind']
+        if k=='field':
+            val=(form.get(f'math_char_{tok["index"]}') or '').strip()
+            out.append(val[:1])
+        elif k=='fixed': out.append(tok.get('answer',''))
+        elif k=='fraction': out.append(_math_answer_nodes(tok['num'],form)+'/'+_math_answer_nodes(tok['den'],form))
+        elif k=='sqrt': out.append('sqrt('+_math_answer_nodes(tok['body'],form)+')')
+        elif k=='abs': out.append('abs('+_math_answer_nodes(tok['body'],form)+')')
+        elif k=='function': out.append(tok['name']+'('+','.join(_math_answer_nodes(a,form) for a in tok['args'])+')')
+        elif k=='integral': out.append('integrate('+_math_answer_nodes(tok['body'],form)+','+_math_answer_nodes(tok['var'],form)+')')
+        elif k=='derivative':
+            args=[_math_answer_nodes(tok['body'],form),_math_answer_nodes(tok['var'],form)]
+            if tok.get('order'): args.append(_math_answer_nodes(tok['order'],form))
+            out.append('diff('+','.join(args)+')')
+        elif k=='power':
+            exp=_math_answer_nodes(tok['exp'],form)
+            out.append('**'+(('('+exp+')') if tok.get('paren') else exp))
     return ''.join(out)
 
 
+def math_answer_from_fields(expected, form):
+    """Složí studentská políčka zpět do matematického zápisu."""
+    layout=math_input_layout(expected)
+    return _math_answer_nodes(layout['tokens'],form)
+
+
 def render_math_input_layout(layout):
-    """Vykreslí samostatná políčka, horní indexy, odmocniny a skutečné zlomky."""
+    """Vykreslí matematiku: speciální konstrukce pevně, obsah jako jednotlivé inputy."""
     def field_html(tok):
         cls='math-char math-char-super' if tok.get('super') else 'math-char'
         return f'<input class="{cls}" name="math_char_{tok["index"]}" maxlength="1" autocomplete="off" required aria-label="matematický znak {tok["index"]+1}">'
-    parts=[]
-    for tok in layout.get('tokens',[]):
-        if tok['kind']=='fixed':
-            parts.append(f'<span class="math-fixed">{escape(tok["text"])}</span>')
-        elif tok['kind']=='fraction':
-            num=''.join(field_html(x) for x in tok['num'])
-            den=''.join(field_html(x) for x in tok['den'])
-            parts.append(f'<span class="math-fraction"><span class="math-num">{num}</span><span class="math-den">{den}</span></span>')
-        else:
-            parts.append(field_html(tok))
-    return Markup('<div class="math-input-line">'+''.join(parts)+'</div>')
-
+    def render(nodes):
+        parts=[]
+        for tok in nodes:
+            k=tok['kind']
+            if k=='field': parts.append(field_html(tok))
+            elif k=='fixed': parts.append(f'<span class="math-fixed">{escape(tok.get("display",""))}</span>')
+            elif k=='fraction': parts.append(f'<span class="math-fraction"><span class="math-num">{render(tok["num"])}</span><span class="math-den">{render(tok["den"])}</span></span>')
+            elif k=='sqrt': parts.append(f'<span class="math-root"><span class="math-root-sign">√</span><span class="math-radicand">{render(tok["body"])}</span></span>')
+            elif k=='abs': parts.append(f'<span class="math-abs">|&nbsp;{render(tok["body"])}&nbsp;|</span>')
+            elif k=='function':
+                args='<span class="math-fixed">,</span>'.join(render(a) for a in tok['args'])
+                parts.append(f'<span class="math-function"><span class="math-fixed">{escape(tok["name"])}</span><span class="math-fixed">(</span>{args}<span class="math-fixed">)</span></span>')
+            elif k=='integral': parts.append(f'<span class="math-integral"><span class="math-special">∫</span>{render(tok["body"])}<span class="math-fixed">d</span>{render(tok["var"])}</span>')
+            elif k=='derivative':
+                var=render(tok['var']); order=render(tok.get('order',[]))
+                top='d'+(f'<sup>{order}</sup>' if order else '')
+                bottom='d'+var+(f'<sup>{order}</sup>' if order else '')
+                parts.append(f'<span class="math-derivative"><span class="math-deriv-frac"><span>{top}</span><span>{bottom}</span></span><span class="math-fixed">(</span>{render(tok["body"])}<span class="math-fixed">)</span></span>')
+            elif k=='power': parts.append(f'<sup class="math-power">{render(tok["exp"])}</sup>')
+        return ''.join(parts)
+    return Markup('<div class="math-input-line">'+render(layout.get('tokens',[]))+'</div>')
 
 def math_answers_equivalent(student_value, expected_value):
     """Porovnává matematický význam, ne přesný text.
@@ -2408,7 +2498,9 @@ def math_answers_equivalent(student_value, expected_value):
 
         def parse_side(txt):
             local_dict = {
-                'sqrt': sp.sqrt,
+                'sqrt': sp.sqrt, 'log': sp.log, 'ln': sp.log,
+                'sin': sp.sin, 'cos': sp.cos, 'tan': sp.tan,
+                'abs': sp.Abs, 'pi': sp.pi, 'diff': sp.diff, 'integrate': sp.integrate,
             }
             return parse_expr(
                 txt,
