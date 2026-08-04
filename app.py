@@ -2294,6 +2294,12 @@ def validate_math_expression(value):
     txt = normalize_math_answer(value)
     if not txt:
         return False, 'zápis je prázdný'
+
+    # V29: učitel může zapisovat stupně jako 30deg, 45deg, ...
+    # Pro validaci je převedeme na radiánový zápis, kterému SymPy rozumí.
+    # Původní text zůstává beze změny pro studentský renderer, kde je celý
+    # úhel (včetně znaku °) pevná konstrukce.
+    txt = re.sub(r'(\d+(?:\.\d+)?)deg\b', r'(\1*pi/180)', txt, flags=re.IGNORECASE)
     try:
         import sympy as sp
         from sympy.parsing.sympy_parser import parse_expr, standard_transformations, implicit_multiplication_application
