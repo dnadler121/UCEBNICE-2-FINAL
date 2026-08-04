@@ -2324,16 +2324,14 @@ def validate_math_expression(value):
 
 
 def format_math_display(value):
-    """Pouze vizuální převod učitelského zápisu pro studenta."""
+    """Vizuální převod učitelského matematického zápisu pro studentskou stránku."""
     text = str(value or '')
     text = re.sub(r'(\d+(?:[.,]\d+)?)\s*deg\b', lambda m: m.group(1) + '°', text, flags=re.IGNORECASE)
     text = re.sub(r'\balpha\b', 'α', text, flags=re.IGNORECASE)
-    # U běžných goniometrických funkcí odstraníme jen vnější závorky kolem jednoduchého úhlu.
     text = re.sub(r'\b(sin|cos|tan)\(([^()]+)\)', r'\1 \2', text, flags=re.IGNORECASE)
     return text
 
 app.jinja_env.filters['math_display'] = format_math_display
-
 
 def math_input_layout(expected):
     """Vytvoří strom studentských políček.
