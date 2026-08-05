@@ -232,6 +232,9 @@ class MathExample(db.Model):
     order = db.Column(db.Integer, default=1)
     title = db.Column(db.String(220), default='')
     problem = db.Column(db.Text, nullable=False)
+    # Volitelný obrázek / náčrt přímo k tomuto matematickému příkladu.
+    # Soubor se ukládá do trvalé složky uploads, v DB je pouze jeho název.
+    image_stored = db.Column(db.String(255), default='')
     lesson = db.relationship('MathLesson', backref='examples')
 
 
@@ -2709,10 +2712,17 @@ def new_math_lesson():
 
         previous_steps=[]
         for ei, ex in enumerate(payload,1):
+            image_file = request.files.get(f'example_image_{ei-1}')
+            image_stored = save_math_example_image(image_file)
+            if image_file and image_file.filename and not image_stored:
+                db.session.rollback()
+                flash(f'Příklad {ei}: obrázek musí být PNG, JPG, JPEG, WEBP, GIF nebo SVG.')
+                return redirect(url_for('new_math_lesson'))
             ex_row=MathExample(
                 lesson_id=lesson_row.id, order=ei,
                 title=str(ex.get('title') or f'Příklad {ei}'),
-                problem=str(ex.get('problem') or '').strip()
+                problem=str(ex.get('problem') or '').strip(),
+                image_stored=image_stored
             )
             db.session.add(ex_row); db.session.flush()
             steps=ex.get('steps') or []
@@ -2877,11 +2887,21 @@ def edit_math_lesson(lesson_id):
 
         previous_steps = []
         for ei, ex in enumerate(payload, 1):
+            existing_image = str(ex.get('image_stored') or '').strip()
+            remove_image = bool(ex.get('remove_image'))
+            image_file = request.files.get(f'example_image_{ei-1}')
+            new_image = save_math_example_image(image_file)
+            if image_file and image_file.filename and not new_image:
+                db.session.rollback()
+                flash(f'Příklad {ei}: obrázek musí být PNG, JPG, JPEG, WEBP, GIF nebo SVG.')
+                return redirect(url_for('edit_math_lesson', lesson_id=item.id))
+            image_stored = '' if remove_image else (new_image or existing_image)
             ex_row = MathExample(
                 lesson_id=item.id,
                 order=ei,
                 title=str(ex.get('title') or f'Příklad {ei}'),
-                problem=str(ex.get('problem') or '').strip()
+                problem=str(ex.get('problem') or '').strip(),
+                image_stored=image_stored
             )
             db.session.add(ex_row)
             db.session.flush()
@@ -2923,6 +2943,8 @@ def edit_math_lesson(lesson_id):
         examples_data.append({
             'title': ex.title,
             'problem': ex.problem,
+            'image_stored': ex.image_stored or '',
+            'remove_image': False,
             'steps': [
                 {
                     'instruction': st.instruction,
@@ -3483,6 +3505,17 @@ def save_upload(file):
     file.save(UPLOADS / name)
     return name
 
+
+def save_math_example_image(file):
+    """Uloží nepovinný obrázek/náčrt k matematickému příkladu."""
+    if not file or not file.filename:
+        return ''
+    ext = Path(file.filename).suffix.lower()
+    allowed = {'.png', '.jpg', '.jpeg', '.webp', '.gif', '.svg'}
+    if ext not in allowed or not (file.mimetype or '').startswith('image/'):
+        return ''
+    return save_upload(file)
+
 def save_question_images():
     """Uloží obrázky vložené přímo u otázek.
     V JSONu editor používá odkaz ve tvaru __file__:nazev_pole.
@@ -3557,6 +3590,9 @@ def ensure_schema_updates():
         },
         'math_attempt': {
             'answers_json': "TEXT DEFAULT '[]'"
+        },
+        'math_example': {
+            'image_stored': "VARCHAR(255) DEFAULT ''"
         }
     }
     for table_name, columns in required.items():

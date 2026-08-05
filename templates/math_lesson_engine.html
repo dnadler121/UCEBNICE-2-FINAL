@@ -20,6 +20,9 @@
 {% for ex in examples %}
 <div style="margin:18px 0">
 <h3>{{loop.index}}. {{ex.title or 'Příklad ' ~ loop.index}}</h3>
+{% if ex.image_stored %}
+<div style="margin:10px 0 14px"><img src="{{url_for('uploads',filename=ex.image_stored)}}" alt="Obrázek k příkladu {{loop.index}}" style="display:block;max-width:min(100%,720px);max-height:440px;object-fit:contain;border:1px solid #dfe6ed;border-radius:12px;background:white;padding:8px"></div>
+{% endif %}
 <div style="font-size:1.15rem;font-weight:700;margin:8px 0">{{ex.problem|math_display}}</div>
 {% for st in ex.steps|sort(attribute='order') %}
 <div style="padding:8px 0">{{loop.index}}. {{st.instruction}} <small>→ {{st.expected|math_display}} · nápověda: {{st.hint}}</small></div>
@@ -47,6 +50,12 @@
   <div style="margin:18px 0;padding:18px;border:1px solid #dfe6ed;border-radius:14px;{% if is_current %}background:#fafcff{% endif %}">
     <small>PŘÍKLAD {{ex.order}}</small>
     <h3 style="margin:4px 0 12px">{{ex.title or 'Příklad ' ~ ex.order}}</h3>
+
+    {% if ex.image_stored %}
+    <div style="margin:10px 0 14px">
+      <img src="{{url_for('uploads',filename=ex.image_stored)}}" alt="Náčrt k příkladu {{ex.order}}" style="display:block;max-width:min(100%,760px);max-height:480px;object-fit:contain;border:1px solid #dfe6ed;border-radius:12px;background:white;padding:8px">
+    </div>
+    {% endif %}
 
     <div style="font-size:1.3rem;font-weight:700;padding:8px 0">
       {{math_variants.get(ex.id, {}).get('problem', ex.problem)|math_display}}

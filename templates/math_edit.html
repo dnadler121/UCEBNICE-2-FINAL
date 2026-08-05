@@ -61,6 +61,11 @@ function render(){
    wrap.innerHTML=`<div style="display:flex;justify-content:space-between"><h3>Příklad ${ei+1}</h3><button type="button" class="link-button danger" onclick="removeExample(${ei})">✕</button></div>
    <label>Název příkladu<input value="${esc(ex.title)}" oninput="examples[${ei}].title=this.value"></label>
    <label>Zadání příkladu<textarea rows="2" oninput="examples[${ei}].problem=this.value">${ex.problem||""}</textarea></label>
+   ${ex.image_stored ? `<div style="margin:10px 0"><b>Současný obrázek:</b><br><img src="/uploads/${encodeURIComponent(ex.image_stored)}" alt="Obrázek k příkladu" style="max-width:420px;max-height:260px;object-fit:contain;border:1px solid #dfe6ed;border-radius:10px;background:white;padding:6px"></div>` : ""}
+   <label><b>${ex.image_stored ? "Nahradit obrázek" : "Obrázek / náčrt k tomuto příkladu"} (nepovinné)</b>
+     <input type="file" name="example_image_${ei}" accept="image/png,image/jpeg,image/webp,image/gif,image/svg+xml">
+   </label>
+   ${ex.image_stored ? `<label style="display:flex;align-items:center;gap:8px"><input type="checkbox" ${ex.remove_image ? "checked" : ""} onchange="examples[${ei}].remove_image=this.checked"> Odstranit současný obrázek</label>` : ""}
    <h4>Kroky</h4><div id="steps-${ei}"></div>
    <button type="button" class="switch" onclick="addStep(${ei})">＋ Přidat krok</button>`;
    box.appendChild(wrap);
@@ -81,7 +86,7 @@ function addExample(copy){
  if(copy && examples.length){
    steps=examples[examples.length-1].steps.map(s=>({instruction:s.instruction,expected:"",hint:s.hint}));
  }
- examples.push({title:"",problem:"",steps:steps}); render();
+ examples.push({title:"",problem:"",image_stored:"",remove_image:false,steps:steps}); render();
 }
 function removeExample(i){examples.splice(i,1);render()}
 function addStep(ei){examples[ei].steps.push({instruction:"",expected:"",hint:""});render()}

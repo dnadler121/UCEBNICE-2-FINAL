@@ -64,6 +64,10 @@ function render(){
    wrap.innerHTML=`<div style="display:flex;justify-content:space-between"><h3>Příklad ${ei+1}</h3><button type="button" class="link-button danger" onclick="removeExample(${ei})">✕</button></div>
    <label>Název příkladu<input value="${esc(ex.title)}" oninput="examples[${ei}].title=this.value"></label>
    <label>Zadání příkladu<textarea rows="2" oninput="examples[${ei}].problem=this.value">${ex.problem||""}</textarea></label>
+   <label><b>Obrázek / náčrt k tomuto příkladu (nepovinné)</b>
+     <input type="file" name="example_image_${ei}" accept="image/png,image/jpeg,image/webp,image/gif,image/svg+xml">
+     <small>Např. jednotková kružnice, graf, geometrický náčrt nebo schéma.</small>
+   </label>
    <h4>Kroky</h4><div id="steps-${ei}"></div>
    <button type="button" class="switch" onclick="addStep(${ei})">＋ Přidat krok</button>`;
    box.appendChild(wrap);
@@ -84,7 +88,7 @@ function addExample(copy){
  if(copy && examples.length){
    steps=examples[examples.length-1].steps.map(s=>({instruction:s.instruction,expected:"",hint:s.hint}));
  }
- examples.push({title:"",problem:"",steps:steps}); render();
+ examples.push({title:"",problem:"",image_stored:"",remove_image:false,steps:steps}); render();
 }
 function removeExample(i){examples.splice(i,1);render()}
 function addStep(ei){examples[ei].steps.push({instruction:"",expected:"",hint:""});render()}
