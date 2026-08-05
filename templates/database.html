@@ -67,7 +67,7 @@
                 <td>{{ r.task.lesson.topic }}</td>
                 <td>{{ r.task.lesson.title }}<br><small>{{ r.task.title }}</small></td>
                 <td>{{ r.percent }} %<br><small>odevzdaný soubor</small></td>
-                <td><b>{{ 1 if r.percent >= 95 else 2 if r.percent >= 90 else 3 if r.percent >= 85 else 4 if r.percent >= 80 else 5 }}</b></td>
+                <td><b>{{ 1 if r.percent >= 90 else 2 if r.percent >= 75 else 3 if r.percent >= 60 else 4 if r.percent >= 40 else 5 }}</b></td>
                 <td>—</td>
                 <td>{{ r.created_at.strftime('%d.%m.%Y %H:%M') }}</td>
                 <td><form method="post" action="{{ url_for('delete_informatics_result', result_id=r.id) }}"><button class="link-button danger">Smazat</button></form></td>

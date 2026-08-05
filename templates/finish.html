@@ -5,7 +5,7 @@
   <h1>Test dokončen</h1>
   <p>Výsledek posledního dokončeného testu: <b>{{ score }} / {{ total }}</b> · {{ percent }} %</p>
   <h2>Známka {{ grade }}</h2>
-  <p>100–95 % = 1, potom vždy po 5 % o známku hůře.</p>
+  <p>90–100 % = 1, 75–89 % = 2, 60–74 % = 3, 40–59 % = 4, méně než 40 % = 5.</p>
   <a class="primary" href="{{ url_for('lesson', lesson_id=lesson._id) }}">Zpět do lekce</a>
   <a class="secondary" href="{{ url_for('dashboard') }}">Moje lekce</a>
 </main>

@@ -18,7 +18,7 @@
 <section class="course-card" style="padding:20px;margin-bottom:14px;{% if not st.unlocked %}opacity:.55{% endif %}">
 <div style="display:flex;justify-content:space-between;align-items:center;gap:14px">
 <div><small>ÚKOL {{st.task.order}}</small><h2 style="margin:4px 0">{{st.task.title}}</h2>
-{% if st.last %}<p>Poslední výsledek: <b>{{st.last.percent}} %</b> · známka <b>{{ 1 if st.last.percent >= 95 else 2 if st.last.percent >= 90 else 3 if st.last.percent >= 85 else 4 if st.last.percent >= 80 else 5 }}</b></p>{% endif %}
+{% if st.last %}<p>Poslední výsledek: <b>{{st.last.percent}} %</b> · známka <b>{{ 1 if st.last.percent >= 90 else 2 if st.last.percent >= 75 else 3 if st.last.percent >= 60 else 4 if st.last.percent >= 40 else 5 }}</b></p>{% endif %}
 </div>
 {% if st.unlocked %}<a class="switch" href="{{url_for('informatics_task',task_id=st.task.id)}}">Otevřít úkol →</a>
 {% else %}<b>🔒 Nejdřív splň předchozí úkol na 100 %</b>{% endif %}

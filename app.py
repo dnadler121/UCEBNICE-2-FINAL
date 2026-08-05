@@ -304,10 +304,10 @@ def strip_accents(s):
     return ''.join(c for c in unicodedata.normalize('NFD', str(s).lower()) if unicodedata.category(c) != 'Mn').strip()
 
 def grade_from_percent(percent):
-    if percent >= 95: return 1
-    if percent >= 90: return 2
-    if percent >= 85: return 3
-    if percent >= 80: return 4
+    if percent >= 90: return 1
+    if percent >= 75: return 2
+    if percent >= 60: return 3
+    if percent >= 40: return 4
     return 5
 
 def current_user():
@@ -1405,10 +1405,10 @@ INFORMATICS_SUBMISSION_DIR.mkdir(parents=True, exist_ok=True)
 
 def informatics_grade_from_percent(percent):
     percent = int(percent or 0)
-    if percent >= 95: return 1
-    if percent >= 90: return 2
-    if percent >= 85: return 3
-    if percent >= 80: return 4
+    if percent >= 90: return 1
+    if percent >= 75: return 2
+    if percent >= 60: return 3
+    if percent >= 40: return 4
     return 5
 
 
