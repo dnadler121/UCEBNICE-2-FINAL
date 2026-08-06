@@ -243,6 +243,12 @@ class MathExample(db.Model):
     variant_min = db.Column(db.Float, default=1)
     variant_max = db.Column(db.Float, default=30)
     variant_step = db.Column(db.Float, default=1)
+    # Obecná pravidla pro kvalitu dopočítaných výsledků náhodné varianty.
+    variant_result_kind = db.Column(db.String(20), default='any')
+    variant_result_sign = db.Column(db.String(20), default='any')
+    variant_result_min = db.Column(db.Float, nullable=True)
+    variant_result_max = db.Column(db.Float, nullable=True)
+    variant_result_decimals = db.Column(db.Integer, default=-1)
     lesson = db.relationship('MathLesson', backref='examples')
 
 
@@ -2496,11 +2502,28 @@ def math_input_layout(expected):
             nodes.append(field(ch,super_mode)); i+=1
         return nodes
 
+    def is_simple_result_assignment(line):
+        m=re.match(r'^(alpha|[A-Za-z])=(.+)$', line, re.IGNORECASE)
+        if not m:
+            return None
+        lhs, rhs=m.group(1), m.group(2)
+        probe=re.sub(r'(?i)(sqrt|log|ln|sin|cos|tan|asin|acos|atan|abs|pi|deg)', '', rhs)
+        if re.search(r'[A-Za-z]', probe):
+            return None
+        return lhs, rhs
+
     tokens=[]
     for line_no, compact in enumerate(compact_lines):
         if line_no:
             tokens.append({'kind':'linebreak'})
-        tokens.extend(parse(compact))
+        assignment=is_simple_result_assignment(compact)
+        if assignment:
+            lhs,rhs=assignment
+            tokens.append({'kind':'fixed','display':'α' if lhs.lower()=='alpha' else lhs,'answer':lhs})
+            tokens.append({'kind':'fixed','display':'=','answer':'='})
+            tokens.extend(parse(rhs))
+        else:
+            tokens.extend(parse(compact))
     return {'tokens':tokens,'field_count':field_index}
 
 
@@ -2796,8 +2819,52 @@ def _replace_variant_numbers(text_value, source_values, new_values):
     return out
 
 
+def _variant_computed_values(example, env):
+    values=[]
+    for st in example.steps:
+        raw=str(getattr(st, 'result_formula', '') or '').strip()
+        if not raw:
+            continue
+        for formula in _split_result_formulas(raw):
+            values.append(_safe_variant_formula(formula, env))
+    return values
+
+
+def _variant_results_ok(example, env):
+    """Obecný filtr kvality výsledků; není svázaný s žádným matematickým tématem."""
+    kind=str(getattr(example, 'variant_result_kind', 'any') or 'any')
+    sign=str(getattr(example, 'variant_result_sign', 'any') or 'any')
+    min_v=getattr(example, 'variant_result_min', None)
+    max_v=getattr(example, 'variant_result_max', None)
+    try:
+        decimals=int(getattr(example, 'variant_result_decimals', -1))
+    except Exception:
+        decimals=-1
+    active=(kind!='any' or sign!='any' or min_v is not None or max_v is not None or decimals>=0)
+    if not active:
+        return True
+    values=_variant_computed_values(example, env)
+    if not values:
+        raise ValueError('je nastaven filtr výsledků, ale žádný krok nemá vzorec pro přepočet výsledku')
+    eps=1e-9
+    for value in values:
+        if kind=='integer' and abs(value-round(value))>eps:
+            return False
+        if sign=='nonnegative' and value < -eps:
+            return False
+        if sign=='positive' and value <= eps:
+            return False
+        if min_v is not None and value < float(min_v)-eps:
+            return False
+        if max_v is not None and value > float(max_v)+eps:
+            return False
+        if decimals >= 0 and abs(value-round(value, decimals))>eps:
+            return False
+    return True
+
+
 def _generic_math_variant(example, user_id):
-    """Obecný generátor: mění vybraná čísla a přijme jen variantu splňující podmínku."""
+    """Obecný generátor: mění vybraná čísla a přijme jen variantu splňující podmínku i filtr výsledků."""
     source=_parse_variant_values(example.variant_values)
     if not source:
         raise ValueError('nejsou zadaná čísla ze vzoru')
@@ -2819,8 +2886,10 @@ def _generic_math_variant(example, user_id):
         vals=[lo + rng.randrange(count)*step for _ in source]
         env={f'n{i+1}':v for i,v in enumerate(vals)}
         try:
-            if _safe_variant_condition(example.variant_condition, env):
+            if _safe_variant_condition(example.variant_condition, env) and _variant_results_ok(example, env):
                 chosen=vals; break
+        except (ZeroDivisionError, ValueError, OverflowError):
+            continue
         except Exception as e:
             raise ValueError(str(e))
     if chosen is None:
@@ -2919,6 +2988,23 @@ def validate_math_payload(payload):
                     raise ValueError('minimum musí být menší nebo rovno maximu a krok musí být kladný')
             except Exception as e:
                 return {'message': f"Příklad {ei}: zkontroluj rozsah a krok generování – {e}.", 'field': f'examples.{ei-1}.variant_range'}
+            try:
+                kind=str(ex.get('variant_result_kind') or 'any')
+                sign=str(ex.get('variant_result_sign') or 'any')
+                if kind not in {'any','integer'}:
+                    raise ValueError('neplatný typ výsledku')
+                if sign not in {'any','nonnegative','positive'}:
+                    raise ValueError('neplatné znaménkové omezení')
+                dec=int(ex.get('variant_result_decimals',-1) if str(ex.get('variant_result_decimals','')).strip() else -1)
+                if dec < -1 or dec > 10:
+                    raise ValueError('počet desetinných míst musí být -1 až 10')
+                rmin=ex.get('variant_result_min'); rmax=ex.get('variant_result_max')
+                if rmin not in (None,''): float(rmin)
+                if rmax not in (None,''): float(rmax)
+                if rmin not in (None,'') and rmax not in (None,'') and float(rmin)>float(rmax):
+                    raise ValueError('minimum výsledku nesmí být větší než maximum')
+            except Exception as e:
+                return {'message': f"Příklad {ei}: zkontroluj pravidla pro výsledky – {e}.", 'field': f'examples.{ei-1}.variant_result_rule'}
         for si, st in enumerate(ex.get("steps") or [], 1):
             formula=str(st.get('result_formula') or '').strip()
             decimals=st.get('result_decimals',2)
@@ -3039,7 +3125,12 @@ def new_math_lesson():
                 variant_condition=str(ex.get('variant_condition') or '').strip(),
                 variant_min=float(ex.get('variant_min') or 1),
                 variant_max=float(ex.get('variant_max') or 30),
-                variant_step=float(ex.get('variant_step') or 1)
+                variant_step=float(ex.get('variant_step') or 1),
+                variant_result_kind=str(ex.get('variant_result_kind') or 'any'),
+                variant_result_sign=str(ex.get('variant_result_sign') or 'any'),
+                variant_result_min=(float(ex.get('variant_result_min')) if ex.get('variant_result_min') not in (None,'') else None),
+                variant_result_max=(float(ex.get('variant_result_max')) if ex.get('variant_result_max') not in (None,'') else None),
+                variant_result_decimals=int(ex.get('variant_result_decimals',-1) if str(ex.get('variant_result_decimals','')).strip() else -1)
             )
             db.session.add(ex_row); db.session.flush()
             steps=ex.get('steps') or []
@@ -3231,7 +3322,12 @@ def edit_math_lesson(lesson_id):
                 variant_condition=str(ex.get('variant_condition') or '').strip(),
                 variant_min=float(ex.get('variant_min') or 1),
                 variant_max=float(ex.get('variant_max') or 30),
-                variant_step=float(ex.get('variant_step') or 1)
+                variant_step=float(ex.get('variant_step') or 1),
+                variant_result_kind=str(ex.get('variant_result_kind') or 'any'),
+                variant_result_sign=str(ex.get('variant_result_sign') or 'any'),
+                variant_result_min=(float(ex.get('variant_result_min')) if ex.get('variant_result_min') not in (None,'') else None),
+                variant_result_max=(float(ex.get('variant_result_max')) if ex.get('variant_result_max') not in (None,'') else None),
+                variant_result_decimals=int(ex.get('variant_result_decimals',-1) if str(ex.get('variant_result_decimals','')).strip() else -1)
             )
             db.session.add(ex_row)
             db.session.flush()
@@ -3286,6 +3382,11 @@ def edit_math_lesson(lesson_id):
             'variant_min': ex.variant_min if ex.variant_min is not None else 1,
             'variant_max': ex.variant_max if ex.variant_max is not None else 30,
             'variant_step': ex.variant_step if ex.variant_step is not None else 1,
+            'variant_result_kind': getattr(ex, 'variant_result_kind', 'any') or 'any',
+            'variant_result_sign': getattr(ex, 'variant_result_sign', 'any') or 'any',
+            'variant_result_min': getattr(ex, 'variant_result_min', None),
+            'variant_result_max': getattr(ex, 'variant_result_max', None),
+            'variant_result_decimals': getattr(ex, 'variant_result_decimals', -1) if getattr(ex, 'variant_result_decimals', None) is not None else -1,
             'steps': [
                 {
                     'instruction': st.instruction,
@@ -3947,7 +4048,12 @@ def ensure_schema_updates():
             'variant_condition': "TEXT DEFAULT ''",
             'variant_min': 'FLOAT DEFAULT 1',
             'variant_max': 'FLOAT DEFAULT 30',
-            'variant_step': 'FLOAT DEFAULT 1'
+            'variant_step': 'FLOAT DEFAULT 1',
+            'variant_result_kind': "VARCHAR(20) DEFAULT 'any'",
+            'variant_result_sign': "VARCHAR(20) DEFAULT 'any'",
+            'variant_result_min': 'FLOAT',
+            'variant_result_max': 'FLOAT',
+            'variant_result_decimals': 'INTEGER DEFAULT -1'
         }
     }
     for table_name, columns in required.items():

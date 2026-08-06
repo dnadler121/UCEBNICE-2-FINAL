@@ -77,6 +77,17 @@ function render(){
          <label>Krok<input type="number" step="any" min="0.000001" value="${ex.variant_step ?? 1}" oninput="examples[${ei}].variant_step=this.value"></label>
        </div>
        <label><b>Doplňující matematická podmínka (nepovinná)</b><input value="${esc(ex.variant_condition||"")}" data-field="examples.${ei}.variant_condition" placeholder="např. n1**2 + n2**2 == n3**2" oninput="examples[${ei}].variant_condition=this.value"><small>n1 je první číslo výše, n2 druhé atd. Lze použít +, −, *, /, **, %, &lt;, &gt;, ==, !=, and, or, sqrt(), abs(), min(), max().</small></label>
+       <div style="margin-top:10px;padding:10px;border:1px solid #cfe3d4;border-radius:9px;background:#f6fbf7">
+         <b>Obecná pravidla pro vygenerované výsledky</b>
+         <small style="display:block;margin:3px 0 8px">Generátor variantu použije až tehdy, když všechny dopočítané výsledky splní tato pravidla. Funguje obecně pro soustavy, geometrii, goniometrii, logaritmy, fyziku atd.</small>
+         <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px">
+           <label>Typ výsledku<select data-field="examples.${ei}.variant_result_rule" onchange="examples[${ei}].variant_result_kind=this.value"><option value="any" ${(ex.variant_result_kind||"any")==="any"?"selected":""}>Bez omezení</option><option value="integer" ${(ex.variant_result_kind||"any")==="integer"?"selected":""}>Celá čísla</option></select></label>
+           <label>Znaménko<select onchange="examples[${ei}].variant_result_sign=this.value"><option value="any" ${(ex.variant_result_sign||"any")==="any"?"selected":""}>Bez omezení</option><option value="nonnegative" ${(ex.variant_result_sign||"any")==="nonnegative"?"selected":""}>Nezáporné</option><option value="positive" ${(ex.variant_result_sign||"any")==="positive"?"selected":""}>Kladné</option></select></label>
+           <label>Minimum výsledku<input type="number" step="any" value="${ex.variant_result_min ?? ""}" placeholder="nepovinné" oninput="examples[${ei}].variant_result_min=this.value"></label>
+           <label>Maximum výsledku<input type="number" step="any" value="${ex.variant_result_max ?? ""}" placeholder="nepovinné" oninput="examples[${ei}].variant_result_max=this.value"></label>
+           <label>Max. desetinných míst<input type="number" min="-1" max="10" step="1" value="${ex.variant_result_decimals ?? -1}" oninput="examples[${ei}].variant_result_decimals=this.value"><small>-1 = bez omezení</small></label>
+         </div>
+       </div>
      </div>` : `<small>Pokud ji nezapneš, generátor se chová stejně jako dosud.</small>`}
    </div>
    ${ex.image_stored ? `<div style="margin:10px 0"><b>Současný obrázek:</b><br><img src="/uploads/${encodeURIComponent(ex.image_stored)}" alt="Obrázek k příkladu" style="max-width:420px;max-height:260px;object-fit:contain;border:1px solid #dfe6ed;border-radius:10px;background:white;padding:6px"></div>` : ""}
@@ -120,7 +131,7 @@ function addExample(copy){
  if(copy && examples.length){
    steps=examples[examples.length-1].steps.map(s=>({instruction:s.instruction,expected:"",hint:s.hint,result_formula:"",result_decimals:s.result_decimals ?? 2}));
  }
- examples.push({title:"",problem:"",prose_problem:"",image_stored:"",remove_image:false,variant_enabled:false,variant_values:"",variant_condition:"",variant_min:1,variant_max:30,variant_step:1,steps:steps}); render();
+ examples.push({title:"",problem:"",prose_problem:"",image_stored:"",remove_image:false,variant_enabled:false,variant_values:"",variant_condition:"",variant_min:1,variant_max:30,variant_step:1,variant_result_kind:"any",variant_result_sign:"any",variant_result_min:"",variant_result_max:"",variant_result_decimals:-1,steps:steps}); render();
 }
 function removeExample(i){examples.splice(i,1);render()}
 function addStep(ei){examples[ei].steps.push({instruction:"",expected:"",hint:"",result_formula:"",result_decimals:2});render()}
