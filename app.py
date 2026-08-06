@@ -2864,6 +2864,32 @@ def _replace_variant_numbers(text_value, source_values, new_values):
     marked,_=_mark_variant_numbers(text_value, source_values)
     return _fill_variant_slots(marked, source_values, new_values)
 
+
+def _render_variant_prose(text_value, env):
+    """Slovní zadání je oddělené od matematického vzoru.
+
+    V46: náhodné hodnoty se do běžného textu vkládají pouze explicitními
+    značkami {n1}, {n2}, ... . Tím se nemůže stát, že staré číslo nebo rovnice
+    ve slovním zadání vytvoří jinou úlohu než matematický vzor kontrolovaný enginem.
+    Čistě matematické řádky ve starších slovních zadáních skryjeme, protože
+    matematický vzor se studentovi nově zobrazuje samostatně.
+    """
+    text=str(text_value or '')
+    for name,value in (env or {}).items():
+        text=text.replace('{'+str(name)+'}', _variant_number_text(value))
+    kept=[]
+    for line in text.splitlines():
+        stripped=line.strip()
+        if stripped and any(ch in stripped for ch in '=<>'):
+            try:
+                ok,_=validate_math_expression(stripped)
+            except Exception:
+                ok=False
+            if ok:
+                continue
+        kept.append(line)
+    return '\n'.join(kept).strip()
+
 def _variant_computed_values(example, env):
     values=[]
     for st in example.steps:
@@ -2994,7 +3020,7 @@ def _generic_math_variant(example, user_id):
             'hint':_replace_variant_numbers(st.hint, source, chosen)
         }
     rendered_problem=_replace_variant_numbers(example.problem, source, chosen)
-    rendered_prose=_replace_variant_numbers(getattr(example, 'prose_problem', '') or '', source, chosen)
+    rendered_prose=_render_variant_prose(getattr(example, 'prose_problem', '') or '', target_env)
     # V45: poslední kontrola výsledků proběhne až po sestavení finální studentské varianty.
     # Používá stejný target_env, z něhož byly naplněny šablonové sloty.
     final_values=_variant_computed_values(example, target_env)
@@ -3012,7 +3038,7 @@ def generated_math_variant(example, user_id):
         except Exception:
             # U žáka nikdy nezobrazíme náhodný kandidát, který porušuje filtr.
             # Bezpečný fallback je učitelův vzor; ten je při ukládání validován.
-            return {'problem':example.problem, 'prose_problem':getattr(example, 'prose_problem', '') or '', 'steps':{st.id:{'instruction':st.instruction,'expected':st.expected,'hint':st.hint} for st in example.steps}, 'variant_fallback': True}
+            return {'problem':example.problem, 'prose_problem':_render_variant_prose(getattr(example, 'prose_problem', '') or '', {f'n{i+1}':v for i,v in enumerate(_parse_variant_values(getattr(example,'variant_values','') or ''))}), 'steps':{st.id:{'instruction':st.instruction,'expected':st.expected,'hint':st.hint} for st in example.steps}, 'variant_fallback': True}
 
     problem = str(example.problem or '')
     compact = normalize_math_answer(problem).replace('**', '^')
