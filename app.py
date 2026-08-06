@@ -2787,7 +2787,16 @@ def _computed_result_markers(expected_text, source_env, target_env, formulas, de
         candidates=[base]
         if '.' in base:
             candidates.append(base.replace('.', ','))
-        marker=f'__UCEBNICE_RESULT_{idx}__'
+        # V42: interní značka nesmí obsahovat číslice. Obecný generátor totiž
+        # nahrazuje číselné tokeny ze vzoru a značka RESULT_2 se mohla omylem
+        # změnit, pokud mezi měněnými hodnotami bylo číslo 2. Index proto
+        # kódujeme pouze písmeny (A, B, ... AA, AB...).
+        n=idx
+        letters=''
+        while n:
+            n, rem = divmod(n-1, 26)
+            letters = chr(65+rem) + letters
+        marker=f'__UCEBNICE_RESULT_{letters}__'
         found=False
         for token in candidates:
             pattern=rf'(?<![\d.]){re.escape(token)}(?![\d.])'
