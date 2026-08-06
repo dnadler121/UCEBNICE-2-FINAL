@@ -63,11 +63,12 @@ function render(){
    const wrap=document.createElement("div"); wrap.className="course-card"; wrap.style="padding:18px;margin:14px 0;background:#fafcff";
    wrap.innerHTML=`<div style="display:flex;justify-content:space-between"><h3>Příklad ${ei+1}</h3><button type="button" class="link-button danger" onclick="removeExample(${ei})">✕</button></div>
    <label>Název příkladu<input value="${esc(ex.title)}" oninput="examples[${ei}].title=this.value"></label>
-   <label>Zadání příkladu<textarea rows="2" oninput="examples[${ei}].problem=this.value">${ex.problem||""}</textarea></label>
+   <label><b>Slovní zadání pro žáka</b><textarea rows="3" placeholder="např. V pravoúhlém trojúhelníku jsou strany 3 cm, 4 cm a 5 cm. Urči sin α." oninput="examples[${ei}].prose_problem=this.value">${ex.prose_problem||""}</textarea><small>Sem můžeš psát normálně česky. Toto pole se matematicky nekontroluje.</small></label>
+   <label><b>Matematický vzor pro engine</b><input value="${esc(ex.problem)}" placeholder="např. a=3,b=4,c=5" oninput="examples[${ei}].problem=this.value"><small>Sem patří pouze matematický zápis. Engine podle něj zachová strukturu příkladu.</small></label>
    <div style="margin:12px 0;padding:12px;border:1px solid #dbe4ee;border-radius:10px;background:#f8fbff">
      <label style="display:flex;align-items:center;gap:8px"><input type="checkbox" ${ex.variant_enabled ? "checked" : ""} onchange="examples[${ei}].variant_enabled=this.checked;render()"> <b>Obecné náhodné varianty pro každého žáka</b></label>
      ${ex.variant_enabled ? `<div style="margin-top:10px">
-       <label><b>Čísla ze vzoru, která se mají měnit</b><input value="${esc(ex.variant_values||"")}" placeholder="např. 3; 4; 5" oninput="examples[${ei}].variant_values=this.value;updateAliases(${ei})"><small>Odděluj středníkem. Stejná čísla se potom změní v zadání, správném výsledku, instrukci i nápovědě.</small></label>
+       <label><b>Čísla z matematického vzoru, která se mají měnit</b><input value="${esc(ex.variant_values||"")}" placeholder="např. 3; 4; 5" oninput="examples[${ei}].variant_values=this.value;updateAliases(${ei})"><small>Odděluj středníkem. Stejná čísla se potom změní ve slovním zadání, matematickém vzoru, správném výsledku, instrukci i nápovědě.</small></label>
        <div id="aliases-${ei}" style="padding:8px 10px;margin:6px 0;background:white;border-radius:8px;font-family:monospace"></div>
        <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px">
          <label>Od<input type="number" step="any" value="${ex.variant_min ?? 1}" oninput="examples[${ei}].variant_min=this.value"></label>
@@ -107,7 +108,7 @@ function addExample(copy){
  if(copy && examples.length){
    steps=examples[examples.length-1].steps.map(s=>({instruction:s.instruction,expected:"",hint:s.hint}));
  }
- examples.push({title:"",problem:"",image_stored:"",remove_image:false,variant_enabled:false,variant_values:"",variant_condition:"",variant_min:1,variant_max:30,variant_step:1,steps:steps}); render();
+ examples.push({title:"",problem:"",prose_problem:"",image_stored:"",remove_image:false,variant_enabled:false,variant_values:"",variant_condition:"",variant_min:1,variant_max:30,variant_step:1,steps:steps}); render();
 }
 function removeExample(i){examples.splice(i,1);render()}
 function addStep(ei){examples[ei].steps.push({instruction:"",expected:"",hint:""});render()}

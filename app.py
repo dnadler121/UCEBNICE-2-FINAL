@@ -232,6 +232,8 @@ class MathExample(db.Model):
     order = db.Column(db.Integer, default=1)
     title = db.Column(db.String(220), default='')
     problem = db.Column(db.Text, nullable=False)
+    # Volitelné slovní zadání pro žáka. 'problem' zůstává čistý matematický vzor pro engine.
+    prose_problem = db.Column(db.Text, default='')
     # Volitelný obrázek / náčrt přímo k tomuto matematickému příkladu.
     # Soubor se ukládá do trvalé složky uploads, v DB je pouze jeho název.
     image_stored = db.Column(db.String(255), default='')
@@ -2304,6 +2306,24 @@ def validate_math_expression(value):
     if not txt:
         return False, 'zápis je prázdný'
 
+    # V35: matematický vzor generátoru může být i seznam přiřazení,
+    # např. a=3,b=4,c=5. Je to praktické pro slovní úlohy; student tento
+    # technický vzor nemusí vidět.
+    if ',' in txt:
+        assignments=[p.strip() for p in txt.split(',') if p.strip()]
+        if assignments and all(re.fullmatch(r'[A-Za-z][A-Za-z0-9_]*\s*=\s*.+', p) for p in assignments):
+            try:
+                import sympy as sp
+                from sympy.parsing.sympy_parser import parse_expr, standard_transformations, implicit_multiplication_application
+                transformations = standard_transformations + (implicit_multiplication_application,)
+                local_dict={'sqrt':sp.sqrt,'log':sp.log,'ln':sp.log,'sin':sp.sin,'cos':sp.cos,'tan':sp.tan,'abs':sp.Abs,'pi':sp.pi}
+                for assignment in assignments:
+                    rhs=assignment.split('=',1)[1].strip()
+                    parse_expr(rhs, transformations=transformations, evaluate=False, local_dict=local_dict)
+                return True, ''
+            except Exception:
+                return False, 'tomuto matematickému vzoru aplikace nerozumí'
+
     # V29: učitel může zapisovat stupně jako 30deg, 45deg, ...
     # Pro validaci je převedeme na radiánový zápis, kterému SymPy rozumí.
     # Původní text zůstává beze změny pro studentský renderer, kde je celý
@@ -2685,8 +2705,9 @@ def _generic_math_variant(example, user_id):
         'expected':_replace_variant_numbers(st.expected, source, chosen),
         'hint':_replace_variant_numbers(st.hint, source, chosen)
     } for st in example.steps}
-    return {'problem':_replace_variant_numbers(example.problem, source, chosen), 'steps':steps,
-            'variant_values':chosen}
+    return {'problem':_replace_variant_numbers(example.problem, source, chosen),
+            'prose_problem':_replace_variant_numbers(getattr(example, 'prose_problem', '') or '', source, chosen),
+            'steps':steps, 'variant_values':chosen}
 
 
 def generated_math_variant(example, user_id):
@@ -2696,20 +2717,20 @@ def generated_math_variant(example, user_id):
             return _generic_math_variant(example, user_id)
         except Exception:
             # U žáka nikdy nerozbijeme lekci: při chybné konfiguraci ukážeme učitelův vzor.
-            return {'problem':example.problem, 'steps':{st.id:{'instruction':st.instruction,'expected':st.expected,'hint':st.hint} for st in example.steps}}
+            return {'problem':example.problem, 'prose_problem':getattr(example, 'prose_problem', '') or '', 'steps':{st.id:{'instruction':st.instruction,'expected':st.expected,'hint':st.hint} for st in example.steps}}
 
     problem = str(example.problem or '')
     compact = normalize_math_answer(problem).replace('**', '^')
     m = re.fullmatch(r'([+-]?\d*)\*?x([+-]\d+)=([+-]?\d+)', compact)
     if not m:
-        return {'problem': problem, 'steps': {st.id:{'instruction':st.instruction,'expected':st.expected,'hint':st.hint} for st in example.steps}}
+        return {'problem': problem, 'prose_problem':getattr(example, 'prose_problem', '') or '', 'steps': {st.id:{'instruction':st.instruction,'expected':st.expected,'hint':st.hint} for st in example.steps}}
     a_txt, b_txt, c_txt = m.groups()
     if a_txt in ('', '+'): a0 = 1
     elif a_txt == '-': a0 = -1
     else: a0 = int(a_txt)
     b0, c0 = int(b_txt), int(c_txt)
     if a0 == 0 or (c0 - b0) % a0 != 0:
-        return {'problem': problem, 'steps': {st.id:{'instruction':st.instruction,'expected':st.expected,'hint':st.hint} for st in example.steps}}
+        return {'problem': problem, 'prose_problem':getattr(example, 'prose_problem', '') or '', 'steps': {st.id:{'instruction':st.instruction,'expected':st.expected,'hint':st.hint} for st in example.steps}}
     x0 = (c0 - b0) // a0
     seed_src = f'{app.config.get("SECRET_KEY")}:{user_id}:{example.id}:math-variant'
     seed = int(hashlib.sha256(seed_src.encode()).hexdigest()[:16], 16)
@@ -2730,7 +2751,7 @@ def generated_math_variant(example, user_id):
     aa = '' if a == 1 else ('-' if a == -1 else str(a))
     new_problem = f'{aa}x {sign} {abs(b)} = {c}'
     steps = {st.id:{'instruction':transform(st.instruction),'expected':transform(st.expected),'hint':transform(st.hint)} for st in example.steps}
-    return {'problem':new_problem, 'steps':steps}
+    return {'problem':new_problem, 'prose_problem':_replace_variant_numbers(getattr(example, 'prose_problem', '') or '', list(mapping.keys()), list(mapping.values())), 'steps':steps}
 
 def validate_math_payload(payload):
     for ei, ex in enumerate(payload, 1):
@@ -2835,6 +2856,7 @@ def new_math_lesson():
                 lesson_id=lesson_row.id, order=ei,
                 title=str(ex.get('title') or f'Příklad {ei}'),
                 problem=str(ex.get('problem') or '').strip(),
+                prose_problem=str(ex.get('prose_problem') or '').strip(),
                 image_stored=image_stored,
                 variant_enabled=bool(ex.get('variant_enabled')),
                 variant_values=str(ex.get('variant_values') or '').strip(),
@@ -3020,6 +3042,7 @@ def edit_math_lesson(lesson_id):
                 order=ei,
                 title=str(ex.get('title') or f'Příklad {ei}'),
                 problem=str(ex.get('problem') or '').strip(),
+                prose_problem=str(ex.get('prose_problem') or '').strip(),
                 image_stored=image_stored,
                 variant_enabled=bool(ex.get('variant_enabled')),
                 variant_values=str(ex.get('variant_values') or '').strip(),
@@ -3068,6 +3091,7 @@ def edit_math_lesson(lesson_id):
         examples_data.append({
             'title': ex.title,
             'problem': ex.problem,
+            'prose_problem': ex.prose_problem or '',
             'image_stored': ex.image_stored or '',
             'remove_image': False,
             'variant_enabled': bool(ex.variant_enabled),
@@ -3723,6 +3747,7 @@ def ensure_schema_updates():
             'answers_json': "TEXT DEFAULT '[]'"
         },
         'math_example': {
+            'prose_problem': "TEXT DEFAULT ''",
             'image_stored': "VARCHAR(255) DEFAULT ''",
             'variant_enabled': 'BOOLEAN DEFAULT 0',
             'variant_values': "TEXT DEFAULT ''",

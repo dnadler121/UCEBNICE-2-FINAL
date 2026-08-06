@@ -23,7 +23,7 @@
 {% if ex.image_stored %}
 <div style="margin:10px 0 14px"><img src="{{url_for('uploads',filename=ex.image_stored)}}" alt="Obrázek k příkladu {{loop.index}}" style="display:block;max-width:min(100%,720px);max-height:440px;object-fit:contain;border:1px solid #dfe6ed;border-radius:12px;background:white;padding:8px"></div>
 {% endif %}
-<div style="font-size:1.15rem;font-weight:700;margin:8px 0">{{ex.problem|math_display}}</div>
+{% if ex.prose_problem %}<div style="font-size:1.08rem;font-weight:600;margin:8px 0">{{ex.prose_problem}}</div><div style="margin:5px 0;color:#65717d">Matematický vzor: {{ex.problem|math_display}}</div>{% else %}<div style="font-size:1.15rem;font-weight:700;margin:8px 0">{{ex.problem|math_display}}</div>{% endif %}
 {% for st in ex.steps|sort(attribute='order') %}
 <div style="padding:8px 0">{{loop.index}}. {{st.instruction}} <small>→ {{st.expected|math_display}} · nápověda: {{st.hint}}</small></div>
 {% endfor %}
@@ -57,9 +57,13 @@
     </div>
     {% endif %}
 
-    <div style="font-size:1.3rem;font-weight:700;padding:8px 0">
-      {{math_variants.get(ex.id, {}).get('problem', ex.problem)|math_display}}
-    </div>
+    {% set variant = math_variants.get(ex.id, {}) %}
+    {% set prose = variant.get('prose_problem', ex.prose_problem or '') %}
+    {% if prose %}
+    <div style="font-size:1.18rem;font-weight:650;padding:8px 0">{{prose}}</div>
+    {% else %}
+    <div style="font-size:1.3rem;font-weight:700;padding:8px 0">{{variant.get('problem', ex.problem)|math_display}}</div>
+    {% endif %}
 
     {% for answer in saved %}
       <div style="display:flex;gap:10px;align-items:center;padding:8px 0;font-size:1.25rem">
