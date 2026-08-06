@@ -2816,35 +2816,53 @@ def _restore_computed_result_markers(text, replacements):
         out=out.replace(marker,target)
     return out
 
-def _replace_variant_numbers(text_value, source_values, new_values):
-    """Atomická náhrada čísel ve vzoru.
+def _variant_slot_name(index):
+    """Bezpečná interní značka bez číslic, aby se nikdy nestřetla s matematickými hodnotami."""
+    n=int(index)+1
+    letters=''
+    while n:
+        n, rem=divmod(n-1, 26)
+        letters=chr(65+rem)+letters
+    return f'__UCEBNICE_VARIANT_{letters}__'
 
-    V43: všechny původní číselné tokeny se nahradí v JEDNOM průchodu.
-    Dřívější postupné re.sub mohlo nově vloženou hodnotu znovu přepsat,
-    pokud se shodovala s jinou zdrojovou hodnotou. Pak filtr kontroloval
-    jinou variantu, než jaká se nakonec zobrazila studentovi.
+
+def _mark_variant_numbers(text_value, source_values):
+    """Převede učitelovy číselné hodnoty na stabilní interní sloty.
+
+    V45: nejprve se vytvoří šablona a až potom se do slotů vloží nová čísla.
+    Díky tomu se žádná nově vložená hodnota nemůže znovu přepsat a znaménka,
+    desetinné tečky i struktura zápisu zůstávají přesně zachované.
     """
     out=str(text_value or '')
-    pairs=list(zip(source_values,new_values))
-    if not pairs:
-        return out
-
-    mapping={}
-    for old,new in pairs:
+    # Stejná zdrojová hodnota reprezentuje stejný alias všude v textu.
+    value_to_marker={}
+    for idx, old in enumerate(source_values):
         old_txt=_variant_number_text(old)
-        new_txt=_variant_number_text(new)
-        # Stejná zdrojová hodnota nemůže jednoznačně reprezentovat dvě různé
-        # proměnné; zachováme první mapování stejně stabilně v celém textu.
-        mapping.setdefault(old_txt, new_txt)
-
-    # Delší tokeny první (13 před 3). Jediný regex znamená, že výsledek
-    # callbacku už se v tomto průchodu nikdy znovu neprohledává.
-    alternatives='|'.join(re.escape(k) for k in sorted(mapping, key=len, reverse=True))
+        value_to_marker.setdefault(old_txt, _variant_slot_name(idx))
+    alternatives='|'.join(re.escape(k) for k in sorted(value_to_marker, key=len, reverse=True))
     if not alternatives:
-        return out
+        return out, value_to_marker
     pattern=re.compile(rf'(?<![\d.])(?:{alternatives})(?![\d.])')
-    return pattern.sub(lambda m: mapping[m.group(0)], out)
+    return pattern.sub(lambda m:value_to_marker[m.group(0)], out), value_to_marker
 
+
+def _fill_variant_slots(marked_text, source_values, new_values):
+    out=str(marked_text or '')
+    marker_to_value={}
+    seen={}
+    for idx,(old,new) in enumerate(zip(source_values,new_values)):
+        old_txt=_variant_number_text(old)
+        marker=seen.setdefault(old_txt, _variant_slot_name(idx))
+        marker_to_value.setdefault(marker, _variant_number_text(new))
+    for marker,value in marker_to_value.items():
+        out=out.replace(marker,value)
+    return out
+
+
+def _replace_variant_numbers(text_value, source_values, new_values):
+    """Obecná bezpečná náhrada přes interní šablonové sloty (V45)."""
+    marked,_=_mark_variant_numbers(text_value, source_values)
+    return _fill_variant_slots(marked, source_values, new_values)
 
 def _variant_computed_values(example, env):
     values=[]
@@ -2860,6 +2878,9 @@ def _variant_computed_values(example, env):
 def _variant_filter_settings(example):
     """Normalizované obecné nastavení kvality výsledků."""
     kind=str(getattr(example, 'variant_result_kind', 'any') or 'any').strip().lower()
+    # toleruj i starší/lokalizované hodnoty, aby filtr nikdy omylem nespadl na 'any'
+    if kind in ('integer','int','whole','cela','celá','cela_cisla','celá čísla','cela cisla') or 'cel' in kind:
+        kind='integer'
     sign=str(getattr(example, 'variant_result_sign', 'any') or 'any').strip().lower()
     min_v=getattr(example, 'variant_result_min', None)
     max_v=getattr(example, 'variant_result_max', None)
@@ -2972,8 +2993,14 @@ def _generic_math_variant(example, user_id):
             'expected':expected_text,
             'hint':_replace_variant_numbers(st.hint, source, chosen)
         }
-    return {'problem':_replace_variant_numbers(example.problem, source, chosen),
-            'prose_problem':_replace_variant_numbers(getattr(example, 'prose_problem', '') or '', source, chosen),
+    rendered_problem=_replace_variant_numbers(example.problem, source, chosen)
+    rendered_prose=_replace_variant_numbers(getattr(example, 'prose_problem', '') or '', source, chosen)
+    # V45: poslední kontrola výsledků proběhne až po sestavení finální studentské varianty.
+    # Používá stejný target_env, z něhož byly naplněny šablonové sloty.
+    final_values=_variant_computed_values(example, target_env)
+    if not _variant_values_match_filter(example, final_values):
+        raise ValueError('finální studentská varianta nesplňuje pravidla výsledků')
+    return {'problem':rendered_problem, 'prose_problem':rendered_prose,
             'steps':steps, 'variant_values':chosen}
 
 
