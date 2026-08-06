@@ -2391,9 +2391,11 @@ def math_input_layout(expected):
     pí, závorky, zlomková čára) vykresluje aplikace napevno.
     """
     raw = str(expected or '').replace('−', '-').replace('–', '-')
-    compact = ''.join(ch for ch in raw if not ch.isspace())
-    # Učitelský zápis jednoduché odmocniny x**(1/2) převedeme na sqrt(x).
-    compact = re.sub(r'([A-Za-z0-9_.]+)\*\*\(1/2\)', r'sqrt(\1)', compact)
+    # V40: správná odpověď může mít více řádků (např. x=2 a y=3).
+    # Každý řádek se vykreslí zvlášť, ale všechna pole zůstávají součástí jednoho kroku.
+    raw_lines = [p.strip() for p in re.split(r'[\r\n;]+', raw) if p.strip()] or ['']
+    compact_lines = [''.join(ch for ch in line if not ch.isspace()) for line in raw_lines]
+    compact_lines = [re.sub(r'([A-Za-z0-9_.]+)\*\*\(1/2\)', r'sqrt(\1)', line) for line in compact_lines]
     # Učitelský zápis úhlů: 30deg -> 30°. Úhel i znak stupně jsou pro studenta pevné.
     field_index = 0
 
@@ -2494,7 +2496,12 @@ def math_input_layout(expected):
             nodes.append(field(ch,super_mode)); i+=1
         return nodes
 
-    return {'tokens':parse(compact),'field_count':field_index}
+    tokens=[]
+    for line_no, compact in enumerate(compact_lines):
+        if line_no:
+            tokens.append({'kind':'linebreak'})
+        tokens.extend(parse(compact))
+    return {'tokens':tokens,'field_count':field_index}
 
 
 def _math_answer_nodes(nodes, form):
@@ -2517,6 +2524,8 @@ def _math_answer_nodes(nodes, form):
         elif k=='power':
             exp=_math_answer_nodes(tok['exp'],form)
             out.append('**'+(('('+exp+')') if tok.get('paren') else exp))
+        elif k=='linebreak':
+            out.append('\n')
     return ''.join(out)
 
 
@@ -2550,6 +2559,7 @@ def render_math_input_layout(layout):
                 bottom='d'+var+(f'<sup>{order}</sup>' if order else '')
                 parts.append(f'<span class="math-derivative"><span class="math-deriv-frac"><span>{top}</span><span>{bottom}</span></span><span class="math-fixed">(</span>{render(tok["body"])}<span class="math-fixed">)</span></span>')
             elif k=='power': parts.append(f'<sup class="math-power">{render(tok["exp"])}</sup>')
+            elif k=='linebreak': parts.append('</div><div class="math-input-line">')
         return ''.join(parts)
     return Markup('<div class="math-input-line">'+render(layout.get('tokens',[]))+'</div>')
 
@@ -2564,6 +2574,15 @@ def math_answers_equivalent(student_value, expected_value):
     Když SymPy výraz neumí bezpečně zpracovat, použije se původní
     normalizované textové porovnání.
     """
+    # V40: více výsledků v jednom kroku porovnáváme po řádcích.
+    # Pořadí řádků odpovídá pořadí výsledkových vzorců z učitelského editoru.
+    a_parts=[p.strip() for p in re.split(r'[\r\n;]+', str(student_value or '')) if p.strip()]
+    b_parts=[p.strip() for p in re.split(r'[\r\n;]+', str(expected_value or '')) if p.strip()]
+    if len(a_parts)>1 or len(b_parts)>1:
+        if len(a_parts) != len(b_parts):
+            return False
+        return all(math_answers_equivalent(x, y) for x,y in zip(a_parts,b_parts))
+
     a = normalize_math_answer(student_value)
     b = normalize_math_answer(expected_value)
 
