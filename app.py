@@ -2857,10 +2857,10 @@ def _variant_computed_values(example, env):
     return values
 
 
-def _variant_results_ok(example, env):
-    """Obecný filtr kvality výsledků; není svázaný s žádným matematickým tématem."""
-    kind=str(getattr(example, 'variant_result_kind', 'any') or 'any')
-    sign=str(getattr(example, 'variant_result_sign', 'any') or 'any')
+def _variant_filter_settings(example):
+    """Normalizované obecné nastavení kvality výsledků."""
+    kind=str(getattr(example, 'variant_result_kind', 'any') or 'any').strip().lower()
+    sign=str(getattr(example, 'variant_result_sign', 'any') or 'any').strip().lower()
     min_v=getattr(example, 'variant_result_min', None)
     max_v=getattr(example, 'variant_result_max', None)
     try:
@@ -2868,13 +2868,21 @@ def _variant_results_ok(example, env):
     except Exception:
         decimals=-1
     active=(kind!='any' or sign!='any' or min_v is not None or max_v is not None or decimals>=0)
+    return kind, sign, min_v, max_v, decimals, active
+
+
+def _variant_values_match_filter(example, values):
+    """Přísná obecná kontrola již vypočtených číselných výsledků."""
+    kind, sign, min_v, max_v, decimals, active=_variant_filter_settings(example)
     if not active:
         return True
-    values=_variant_computed_values(example, env)
     if not values:
         raise ValueError('je nastaven filtr výsledků, ale žádný krok nemá vzorec pro přepočet výsledku')
     eps=1e-9
-    for value in values:
+    for raw in values:
+        value=float(raw)
+        if not math.isfinite(value):
+            return False
         if kind=='integer' and abs(value-round(value))>eps:
             return False
         if sign=='nonnegative' and value < -eps:
@@ -2888,6 +2896,14 @@ def _variant_results_ok(example, env):
         if decimals >= 0 and abs(value-round(value, decimals))>eps:
             return False
     return True
+
+
+def _variant_results_ok(example, env):
+    """Obecný filtr kvality výsledků; není svázaný s žádným matematickým tématem."""
+    _, _, _, _, _, active=_variant_filter_settings(example)
+    if not active:
+        return True
+    return _variant_values_match_filter(example, _variant_computed_values(example, env))
 
 
 def _generic_math_variant(example, user_id):
@@ -2919,11 +2935,25 @@ def _generic_math_variant(example, user_id):
             continue
         except Exception as e:
             raise ValueError(str(e))
-    if chosen is None:
-        raise ValueError('v daném rozsahu se nepodařilo najít čísla splňující podmínku')
-
     source_env={f'n{i+1}':v for i,v in enumerate(source)}
+    if chosen is None:
+        # Bezpečný obecný fallback: použijeme učitelův vzor pouze tehdy, když
+        # sám splňuje aktivní pravidla výsledků. Nikdy nezobrazíme variantu,
+        # která filtr porušuje.
+        try:
+            if _safe_variant_condition(example.variant_condition, source_env) and _variant_results_ok(example, source_env):
+                chosen=list(source)
+            else:
+                raise ValueError('v daném rozsahu se nepodařilo najít variantu splňující pravidla výsledků')
+        except Exception:
+            raise ValueError('v daném rozsahu se nepodařilo najít variantu splňující pravidla výsledků')
+
     target_env={f'n{i+1}':v for i,v in enumerate(chosen)}
+    # V44: druhá, nezávislá kontrola těsně před sestavením studentské varianty.
+    # Tím je obecně zaručeno, že se studentovi nikdy nevykreslí kandidát, který
+    # neodpovídá nastaveným pravidlům (celá čísla, znaménko, rozsah, desetinná místa).
+    if not _variant_results_ok(example, target_env):
+        raise ValueError('vygenerovaná varianta nesplňuje pravidla výsledků')
     steps={}
     for st in example.steps:
         expected_text=str(st.expected or '')
@@ -2953,8 +2983,9 @@ def generated_math_variant(example, user_id):
         try:
             return _generic_math_variant(example, user_id)
         except Exception:
-            # U žáka nikdy nerozbijeme lekci: při chybné konfiguraci ukážeme učitelův vzor.
-            return {'problem':example.problem, 'prose_problem':getattr(example, 'prose_problem', '') or '', 'steps':{st.id:{'instruction':st.instruction,'expected':st.expected,'hint':st.hint} for st in example.steps}}
+            # U žáka nikdy nezobrazíme náhodný kandidát, který porušuje filtr.
+            # Bezpečný fallback je učitelův vzor; ten je při ukládání validován.
+            return {'problem':example.problem, 'prose_problem':getattr(example, 'prose_problem', '') or '', 'steps':{st.id:{'instruction':st.instruction,'expected':st.expected,'hint':st.hint} for st in example.steps}, 'variant_fallback': True}
 
     problem = str(example.problem or '')
     compact = normalize_math_answer(problem).replace('**', '^')
