@@ -2817,15 +2817,33 @@ def _restore_computed_result_markers(text, replacements):
     return out
 
 def _replace_variant_numbers(text_value, source_values, new_values):
+    """Atomická náhrada čísel ve vzoru.
+
+    V43: všechny původní číselné tokeny se nahradí v JEDNOM průchodu.
+    Dřívější postupné re.sub mohlo nově vloženou hodnotu znovu přepsat,
+    pokud se shodovala s jinou zdrojovou hodnotou. Pak filtr kontroloval
+    jinou variantu, než jaká se nakonec zobrazila studentovi.
+    """
     out=str(text_value or '')
     pairs=list(zip(source_values,new_values))
-    # Delší zápisy jako 12 před 2. Nahrazujeme jen celá číselná tokenová místa.
-    pairs.sort(key=lambda p: len(_variant_number_text(p[0])), reverse=True)
+    if not pairs:
+        return out
+
+    mapping={}
     for old,new in pairs:
         old_txt=_variant_number_text(old)
         new_txt=_variant_number_text(new)
-        out=re.sub(rf'(?<![\d.]){re.escape(old_txt)}(?![\d.])', new_txt, out)
-    return out
+        # Stejná zdrojová hodnota nemůže jednoznačně reprezentovat dvě různé
+        # proměnné; zachováme první mapování stejně stabilně v celém textu.
+        mapping.setdefault(old_txt, new_txt)
+
+    # Delší tokeny první (13 před 3). Jediný regex znamená, že výsledek
+    # callbacku už se v tomto průchodu nikdy znovu neprohledává.
+    alternatives='|'.join(re.escape(k) for k in sorted(mapping, key=len, reverse=True))
+    if not alternatives:
+        return out
+    pattern=re.compile(rf'(?<![\d.])(?:{alternatives})(?![\d.])')
+    return pattern.sub(lambda m: mapping[m.group(0)], out)
 
 
 def _variant_computed_values(example, env):
