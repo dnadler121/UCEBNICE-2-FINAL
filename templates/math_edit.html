@@ -57,6 +57,7 @@
 let examples={{ examples_json|safe }};
 const mathError={{ (math_errors or {})|tojson }};
 function esc(v){return (v||"").replace(/&/g,"&amp;").replace(/"/g,"&quot;").replace(/</g,"&lt;").replace(/>/g,"&gt;")}
+function escText(v){return String(v||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;")}
 function render(){
  const box=document.getElementById("examples"); box.innerHTML="";
  examples.forEach((ex,ei)=>{
