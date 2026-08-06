@@ -2305,10 +2305,26 @@ def normalize_math_answer(value):
 
 
 def validate_math_expression(value):
-    """Ověří, že učitelův matematický zápis umíme přečíst."""
-    txt = normalize_math_answer(value)
-    if not txt:
+    """Ověří, že učitelův matematický zápis umíme přečíst.
+
+    V38: podporuje i více matematických řádků (např. soustavu rovnic).
+    Jednotlivé řádky lze oddělit novým řádkem nebo středníkem.
+    """
+    raw = str(value or '').strip()
+    if not raw:
         return False, 'zápis je prázdný'
+
+    # V38: více rovnic / výrazů v jednom matematickém vzoru.
+    # Každý řádek validujeme stejným parserem jako samostatný příklad.
+    multi_parts = [p.strip() for p in re.split(r'[\r\n;]+', raw) if p.strip()]
+    if len(multi_parts) > 1:
+        for idx, part in enumerate(multi_parts, 1):
+            ok, why = validate_math_expression(part)
+            if not ok:
+                return False, f'řádek {idx}: {why}'
+        return True, ''
+
+    txt = normalize_math_answer(raw)
 
     # V35: matematický vzor generátoru může být i seznam přiřazení,
     # např. a=3,b=4,c=5. Je to praktické pro slovní úlohy; student tento
