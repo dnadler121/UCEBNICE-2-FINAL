@@ -64,6 +64,19 @@ function render(){
    wrap.innerHTML=`<div style="display:flex;justify-content:space-between"><h3>Příklad ${ei+1}</h3><button type="button" class="link-button danger" onclick="removeExample(${ei})">✕</button></div>
    <label>Název příkladu<input value="${esc(ex.title)}" oninput="examples[${ei}].title=this.value"></label>
    <label>Zadání příkladu<textarea rows="2" oninput="examples[${ei}].problem=this.value">${ex.problem||""}</textarea></label>
+   <div style="margin:12px 0;padding:12px;border:1px solid #dbe4ee;border-radius:10px;background:#f8fbff">
+     <label style="display:flex;align-items:center;gap:8px"><input type="checkbox" ${ex.variant_enabled ? "checked" : ""} onchange="examples[${ei}].variant_enabled=this.checked;render()"> <b>Obecné náhodné varianty pro každého žáka</b></label>
+     ${ex.variant_enabled ? `<div style="margin-top:10px">
+       <label><b>Čísla ze vzoru, která se mají měnit</b><input value="${esc(ex.variant_values||"")}" placeholder="např. 3; 4; 5" oninput="examples[${ei}].variant_values=this.value;updateAliases(${ei})"><small>Odděluj středníkem. Stejná čísla se potom změní v zadání, správném výsledku, instrukci i nápovědě.</small></label>
+       <div id="aliases-${ei}" style="padding:8px 10px;margin:6px 0;background:white;border-radius:8px;font-family:monospace"></div>
+       <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px">
+         <label>Od<input type="number" step="any" value="${ex.variant_min ?? 1}" oninput="examples[${ei}].variant_min=this.value"></label>
+         <label>Do<input type="number" step="any" value="${ex.variant_max ?? 30}" oninput="examples[${ei}].variant_max=this.value"></label>
+         <label>Krok<input type="number" step="any" min="0.000001" value="${ex.variant_step ?? 1}" oninput="examples[${ei}].variant_step=this.value"></label>
+       </div>
+       <label><b>Doplňující matematická podmínka (nepovinná)</b><input value="${esc(ex.variant_condition||"")}" placeholder="např. n1**2 + n2**2 == n3**2" oninput="examples[${ei}].variant_condition=this.value"><small>n1 je první číslo výše, n2 druhé atd. Lze použít +, −, *, /, **, %, &lt;, &gt;, ==, !=, and, or, sqrt(), abs(), min(), max().</small></label>
+     </div>` : `<small>Pokud ji nezapneš, generátor se chová stejně jako dosud.</small>`}
+   </div>
    <label><b>Obrázek / náčrt k tomuto příkladu (nepovinné)</b>
      <input type="file" name="example_image_${ei}" accept="image/png,image/jpeg,image/webp,image/gif,image/svg+xml">
      <small>Např. jednotková kružnice, graf, geometrický náčrt nebo schéma.</small>
@@ -81,14 +94,20 @@ function render(){
       <button type="button" class="link-button danger" onclick="removeStep(${ei},${si})">Odebrat krok</button>`;
       sb.appendChild(d);
    });
+   updateAliases(ei);
  });
+}
+function updateAliases(ei){
+ const el=document.getElementById(`aliases-${ei}`); if(!el)return;
+ const vals=String(examples[ei].variant_values||"").split(/[;\n]+/).map(x=>x.trim()).filter(Boolean);
+ el.textContent=vals.length ? vals.map((v,i)=>`n${i+1} = ${v}`).join("   |   ") : "Zadej čísla ze vzoru, např. 3; 4; 5";
 }
 function addExample(copy){
  let steps=[{instruction:"",expected:"",hint:""}];
  if(copy && examples.length){
    steps=examples[examples.length-1].steps.map(s=>({instruction:s.instruction,expected:"",hint:s.hint}));
  }
- examples.push({title:"",problem:"",image_stored:"",remove_image:false,steps:steps}); render();
+ examples.push({title:"",problem:"",image_stored:"",remove_image:false,variant_enabled:false,variant_values:"",variant_condition:"",variant_min:1,variant_max:30,variant_step:1,steps:steps}); render();
 }
 function removeExample(i){examples.splice(i,1);render()}
 function addStep(ei){examples[ei].steps.push({instruction:"",expected:"",hint:""});render()}

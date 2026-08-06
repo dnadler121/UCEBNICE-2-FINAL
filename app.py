@@ -1,4 +1,4 @@
-import os, json, unicodedata, random, html, re, base64, uuid, urllib.parse, urllib.request, urllib.error, zipfile, shutil, importlib.util, tempfile, threading, hmac, hashlib
+import os, json, unicodedata, random, html, re, base64, uuid, urllib.parse, urllib.request, urllib.error, zipfile, shutil, importlib.util, tempfile, threading, hmac, hashlib, ast, math
 from pathlib import Path
 from datetime import datetime
 from flask import Flask, render_template, render_template_string, request, jsonify, session, redirect, url_for, send_from_directory, send_file, flash
@@ -235,6 +235,12 @@ class MathExample(db.Model):
     # Volitelný obrázek / náčrt přímo k tomuto matematickému příkladu.
     # Soubor se ukládá do trvalé složky uploads, v DB je pouze jeho název.
     image_stored = db.Column(db.String(255), default='')
+    variant_enabled = db.Column(db.Boolean, default=False)
+    variant_values = db.Column(db.Text, default='')
+    variant_condition = db.Column(db.Text, default='')
+    variant_min = db.Column(db.Float, default=1)
+    variant_max = db.Column(db.Float, default=30)
+    variant_step = db.Column(db.Float, default=1)
     lesson = db.relationship('MathLesson', backref='examples')
 
 
@@ -2587,10 +2593,111 @@ def math_answers_equivalent(student_value, expected_value):
     return a == b
 
 
+def _variant_number_text(value):
+    """Pěkný zápis náhodné hodnoty bez zbytečných .0."""
+    try:
+        f = float(value)
+        if abs(f - round(f)) < 1e-10:
+            return str(int(round(f)))
+        return (f'{f:.10f}').rstrip('0').rstrip('.')
+    except Exception:
+        return str(value)
+
+
+def _parse_variant_values(raw):
+    """Hodnoty učitelského vzoru oddělené středníkem nebo novým řádkem."""
+    parts = [x.strip().replace(',', '.') for x in re.split(r'[;\n]+', str(raw or '')) if x.strip()]
+    vals=[]
+    for x in parts:
+        try:
+            vals.append(float(x))
+        except Exception:
+            raise ValueError(f'„{x}“ není číslo')
+    return vals
+
+
+def _safe_variant_condition(condition, env):
+    """Bezpečně vyhodnotí obecnou matematickou podmínku n1, n2, ..."""
+    cond = str(condition or '').strip()
+    if not cond:
+        return True
+    tree = ast.parse(cond, mode='eval')
+    allowed_nodes=(ast.Expression, ast.BoolOp, ast.BinOp, ast.UnaryOp, ast.Compare, ast.Name, ast.Load,
+                   ast.Constant, ast.And, ast.Or, ast.Not, ast.Add, ast.Sub, ast.Mult, ast.Div,
+                   ast.FloorDiv, ast.Mod, ast.Pow, ast.USub, ast.UAdd, ast.Eq, ast.NotEq,
+                   ast.Lt, ast.LtE, ast.Gt, ast.GtE, ast.Call)
+    allowed_funcs={'abs':abs,'min':min,'max':max,'round':round,'sqrt':math.sqrt}
+    for node in ast.walk(tree):
+        if not isinstance(node, allowed_nodes):
+            raise ValueError('nepovolená konstrukce v podmínce')
+        if isinstance(node, ast.Name) and node.id not in env and node.id not in allowed_funcs:
+            raise ValueError(f'neznámá proměnná {node.id}')
+        if isinstance(node, ast.Call):
+            if not isinstance(node.func, ast.Name) or node.func.id not in allowed_funcs:
+                raise ValueError('nepovolená funkce v podmínce')
+    return bool(eval(compile(tree, '<math-condition>', 'eval'), {'__builtins__':{}, **allowed_funcs}, env))
+
+
+def _replace_variant_numbers(text_value, source_values, new_values):
+    out=str(text_value or '')
+    pairs=list(zip(source_values,new_values))
+    # Delší zápisy jako 12 před 2. Nahrazujeme jen celá číselná tokenová místa.
+    pairs.sort(key=lambda p: len(_variant_number_text(p[0])), reverse=True)
+    for old,new in pairs:
+        old_txt=_variant_number_text(old)
+        new_txt=_variant_number_text(new)
+        out=re.sub(rf'(?<![\d.]){re.escape(old_txt)}(?![\d.])', new_txt, out)
+    return out
+
+
+def _generic_math_variant(example, user_id):
+    """Obecný generátor: mění vybraná čísla a přijme jen variantu splňující podmínku."""
+    source=_parse_variant_values(example.variant_values)
+    if not source:
+        raise ValueError('nejsou zadaná čísla ze vzoru')
+    lo=float(example.variant_min if example.variant_min is not None else 1)
+    hi=float(example.variant_max if example.variant_max is not None else 30)
+    step=float(example.variant_step if example.variant_step is not None else 1)
+    if step <= 0 or hi < lo:
+        raise ValueError('neplatný rozsah nebo krok')
+    count=int(math.floor((hi-lo)/step + 1e-9)) + 1
+    if count < 1 or count > 10000:
+        raise ValueError('rozsah generování je příliš velký')
+
+    seed_src=f'{app.config.get("SECRET_KEY")}:{user_id}:{example.id}:math-generic-variant'
+    seed=int(hashlib.sha256(seed_src.encode()).hexdigest()[:16],16)
+    rng=random.Random(seed)
+    chosen=None
+    # 20 000 pokusů stačí i pro řidší vztahy typu Pythagorovy trojice v rozsahu 1–30.
+    for _ in range(20000):
+        vals=[lo + rng.randrange(count)*step for _ in source]
+        env={f'n{i+1}':v for i,v in enumerate(vals)}
+        try:
+            if _safe_variant_condition(example.variant_condition, env):
+                chosen=vals; break
+        except Exception as e:
+            raise ValueError(str(e))
+    if chosen is None:
+        raise ValueError('v daném rozsahu se nepodařilo najít čísla splňující podmínku')
+
+    steps={st.id:{
+        'instruction':_replace_variant_numbers(st.instruction, source, chosen),
+        'expected':_replace_variant_numbers(st.expected, source, chosen),
+        'hint':_replace_variant_numbers(st.hint, source, chosen)
+    } for st in example.steps}
+    return {'problem':_replace_variant_numbers(example.problem, source, chosen), 'steps':steps,
+            'variant_values':chosen}
+
+
 def generated_math_variant(example, user_id):
-    """Z jednoduché lineární rovnice ax±b=c vytvoří stabilní variantu pro konkrétního žáka.
-    Když vzor nerozpozná, vrátí původní zadání a kroky beze změny.
-    """
+    """Stabilní varianta pro žáka. Nový obecný režim má přednost; původní lineární generátor zůstává jako fallback."""
+    if getattr(example, 'variant_enabled', False):
+        try:
+            return _generic_math_variant(example, user_id)
+        except Exception:
+            # U žáka nikdy nerozbijeme lekci: při chybné konfiguraci ukážeme učitelův vzor.
+            return {'problem':example.problem, 'steps':{st.id:{'instruction':st.instruction,'expected':st.expected,'hint':st.hint} for st in example.steps}}
+
     problem = str(example.problem or '')
     compact = normalize_math_answer(problem).replace('**', '^')
     m = re.fullmatch(r'([+-]?\d*)\*?x([+-]\d+)=([+-]?\d+)', compact)
@@ -2604,7 +2711,6 @@ def generated_math_variant(example, user_id):
     if a0 == 0 or (c0 - b0) % a0 != 0:
         return {'problem': problem, 'steps': {st.id:{'instruction':st.instruction,'expected':st.expected,'hint':st.hint} for st in example.steps}}
     x0 = (c0 - b0) // a0
-
     seed_src = f'{app.config.get("SECRET_KEY")}:{user_id}:{example.id}:math-variant'
     seed = int(hashlib.sha256(seed_src.encode()).hexdigest()[:16], 16)
     rng = random.Random(seed)
@@ -2614,28 +2720,35 @@ def generated_math_variant(example, user_id):
     b = b_abs if b0 >= 0 else -b_abs
     c = a*x + b
     ax = a*x
-
-    # Hodnoty z učitelova vzoru nahradíme odpovídajícími hodnotami nové varianty.
     mapping = {a0:a, b0:b, c0:c, a0*x0:ax, x0:x}
-    # Delší čísla první, aby např. 31 nebylo částečně nahrazeno jako 3 a 1.
     def transform(text_value):
         out = str(text_value or '')
         for old, new in sorted(mapping.items(), key=lambda kv: len(str(abs(kv[0]))), reverse=True):
             out = re.sub(rf'(?<![\d.]){re.escape(str(old))}(?![\d.])', str(new), out)
         return out
-
     sign = '+' if b >= 0 else '-'
     aa = '' if a == 1 else ('-' if a == -1 else str(a))
     new_problem = f'{aa}x {sign} {abs(b)} = {c}'
     steps = {st.id:{'instruction':transform(st.instruction),'expected':transform(st.expected),'hint':transform(st.hint)} for st in example.steps}
     return {'problem':new_problem, 'steps':steps}
 
-
 def validate_math_payload(payload):
     for ei, ex in enumerate(payload, 1):
         ok, why = validate_math_expression(ex.get("problem", ""))
         if not ok:
             return f"Příklad {ei}: {why}. Oprav zadání a zkus to znovu."
+        if ex.get("variant_enabled"):
+            try:
+                vals=_parse_variant_values(ex.get("variant_values", ""))
+                if not vals:
+                    return f"Příklad {ei}: zadej alespoň jedno číslo ze vzoru pro obecné generování."
+                env={f'n{i+1}':v for i,v in enumerate(vals)}
+                _safe_variant_condition(ex.get("variant_condition", ""), env)
+                lo=float(ex.get("variant_min",1)); hi=float(ex.get("variant_max",30)); step=float(ex.get("variant_step",1))
+                if step<=0 or hi<lo:
+                    return f"Příklad {ei}: zkontroluj rozsah a krok generování."
+            except Exception as e:
+                return f"Příklad {ei}: chyba v podmínce generování – {e}."
         for si, st in enumerate(ex.get("steps") or [], 1):
             ok, why = validate_math_expression(st.get("expected", ""))
             if not ok:
@@ -2722,7 +2835,13 @@ def new_math_lesson():
                 lesson_id=lesson_row.id, order=ei,
                 title=str(ex.get('title') or f'Příklad {ei}'),
                 problem=str(ex.get('problem') or '').strip(),
-                image_stored=image_stored
+                image_stored=image_stored,
+                variant_enabled=bool(ex.get('variant_enabled')),
+                variant_values=str(ex.get('variant_values') or '').strip(),
+                variant_condition=str(ex.get('variant_condition') or '').strip(),
+                variant_min=float(ex.get('variant_min') or 1),
+                variant_max=float(ex.get('variant_max') or 30),
+                variant_step=float(ex.get('variant_step') or 1)
             )
             db.session.add(ex_row); db.session.flush()
             steps=ex.get('steps') or []
@@ -2901,7 +3020,13 @@ def edit_math_lesson(lesson_id):
                 order=ei,
                 title=str(ex.get('title') or f'Příklad {ei}'),
                 problem=str(ex.get('problem') or '').strip(),
-                image_stored=image_stored
+                image_stored=image_stored,
+                variant_enabled=bool(ex.get('variant_enabled')),
+                variant_values=str(ex.get('variant_values') or '').strip(),
+                variant_condition=str(ex.get('variant_condition') or '').strip(),
+                variant_min=float(ex.get('variant_min') or 1),
+                variant_max=float(ex.get('variant_max') or 30),
+                variant_step=float(ex.get('variant_step') or 1)
             )
             db.session.add(ex_row)
             db.session.flush()
@@ -2945,6 +3070,12 @@ def edit_math_lesson(lesson_id):
             'problem': ex.problem,
             'image_stored': ex.image_stored or '',
             'remove_image': False,
+            'variant_enabled': bool(ex.variant_enabled),
+            'variant_values': ex.variant_values or '',
+            'variant_condition': ex.variant_condition or '',
+            'variant_min': ex.variant_min if ex.variant_min is not None else 1,
+            'variant_max': ex.variant_max if ex.variant_max is not None else 30,
+            'variant_step': ex.variant_step if ex.variant_step is not None else 1,
             'steps': [
                 {
                     'instruction': st.instruction,
@@ -3592,7 +3723,13 @@ def ensure_schema_updates():
             'answers_json': "TEXT DEFAULT '[]'"
         },
         'math_example': {
-            'image_stored': "VARCHAR(255) DEFAULT ''"
+            'image_stored': "VARCHAR(255) DEFAULT ''",
+            'variant_enabled': 'BOOLEAN DEFAULT 0',
+            'variant_values': "TEXT DEFAULT ''",
+            'variant_condition': "TEXT DEFAULT ''",
+            'variant_min': 'FLOAT DEFAULT 1',
+            'variant_max': 'FLOAT DEFAULT 30',
+            'variant_step': 'FLOAT DEFAULT 1'
         }
     }
     for table_name, columns in required.items():
