@@ -253,6 +253,10 @@ class MathStep(db.Model):
     instruction = db.Column(db.Text, nullable=False)
     expected = db.Column(db.Text, nullable=False)
     hint = db.Column(db.Text, default='')
+    # Volitelný jeden nebo více obecných vzorců pro dopočet výsledků z n1, n2, ...
+    # Více vzorců odděl středníkem / novým řádkem; postupně nahradí čísla ve vzorové odpovědi.
+    result_formula = db.Column(db.Text, default='')
+    result_decimals = db.Column(db.Integer, default=2)
     example = db.relationship('MathExample', backref='steps')
 
 
@@ -2357,6 +2361,7 @@ def format_math_display(value):
     text = str(value or '')
     text = re.sub(r'(\d+(?:[.,]\d+)?)\s*deg\b', lambda m: m.group(1) + '°', text, flags=re.IGNORECASE)
     text = re.sub(r'\balpha\b', 'α', text, flags=re.IGNORECASE)
+    text = re.sub(r'\b(asin|acos|atan)\(([^()]+)\)', lambda m: {'asin':'sin⁻¹','acos':'cos⁻¹','atan':'tan⁻¹'}[m.group(1).lower()]+' '+m.group(2), text, flags=re.IGNORECASE)
     text = re.sub(r'\b(sin|cos|tan)\(([^()]+)\)', r'\1 \2', text, flags=re.IGNORECASE)
     return text
 
@@ -2421,7 +2426,8 @@ def math_input_layout(expected):
                     elif name=='diff' and args:
                         nodes.append({'kind':'derivative','body':parse(args[0]),'var':parse(args[1]) if len(args)>1 else [],'order':parse(args[2], True) if len(args)>2 else []})
                     else:
-                        nodes.append({'kind':'function','name':name,'args':[parse(a) for a in args]})
+                        display_name={'asin':'sin⁻¹','acos':'cos⁻¹','atan':'tan⁻¹'}.get(name,name)
+                        nodes.append({'kind':'function','name':name,'display_name':display_name,'args':[parse(a) for a in args]})
                     i=close+1; continue
             if text.startswith('pi',i) and (i+2==len(text) or not text[i+2].isalpha()):
                 nodes.append({'kind':'fixed','display':'π','answer':'pi'}); i+=2; continue
@@ -2520,7 +2526,7 @@ def render_math_input_layout(layout):
             elif k=='abs': parts.append(f'<span class="math-abs">|&nbsp;{render(tok["body"])}&nbsp;|</span>')
             elif k=='function':
                 args='<span class="math-fixed">,</span>'.join(render(a) for a in tok['args'])
-                parts.append(f'<span class="math-function"><span class="math-fixed">{escape(tok["name"])}</span><span class="math-fixed">(</span>{args}<span class="math-fixed">)</span></span>')
+                parts.append(f'<span class="math-function"><span class="math-fixed">{escape(tok.get("display_name",tok["name"]))}</span><span class="math-fixed">(</span>{args}<span class="math-fixed">)</span></span>')
             elif k=='integral': parts.append(f'<span class="math-integral"><span class="math-special">∫</span>{render(tok["body"])}<span class="math-fixed">d</span>{render(tok["var"])}</span>')
             elif k=='derivative':
                 var=render(tok['var']); order=render(tok.get('order',[]))
@@ -2658,6 +2664,91 @@ def _safe_variant_condition(condition, env):
     return bool(eval(compile(tree, '<math-condition>', 'eval'), {'__builtins__':{}, **allowed_funcs}, env))
 
 
+def _safe_variant_formula(formula, env):
+    """Bezpečně spočítá číselný výsledek z n1, n2, ... bez eval přístupu k Pythonu."""
+    expr = str(formula or '').strip()
+    if not expr:
+        raise ValueError('vzorec pro výpočet výsledku je prázdný')
+    tree = ast.parse(expr, mode='eval')
+    allowed_nodes=(ast.Expression, ast.BinOp, ast.UnaryOp, ast.Name, ast.Load, ast.Constant,
+                   ast.Add, ast.Sub, ast.Mult, ast.Div, ast.FloorDiv, ast.Mod, ast.Pow,
+                   ast.USub, ast.UAdd, ast.Call)
+    allowed_funcs={
+        'abs':abs, 'min':min, 'max':max, 'round':round, 'sqrt':math.sqrt,
+        'sin':math.sin, 'cos':math.cos, 'tan':math.tan,
+        'asin':math.asin, 'acos':math.acos, 'atan':math.atan,
+        'degrees':math.degrees, 'radians':math.radians,
+        'log':math.log, 'ln':math.log, 'exp':math.exp
+    }
+    constants={'pi':math.pi, 'e':math.e}
+    for node in ast.walk(tree):
+        if not isinstance(node, allowed_nodes):
+            raise ValueError('nepovolená konstrukce ve vzorci výsledku')
+        if isinstance(node, ast.Name) and node.id not in env and node.id not in allowed_funcs and node.id not in constants:
+            raise ValueError(f'neznámá proměnná {node.id}')
+        if isinstance(node, ast.Call):
+            if not isinstance(node.func, ast.Name) or node.func.id not in allowed_funcs:
+                raise ValueError('nepovolená funkce ve vzorci výsledku')
+    value=eval(compile(tree, '<math-result-formula>', 'eval'), {'__builtins__':{}, **allowed_funcs, **constants}, env)
+    try:
+        value=float(value)
+    except Exception:
+        raise ValueError('vzorec výsledku musí vrátit jedno číslo')
+    if not math.isfinite(value):
+        raise ValueError('vzorec výsledku nevrátil konečné číslo')
+    return value
+
+
+def _format_result_number(value, decimals=2):
+    try:
+        decimals=max(0, min(10, int(decimals)))
+    except Exception:
+        decimals=2
+    rounded=round(float(value), decimals)
+    if decimals == 0:
+        return str(int(round(rounded)))
+    return f'{rounded:.{decimals}f}'.rstrip('0').rstrip('.')
+
+
+def _split_result_formulas(raw):
+    """Jeden nebo více obecných vzorců, oddělených středníkem nebo novým řádkem."""
+    return [x.strip() for x in re.split(r'[;\n]+', str(raw or '')) if x.strip()]
+
+
+def _computed_result_markers(expected_text, source_env, target_env, formulas, decimals):
+    """Nahradí vypočtené vzorové výsledky dočasnými značkami.
+
+    Díky značkám se následná výměna vstupních náhodných čísel nemůže omylem
+    dotknout právě dopočítaného výsledku. Podporuje libovolný počet výsledků.
+    """
+    text=str(expected_text or '')
+    replacements=[]
+    for idx, formula in enumerate(_split_result_formulas(formulas), 1):
+        base=_format_result_number(_safe_variant_formula(formula, source_env), decimals)
+        target=_format_result_number(_safe_variant_formula(formula, target_env), decimals)
+        candidates=[base]
+        if '.' in base:
+            candidates.append(base.replace('.', ','))
+        marker=f'__UCEBNICE_RESULT_{idx}__'
+        found=False
+        for token in candidates:
+            pattern=rf'(?<![\d.]){re.escape(token)}(?![\d.])'
+            if re.search(pattern, text):
+                text=re.sub(pattern, marker, text, count=1)
+                found=True
+                break
+        if not found:
+            raise ValueError(f've správné odpovědi nebyl nalezen vypočtený vzorový výsledek {base}')
+        replacements.append((marker,target))
+    return text, replacements
+
+
+def _restore_computed_result_markers(text, replacements):
+    out=str(text or '')
+    for marker,target in replacements:
+        out=out.replace(marker,target)
+    return out
+
 def _replace_variant_numbers(text_value, source_values, new_values):
     out=str(text_value or '')
     pairs=list(zip(source_values,new_values))
@@ -2700,11 +2791,26 @@ def _generic_math_variant(example, user_id):
     if chosen is None:
         raise ValueError('v daném rozsahu se nepodařilo najít čísla splňující podmínku')
 
-    steps={st.id:{
-        'instruction':_replace_variant_numbers(st.instruction, source, chosen),
-        'expected':_replace_variant_numbers(st.expected, source, chosen),
-        'hint':_replace_variant_numbers(st.hint, source, chosen)
-    } for st in example.steps}
+    source_env={f'n{i+1}':v for i,v in enumerate(source)}
+    target_env={f'n{i+1}':v for i,v in enumerate(chosen)}
+    steps={}
+    for st in example.steps:
+        expected_text=str(st.expected or '')
+        replacements=[]
+        if str(getattr(st, 'result_formula', '') or '').strip():
+            # Vypočtené výsledky nejprve ochráníme značkami, pak měníme vstupní čísla
+            # a nakonec vložíme nové vypočtené hodnoty. Funguje i pro více výsledků.
+            expected_text,replacements=_computed_result_markers(
+                expected_text, source_env, target_env, st.result_formula,
+                getattr(st, 'result_decimals', 2)
+            )
+        expected_text=_replace_variant_numbers(expected_text, source, chosen)
+        expected_text=_restore_computed_result_markers(expected_text,replacements)
+        steps[st.id]={
+            'instruction':_replace_variant_numbers(st.instruction, source, chosen),
+            'expected':expected_text,
+            'hint':_replace_variant_numbers(st.hint, source, chosen)
+        }
     return {'problem':_replace_variant_numbers(example.problem, source, chosen),
             'prose_problem':_replace_variant_numbers(getattr(example, 'prose_problem', '') or '', source, chosen),
             'steps':steps, 'variant_values':chosen}
@@ -2754,26 +2860,52 @@ def generated_math_variant(example, user_id):
     return {'problem':new_problem, 'prose_problem':_replace_variant_numbers(getattr(example, 'prose_problem', '') or '', list(mapping.keys()), list(mapping.values())), 'steps':steps}
 
 def validate_math_payload(payload):
+    """Vrací None, nebo dict {message, field}; field dovolí UI označit jen chybný input."""
     for ei, ex in enumerate(payload, 1):
+        if not (ex.get('steps') or []):
+            return {'message': f'Příklad {ei} nemá žádné kroky.', 'field': f'examples.{ei-1}.steps'}
         ok, why = validate_math_expression(ex.get("problem", ""))
         if not ok:
-            return f"Příklad {ei}: {why}. Oprav zadání a zkus to znovu."
+            return {'message': f"Příklad {ei}: {why}. Oprav matematický vzor.", 'field': f'examples.{ei-1}.problem'}
+        vals=[]
+        source_env={}
         if ex.get("variant_enabled"):
             try:
                 vals=_parse_variant_values(ex.get("variant_values", ""))
                 if not vals:
-                    return f"Příklad {ei}: zadej alespoň jedno číslo ze vzoru pro obecné generování."
-                env={f'n{i+1}':v for i,v in enumerate(vals)}
-                _safe_variant_condition(ex.get("variant_condition", ""), env)
+                    return {'message': f"Příklad {ei}: zadej alespoň jedno číslo ze vzoru pro obecné generování.", 'field': f'examples.{ei-1}.variant_values'}
+                source_env={f'n{i+1}':v for i,v in enumerate(vals)}
+                _safe_variant_condition(ex.get("variant_condition", ""), source_env)
+            except Exception as e:
+                return {'message': f"Příklad {ei}: chyba v podmínce generování – {e}.", 'field': f'examples.{ei-1}.variant_condition'}
+            try:
                 lo=float(ex.get("variant_min",1)); hi=float(ex.get("variant_max",30)); step=float(ex.get("variant_step",1))
                 if step<=0 or hi<lo:
-                    return f"Příklad {ei}: zkontroluj rozsah a krok generování."
+                    raise ValueError('minimum musí být menší nebo rovno maximu a krok musí být kladný')
             except Exception as e:
-                return f"Příklad {ei}: chyba v podmínce generování – {e}."
+                return {'message': f"Příklad {ei}: zkontroluj rozsah a krok generování – {e}.", 'field': f'examples.{ei-1}.variant_range'}
         for si, st in enumerate(ex.get("steps") or [], 1):
-            ok, why = validate_math_expression(st.get("expected", ""))
+            formula=str(st.get('result_formula') or '').strip()
+            decimals=st.get('result_decimals',2)
+            expected=str(st.get("expected", "") or '')
+            if formula:
+                if not ex.get('variant_enabled'):
+                    return {'message': f"Příklad {ei}, krok {si}: vzorec pro přepočet výsledku vyžaduje zapnuté obecné náhodné varianty.", 'field': f'examples.{ei-1}.steps.{si-1}.result_formula'}
+                try:
+                    d=int(decimals)
+                    if d < 0 or d > 10:
+                        raise ValueError('zaokrouhlení musí být 0 až 10 desetinných míst')
+                    # Ověříme všechny vzorce a že jejich vzorové výsledky umíme
+                    # ve správné odpovědi najít. Vzorců může být více (středník / nový řádek).
+                    formulas=_split_result_formulas(formula)
+                    if not formulas:
+                        raise ValueError('zadej alespoň jeden vzorec')
+                    _computed_result_markers(expected, source_env, source_env, formula, d)
+                except Exception as e:
+                    return {'message': f"Příklad {ei}, krok {si}: chyba ve vzorci výsledku – {e}.", 'field': f'examples.{ei-1}.steps.{si-1}.result_formula'}
+            ok, why = validate_math_expression(expected)
             if not ok:
-                return f"Příklad {ei}, krok {si}: {why}. Oprav správný stav a zkus to znovu."
+                return {'message': f"Příklad {ei}, krok {si}: {why}. Oprav správný stav.", 'field': f'examples.{ei-1}.steps.{si-1}.expected'}
     return None
 
 
@@ -2811,8 +2943,12 @@ def new_math_lesson():
         topic=request.form.get('topic','').strip()
         title=request.form.get('title','').strip()
         if not all((school,grade_name,topic,title)):
-            flash('Vyplň školu/třídu, ročník, téma a název lekce.')
-            return redirect(url_for('new_math_lesson'))
+            lessons=MathLesson.query.order_by(MathLesson.created_at.desc()).all()
+            missing = 'school' if not school else ('grade_name' if not grade_name else ('topic' if not topic else 'title'))
+            return render_template('math_new.html', course=course_from_lesson(None), lesson=None, lessons=lessons,
+                form_data={'school':school,'grade_name':grade_name,'topic':topic,'title':title},
+                examples_json=request.form.get('examples_json','[]'),
+                math_errors={'message':'Vyplň všechna povinná pole zařazení lekce.','field':missing})
 
         html_file=request.files.get('lesson_html')
         html_original=''; html_stored=''
@@ -2836,13 +2972,18 @@ def new_math_lesson():
             payload=[]
         if not payload:
             db.session.rollback()
-            flash('Přidej alespoň jeden příklad.')
-            return redirect(url_for('new_math_lesson'))
+            lessons=MathLesson.query.order_by(MathLesson.created_at.desc()).all()
+            return render_template('math_new.html', course=course_from_lesson(None), lesson=None, lessons=lessons,
+                form_data={'school':school,'grade_name':grade_name,'topic':topic,'title':title},
+                examples_json=request.form.get('examples_json','[]'),
+                math_errors={'message':'Přidej alespoň jeden příklad.','field':'examples'})
         math_error = validate_math_payload(payload)
         if math_error:
             db.session.rollback()
-            flash('❌ ' + math_error)
-            return redirect(url_for('new_math_lesson'))
+            lessons=MathLesson.query.order_by(MathLesson.created_at.desc()).all()
+            return render_template('math_new.html', course=course_from_lesson(None), lesson=None, lessons=lessons,
+                form_data={'school':school,'grade_name':grade_name,'topic':topic,'title':title},
+                examples_json=json.dumps(payload, ensure_ascii=False), math_errors=math_error)
 
         previous_steps=[]
         for ei, ex in enumerate(payload,1):
@@ -2878,19 +3019,22 @@ def new_math_lesson():
                 item={
                     'instruction':str(st.get('instruction') or '').strip(),
                     'expected':str(st.get('expected') or '').strip(),
-                    'hint':str(st.get('hint') or '').strip()
+                    'hint':str(st.get('hint') or '').strip(),
+                    'result_formula':str(st.get('result_formula') or '').strip(),
+                    'result_decimals':int(st.get('result_decimals') if str(st.get('result_decimals','')).strip() else 2)
                 }
                 previous_steps.append(item)
                 db.session.add(MathStep(
                     example_id=ex_row.id, order=si,
-                    instruction=item['instruction'], expected=item['expected'], hint=item['hint']
+                    instruction=item['instruction'], expected=item['expected'], hint=item['hint'],
+                    result_formula=item['result_formula'], result_decimals=item['result_decimals']
                 ))
         db.session.commit()
         flash('Matematická lekce byla vytvořena.')
         return redirect(url_for('math_lesson', lesson_id=lesson_row.id))
 
     lessons=MathLesson.query.order_by(MathLesson.created_at.desc()).all()
-    return render_template('math_new.html', course=course_from_lesson(None), lesson=None, lessons=lessons)
+    return render_template('math_new.html', course=course_from_lesson(None), lesson=None, lessons=lessons, form_data={}, examples_json='', math_errors=None)
 
 
 @app.route('/math-lesson/<int:lesson_id>', methods=['GET','POST'])
@@ -3012,13 +3156,16 @@ def edit_math_lesson(lesson_id):
             payload = []
 
         if not payload:
-            flash('Lekce musí obsahovat alespoň jeden příklad.')
-            return redirect(url_for('edit_math_lesson', lesson_id=item.id))
+            db.session.rollback()
+            return render_template('math_edit.html', course=course_from_lesson(None), lesson=None, item=item,
+                form_data={'school':request.form.get('school',''),'grade_name':request.form.get('grade_name',''),'topic':request.form.get('topic',''),'title':request.form.get('title','')},
+                examples_json='[]', math_errors={'message':'Lekce musí obsahovat alespoň jeden příklad.','field':'examples'})
         math_error = validate_math_payload(payload)
         if math_error:
             db.session.rollback()
-            flash('❌ ' + math_error)
-            return redirect(url_for('edit_math_lesson', lesson_id=item.id))
+            return render_template('math_edit.html', course=course_from_lesson(None), lesson=None, item=item,
+                form_data={'school':request.form.get('school',''),'grade_name':request.form.get('grade_name',''),'topic':request.form.get('topic',''),'title':request.form.get('title','')},
+                examples_json=json.dumps(payload, ensure_ascii=False), math_errors=math_error)
 
         old_example_ids = [e.id for e in item.examples]
         if old_example_ids:
@@ -3069,6 +3216,8 @@ def edit_math_lesson(lesson_id):
                     'instruction': str(st.get('instruction') or '').strip(),
                     'expected': str(st.get('expected') or '').strip(),
                     'hint': str(st.get('hint') or '').strip(),
+                    'result_formula': str(st.get('result_formula') or '').strip(),
+                    'result_decimals': int(st.get('result_decimals') if str(st.get('result_decimals','')).strip() else 2),
                 }
                 previous_steps.append(step_data)
                 db.session.add(MathStep(
@@ -3077,6 +3226,8 @@ def edit_math_lesson(lesson_id):
                     instruction=step_data['instruction'],
                     expected=step_data['expected'],
                     hint=step_data['hint'],
+                    result_formula=step_data['result_formula'],
+                    result_decimals=step_data['result_decimals'],
                 ))
 
         # Při změně struktury lekce vynulujeme staré rozpracované pokusy,
@@ -3105,6 +3256,8 @@ def edit_math_lesson(lesson_id):
                     'instruction': st.instruction,
                     'expected': st.expected,
                     'hint': st.hint,
+                    'result_formula': getattr(st, 'result_formula', '') or '',
+                    'result_decimals': getattr(st, 'result_decimals', 2) if getattr(st, 'result_decimals', None) is not None else 2,
                 }
                 for st in sorted(ex.steps, key=lambda x:x.order)
             ]
@@ -3115,7 +3268,8 @@ def edit_math_lesson(lesson_id):
         course=course_from_lesson(None),
         lesson=None,
         item=item,
-        examples_json=json.dumps(examples_data, ensure_ascii=False)
+        examples_json=json.dumps(examples_data, ensure_ascii=False),
+        form_data={}, math_errors=None
     )
 
 @app.route('/teacher/math/<int:lesson_id>/delete', methods=['POST'])
@@ -3745,6 +3899,10 @@ def ensure_schema_updates():
         },
         'math_attempt': {
             'answers_json': "TEXT DEFAULT '[]'"
+        },
+        'math_step': {
+            'result_formula': "TEXT DEFAULT ''",
+            'result_decimals': 'INTEGER DEFAULT 2'
         },
         'math_example': {
             'prose_problem': "TEXT DEFAULT ''",

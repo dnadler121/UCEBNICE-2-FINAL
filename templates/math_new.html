@@ -5,6 +5,8 @@
 <p>Ty určuješ jednotlivé kroky i nápovědy. Další podobný příklad může převzít stejnou strukturu kroků jako předchozí.</p></div>
 <a class="switch" href="{{url_for('teacher_home')}}">← Administrace</a></div>
 {% with messages=get_flashed_messages() %}{% if messages %}<div class="notice">{% for m in messages %}<p>{{m}}</p>{% endfor %}</div>{% endif %}{% endwith %}
+{% if math_errors %}<div class="notice" style="border:2px solid #d33;background:#fff4f4"><p><b>❌ {{ math_errors.message }}</b></p><p>Ostatní vyplněné údaje zůstaly zachované. Oprav jen označené pole.</p></div>{% endif %}
+<style>.math-field-error{outline:3px solid #d33!important;background:#fff2f2!important}.math-error-label{color:#b00020;font-weight:700}</style>
 
 
 <section class="course-card math-help" style="padding:18px;margin-top:18px">
@@ -30,10 +32,10 @@
 <section class="course-card" style="padding:22px">
 <h2>1. Zařazení lekce</h2>
 <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px">
-<label><b>Škola / třída</b><input name="school" required></label>
-<label><b>Ročník</b><input name="grade_name" required></label>
-<label><b>Téma</b><input name="topic" required placeholder="např. Lineární rovnice"></label>
-<label><b>Název lekce</b><input name="title" required></label>
+<label><b>Škola / třída</b><input name="school" required data-field="school" value="{{ (form_data or {}).get('school','') }}"></label>
+<label><b>Ročník</b><input name="grade_name" required data-field="grade_name" value="{{ (form_data or {}).get('grade_name','') }}"></label>
+<label><b>Téma</b><input name="topic" required data-field="topic" placeholder="např. Lineární rovnice" value="{{ (form_data or {}).get('topic','') }}"></label>
+<label><b>Název lekce</b><input name="title" required data-field="title" value="{{ (form_data or {}).get('title','') }}"></label>
 </div>
 <label><b>HTML výklad / návod – jednou pro celou lekci</b><input type="file" name="lesson_html" accept=".html,.htm"></label>
 </section>
@@ -55,7 +57,8 @@
 </main></div>
 
 <script>
-let examples=[];
+let examples={{ (examples_json or '[]')|safe }};
+const mathError={{ (math_errors or {})|tojson }};
 function esc(v){return (v||"").replace(/"/g,"&quot;")}
 function render(){
  const box=document.getElementById("examples"); box.innerHTML="";
@@ -64,18 +67,18 @@ function render(){
    wrap.innerHTML=`<div style="display:flex;justify-content:space-between"><h3>Příklad ${ei+1}</h3><button type="button" class="link-button danger" onclick="removeExample(${ei})">✕</button></div>
    <label>Název příkladu<input value="${esc(ex.title)}" oninput="examples[${ei}].title=this.value"></label>
    <label><b>Slovní zadání pro žáka</b><textarea rows="3" placeholder="např. V pravoúhlém trojúhelníku jsou strany 3 cm, 4 cm a 5 cm. Urči sin α." oninput="examples[${ei}].prose_problem=this.value">${ex.prose_problem||""}</textarea><small>Sem můžeš psát normálně česky. Toto pole se matematicky nekontroluje.</small></label>
-   <label><b>Matematický vzor pro engine</b><input value="${esc(ex.problem)}" placeholder="např. a=3,b=4,c=5" oninput="examples[${ei}].problem=this.value"><small>Sem patří pouze matematický zápis. Engine podle něj zachová strukturu příkladu.</small></label>
+   <label><b>Matematický vzor pro engine</b><input value="${esc(ex.problem)}" data-field="examples.${ei}.problem" placeholder="např. a=3,b=4,c=5" oninput="examples[${ei}].problem=this.value"><small>Sem patří pouze matematický zápis. Engine podle něj zachová strukturu příkladu.</small></label>
    <div style="margin:12px 0;padding:12px;border:1px solid #dbe4ee;border-radius:10px;background:#f8fbff">
      <label style="display:flex;align-items:center;gap:8px"><input type="checkbox" ${ex.variant_enabled ? "checked" : ""} onchange="examples[${ei}].variant_enabled=this.checked;render()"> <b>Obecné náhodné varianty pro každého žáka</b></label>
      ${ex.variant_enabled ? `<div style="margin-top:10px">
-       <label><b>Čísla z matematického vzoru, která se mají měnit</b><input value="${esc(ex.variant_values||"")}" placeholder="např. 3; 4; 5" oninput="examples[${ei}].variant_values=this.value;updateAliases(${ei})"><small>Odděluj středníkem. Stejná čísla se potom změní ve slovním zadání, matematickém vzoru, správném výsledku, instrukci i nápovědě.</small></label>
+       <label><b>Čísla z matematického vzoru, která se mají měnit</b><input value="${esc(ex.variant_values||"")}" data-field="examples.${ei}.variant_values" placeholder="např. 3; 4; 5" oninput="examples[${ei}].variant_values=this.value;updateAliases(${ei})"><small>Odděluj středníkem. Stejná čísla se potom změní ve slovním zadání, matematickém vzoru, správném výsledku, instrukci i nápovědě.</small></label>
        <div id="aliases-${ei}" style="padding:8px 10px;margin:6px 0;background:white;border-radius:8px;font-family:monospace"></div>
        <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px">
-         <label>Od<input type="number" step="any" value="${ex.variant_min ?? 1}" oninput="examples[${ei}].variant_min=this.value"></label>
+         <label>Od<input data-field="examples.${ei}.variant_range" type="number" step="any" value="${ex.variant_min ?? 1}" oninput="examples[${ei}].variant_min=this.value"></label>
          <label>Do<input type="number" step="any" value="${ex.variant_max ?? 30}" oninput="examples[${ei}].variant_max=this.value"></label>
          <label>Krok<input type="number" step="any" min="0.000001" value="${ex.variant_step ?? 1}" oninput="examples[${ei}].variant_step=this.value"></label>
        </div>
-       <label><b>Doplňující matematická podmínka (nepovinná)</b><input value="${esc(ex.variant_condition||"")}" placeholder="např. n1**2 + n2**2 == n3**2" oninput="examples[${ei}].variant_condition=this.value"><small>n1 je první číslo výše, n2 druhé atd. Lze použít +, −, *, /, **, %, &lt;, &gt;, ==, !=, and, or, sqrt(), abs(), min(), max().</small></label>
+       <label><b>Doplňující matematická podmínka (nepovinná)</b><input value="${esc(ex.variant_condition||"")}" data-field="examples.${ei}.variant_condition" placeholder="např. n1**2 + n2**2 == n3**2" oninput="examples[${ei}].variant_condition=this.value"><small>n1 je první číslo výše, n2 druhé atd. Lze použít +, −, *, /, **, %, &lt;, &gt;, ==, !=, and, or, sqrt(), abs(), min(), max().</small></label>
      </div>` : `<small>Pokud ji nezapneš, generátor se chová stejně jako dosud.</small>`}
    </div>
    <label><b>Obrázek / náčrt k tomuto příkladu (nepovinné)</b>
@@ -90,13 +93,23 @@ function render(){
       const d=document.createElement("div"); d.style="padding:12px;margin:10px 0;border:1px solid #e0e6ec;border-radius:10px;background:white";
       d.innerHTML=`<b>Krok ${si+1}</b>
       <label>Co má student udělat<input value="${esc(st.instruction)}" oninput="examples[${ei}].steps[${si}].instruction=this.value"></label>
-      <label>Správný stav / odpověď<input value="${esc(st.expected)}" oninput="examples[${ei}].steps[${si}].expected=this.value"></label>
+      <label>Správný stav / odpověď<input data-field="examples.${ei}.steps.${si}.expected" value="${esc(st.expected)}" oninput="examples[${ei}].steps[${si}].expected=this.value"><small>Např. alpha=36.87deg. To je správný výsledek pro tvůj vzorový příklad.</small></label>
+      ${ex.variant_enabled ? `<div style="padding:10px;margin:8px 0;background:#f6fbf7;border:1px solid #cfe3d4;border-radius:9px">
+        <label><b>Vzorec / vzorce pro přepočet výsledku (nepovinné)</b><textarea data-field="examples.${ei}.steps.${si}.result_formula" rows="2" placeholder="např. degrees(asin(n1/n3))" oninput="examples[${ei}].steps[${si}].result_formula=this.value">${esc(st.result_formula||"")}</textarea><small>Jeden výsledek: např. degrees(asin(n1/n3)). Více výsledků (např. x a y u soustavy) napiš po jednom na řádek nebo odděl středníkem. Výsledky se dosadí ve stejném pořadí, v jakém jsou ve správné odpovědi.</small></label>
+        <label>Zaokrouhlit na počet desetinných míst<input type="number" min="0" max="10" step="1" value="${st.result_decimals ?? 2}" oninput="examples[${ei}].steps[${si}].result_decimals=this.value"></label>
+      </div>` : ``}
       <label>Moje nápověda<input value="${esc(st.hint)}" oninput="examples[${ei}].steps[${si}].hint=this.value"></label>
       <button type="button" class="link-button danger" onclick="removeStep(${ei},${si})">Odebrat krok</button>`;
       sb.appendChild(d);
    });
    updateAliases(ei);
  });
+ applyMathError();
+}
+function applyMathError(){
+ if(!mathError || !mathError.field) return;
+ const el=document.querySelector(`[data-field="${mathError.field}"]`);
+ if(el){ el.classList.add("math-field-error"); const lab=el.closest("label"); if(lab) lab.classList.add("math-error-label"); setTimeout(()=>el.scrollIntoView({behavior:"smooth",block:"center"}),50); }
 }
 function updateAliases(ei){
  const el=document.getElementById(`aliases-${ei}`); if(!el)return;
@@ -104,16 +117,16 @@ function updateAliases(ei){
  el.textContent=vals.length ? vals.map((v,i)=>`n${i+1} = ${v}`).join("   |   ") : "Zadej čísla ze vzoru, např. 3; 4; 5";
 }
 function addExample(copy){
- let steps=[{instruction:"",expected:"",hint:""}];
+ let steps=[{instruction:"",expected:"",hint:"",result_formula:"",result_decimals:2}];
  if(copy && examples.length){
-   steps=examples[examples.length-1].steps.map(s=>({instruction:s.instruction,expected:"",hint:s.hint}));
+   steps=examples[examples.length-1].steps.map(s=>({instruction:s.instruction,expected:"",hint:s.hint,result_formula:"",result_decimals:s.result_decimals ?? 2}));
  }
  examples.push({title:"",problem:"",prose_problem:"",image_stored:"",remove_image:false,variant_enabled:false,variant_values:"",variant_condition:"",variant_min:1,variant_max:30,variant_step:1,steps:steps}); render();
 }
 function removeExample(i){examples.splice(i,1);render()}
-function addStep(ei){examples[ei].steps.push({instruction:"",expected:"",hint:""});render()}
+function addStep(ei){examples[ei].steps.push({instruction:"",expected:"",hint:"",result_formula:"",result_decimals:2});render()}
 function removeStep(ei,si){examples[ei].steps.splice(si,1);render()}
 document.getElementById("mathForm").addEventListener("submit",()=>{document.getElementById("examples_json").value=JSON.stringify(examples)});
-addExample(false);
+if(examples.length){ render(); } else { addExample(false); }
 </script>
 {% endblock %}

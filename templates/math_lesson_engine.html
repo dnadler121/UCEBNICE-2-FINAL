@@ -112,6 +112,29 @@
 {% endif %}
 
 <section class="course-card" style="padding:22px;margin-top:18px">
+<div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap">
+  <div><h2 style="margin:0">🧮 Vědecká kalkulačka</h2><small style="color:#65717d">Je součástí lekce, takže kvůli výpočtu nemusíš přepínat do jiné aplikace.</small></div>
+  <button type="button" class="switch" id="calc-toggle" onclick="toggleCalculator()">Otevřít kalkulačku</button>
+</div>
+<div id="student-calculator" class="student-calculator" hidden>
+  <div class="calc-top">
+    <button type="button" id="calc-angle-mode" class="calc-mode" onclick="toggleAngleMode()">DEG</button>
+    <input id="calc-expression" class="calc-display" inputmode="decimal" autocomplete="off" placeholder="např. asin(3/5)" aria-label="Výraz kalkulačky">
+  </div>
+  <div id="calc-result" class="calc-result">0</div>
+  <div class="calc-grid">
+    <button type="button" onclick="calcInsert('sin(')">sin</button><button type="button" onclick="calcInsert('cos(')">cos</button><button type="button" onclick="calcInsert('tan(')">tan</button><button type="button" onclick="calcInsert('sqrt(')">√</button><button type="button" onclick="calcClear()">C</button>
+    <button type="button" onclick="calcInsert('asin(')">sin⁻¹</button><button type="button" onclick="calcInsert('acos(')">cos⁻¹</button><button type="button" onclick="calcInsert('atan(')">tan⁻¹</button><button type="button" onclick="calcInsert('log(')">log</button><button type="button" onclick="calcInsert('ln(')">ln</button>
+    <button type="button" onclick="calcInsert('7')">7</button><button type="button" onclick="calcInsert('8')">8</button><button type="button" onclick="calcInsert('9')">9</button><button type="button" onclick="calcInsert('/')">÷</button><button type="button" onclick="calcInsert('**')">xʸ</button>
+    <button type="button" onclick="calcInsert('4')">4</button><button type="button" onclick="calcInsert('5')">5</button><button type="button" onclick="calcInsert('6')">6</button><button type="button" onclick="calcInsert('*')">×</button><button type="button" onclick="calcInsert('pi')">π</button>
+    <button type="button" onclick="calcInsert('1')">1</button><button type="button" onclick="calcInsert('2')">2</button><button type="button" onclick="calcInsert('3')">3</button><button type="button" onclick="calcInsert('-')">−</button><button type="button" onclick="calcInsert('(')">(</button>
+    <button type="button" onclick="calcInsert('0')">0</button><button type="button" onclick="calcInsert('.')">,</button><button type="button" onclick="calcInsert(')')">)</button><button type="button" onclick="calcInsert('+')">+</button><button type="button" class="calc-equals" onclick="calcEvaluate()">=</button>
+  </div>
+  <small style="display:block;margin-top:8px;color:#65717d">Kalkulačka počítá číselné výrazy. Neřeší celé rovnice ani soustavy za studenta.</small>
+</div>
+</section>
+
+<section class="course-card" style="padding:22px;margin-top:18px">
 <h2>Odevzdání</h2>
 {% if percent < 100 %}
 <div class="notice"><p><b>⚠️ Lekce ještě není hotová.</b> Pokud ji odevzdáš teď, zapíše se {{percent}} % a známka {{grade}}.</p></div>
@@ -139,6 +162,8 @@
 .math-root{display:inline-flex;align-items:flex-start;margin:0 3px}.math-root-sign{font-size:2.35rem;line-height:1}.math-radicand{display:inline-flex;align-items:center;border-top:2px solid #111;padding:3px 3px 0;margin-left:-3px;min-height:42px}
 .math-power{display:inline-flex;align-items:flex-start;gap:2px;margin-left:1px;transform:translateY(-12px)}.math-power .math-char{width:30px;height:34px;font-size:1rem}
 .math-function,.math-integral,.math-derivative,.math-abs{display:inline-flex;align-items:center;gap:3px}.math-special{font-size:2.5rem;line-height:1}.math-deriv-frac{display:inline-flex;flex-direction:column;align-items:center;font-size:1rem;line-height:1.15;margin-right:3px}.math-deriv-frac>span:first-child{border-bottom:2px solid #111;padding:1px 4px}.math-deriv-frac>span:last-child{padding:1px 4px}.math-deriv-frac .math-char{width:28px;height:32px;font-size:.95rem}
+
+.student-calculator{margin-top:16px;padding:16px;border:1px solid #dbe4ee;border-radius:14px;background:#f8fbff;max-width:620px}.calc-top{display:flex;gap:8px;align-items:center}.calc-mode{min-width:64px;height:46px;border:1px solid #9fb0c2;border-radius:9px;background:white;font-weight:800;cursor:pointer}.calc-display{flex:1;height:46px;border:2px solid #aebccc;border-radius:9px;padding:0 12px;font-size:1.15rem;font-family:monospace}.calc-result{min-height:48px;margin:10px 0;padding:10px 12px;background:white;border:1px solid #d8e1ea;border-radius:9px;text-align:right;font-size:1.45rem;font-weight:800;overflow-wrap:anywhere}.calc-grid{display:grid;grid-template-columns:repeat(5,minmax(54px,1fr));gap:7px}.calc-grid button{min-height:44px;border:1px solid #b8c5d2;border-radius:9px;background:white;font-size:1rem;font-weight:700;cursor:pointer}.calc-grid button:hover{background:#eef5ff}.calc-grid .calc-equals{font-size:1.25rem}.calc-error{color:#b42318}
 </style>
 <script>
 document.addEventListener('DOMContentLoaded',()=>{
@@ -154,6 +179,40 @@ document.addEventListener('DOMContentLoaded',()=>{
    });
  });
 });
+</script>
+<script>
+let calculatorAngleMode='DEG';
+function toggleCalculator(){
+ const panel=document.getElementById('student-calculator'), btn=document.getElementById('calc-toggle');
+ panel.hidden=!panel.hidden; btn.textContent=panel.hidden?'Otevřít kalkulačku':'Skrýt kalkulačku';
+ if(!panel.hidden) document.getElementById('calc-expression').focus();
+}
+function toggleAngleMode(){ calculatorAngleMode=calculatorAngleMode==='DEG'?'RAD':'DEG'; document.getElementById('calc-angle-mode').textContent=calculatorAngleMode; }
+function calcInsert(txt){ const el=document.getElementById('calc-expression'); const a=el.selectionStart??el.value.length,b=el.selectionEnd??el.value.length; el.value=el.value.slice(0,a)+txt+el.value.slice(b); const pos=a+txt.length; el.focus(); el.setSelectionRange(pos,pos); }
+function calcClear(){ document.getElementById('calc-expression').value=''; const r=document.getElementById('calc-result'); r.textContent='0'; r.classList.remove('calc-error'); }
+function calcEvaluate(){
+ const input=document.getElementById('calc-expression'), out=document.getElementById('calc-result');
+ try{
+   let src=input.value.trim().replace(/,/g,'.').replace(/\^/g,'**');
+   if(!src) throw new Error('Zadej výpočet');
+   if(!/^[0-9A-Za-z_+\-*/().\s]+$/.test(src)) throw new Error('Nepovolený znak');
+   const names=(src.match(/[A-Za-z_]+/g)||[]);
+   const allowed=new Set(['sin','cos','tan','asin','acos','atan','sqrt','log','ln','abs','pi','e']);
+   if(names.some(n=>!allowed.has(n))) throw new Error('Nepovolená funkce');
+   const toRad=x=>calculatorAngleMode==='DEG'?x*Math.PI/180:x;
+   const fromRad=x=>calculatorAngleMode==='DEG'?x*180/Math.PI:x;
+   const funcs={
+     sin:x=>Math.sin(toRad(x)), cos:x=>Math.cos(toRad(x)), tan:x=>Math.tan(toRad(x)),
+     asin:x=>fromRad(Math.asin(x)), acos:x=>fromRad(Math.acos(x)), atan:x=>fromRad(Math.atan(x)),
+     sqrt:Math.sqrt, log:Math.log10, ln:Math.log, abs:Math.abs, pi:Math.PI, e:Math.E
+   };
+   const fn=new Function(...Object.keys(funcs),'"use strict"; return ('+src+');');
+   const value=fn(...Object.values(funcs));
+   if(typeof value!=='number'||!Number.isFinite(value)) throw new Error('Výsledek není platné číslo');
+   out.textContent=Number(value.toPrecision(12)).toString().replace('.',','); out.classList.remove('calc-error');
+ }catch(e){ out.textContent='Chyba: '+e.message; out.classList.add('calc-error'); }
+}
+document.addEventListener('DOMContentLoaded',()=>{ const c=document.getElementById('calc-expression'); if(c)c.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();calcEvaluate();}}); });
 </script>
 <script>window.UCEBNICE_FOCUS_GUARD={{ {'kind':'math','key':item.id}|tojson }};</script>
 <script src="{{url_for('static',filename='js/focus_guard.js')}}"></script>
