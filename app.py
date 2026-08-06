@@ -2954,90 +2954,115 @@ def _variant_results_ok(example, env):
 
 
 def _generic_math_variant(example, user_id):
-    """Obecný generátor: mění vybraná čísla a přijme jen variantu splňující podmínku i filtr výsledků."""
-    source=_parse_variant_values(example.variant_values)
+    """V47: přísný obecný generátor typu generate -> compute -> filter -> render.
+
+    Kandidát se NESMÍ vykreslit dřív, než jsou z jeho n-hodnot vypočteny všechny
+    result_formula a ty projdou obecným filtrem výsledků. Není zde žádná logika
+    specifická pro rovnice/soustavy; stejný postup platí pro každý matematický typ.
+    """
+    source = _parse_variant_values(example.variant_values)
     if not source:
         raise ValueError('nejsou zadaná čísla ze vzoru')
-    lo=float(example.variant_min if example.variant_min is not None else 1)
-    hi=float(example.variant_max if example.variant_max is not None else 30)
-    step=float(example.variant_step if example.variant_step is not None else 1)
+
+    lo = float(example.variant_min if example.variant_min is not None else 1)
+    hi = float(example.variant_max if example.variant_max is not None else 30)
+    step = float(example.variant_step if example.variant_step is not None else 1)
     if step <= 0 or hi < lo:
         raise ValueError('neplatný rozsah nebo krok')
-    count=int(math.floor((hi-lo)/step + 1e-9)) + 1
+    count = int(math.floor((hi-lo)/step + 1e-9)) + 1
     if count < 1 or count > 10000:
         raise ValueError('rozsah generování je příliš velký')
 
-    seed_src=f'{app.config.get("SECRET_KEY")}:{user_id}:{example.id}:math-generic-variant'
-    seed=int(hashlib.sha256(seed_src.encode()).hexdigest()[:16],16)
-    rng=random.Random(seed)
-    chosen=None
-    # 20 000 pokusů stačí i pro řidší vztahy typu Pythagorovy trojice v rozsahu 1–30.
-    for _ in range(20000):
-        vals=[lo + rng.randrange(count)*step for _ in source]
-        env={f'n{i+1}':v for i,v in enumerate(vals)}
+    # Je-li zapnutý filtr výsledků, musí existovat alespoň jeden vzorec výsledku.
+    _, _, _, _, _, filter_active = _variant_filter_settings(example)
+    formulas_present = any(str(getattr(st, 'result_formula', '') or '').strip() for st in example.steps)
+    if filter_active and not formulas_present:
+        raise ValueError('je nastaven filtr výsledků, ale chybí vzorec pro přepočet výsledku')
+
+    seed_src = f'{app.config.get("SECRET_KEY")}:{user_id}:{example.id}:math-generic-variant-v47'
+    seed = int(hashlib.sha256(seed_src.encode()).hexdigest()[:16], 16)
+    rng = random.Random(seed)
+
+    chosen = None
+    chosen_env = None
+    chosen_results = None
+    for _ in range(50000):
+        vals = [lo + rng.randrange(count)*step for _ in source]
+        env = {f'n{i+1}': v for i, v in enumerate(vals)}
         try:
-            if _safe_variant_condition(example.variant_condition, env) and _variant_results_ok(example, env):
-                chosen=vals; break
+            # 1. podmínka nad vstupy
+            if not _safe_variant_condition(example.variant_condition, env):
+                continue
+            # 2. SKUTEČNĚ vypočítat výsledky kandidáta
+            results = _variant_computed_values(example, env)
+            # 3. teprve vypočtené výsledky pustit přes obecný filtr
+            if not _variant_values_match_filter(example, results):
+                continue
+            chosen, chosen_env, chosen_results = vals, env, results
+            break
         except (ZeroDivisionError, ValueError, OverflowError):
             continue
-        except Exception as e:
-            raise ValueError(str(e))
-    source_env={f'n{i+1}':v for i,v in enumerate(source)}
-    if chosen is None:
-        # Bezpečný obecný fallback: použijeme učitelův vzor pouze tehdy, když
-        # sám splňuje aktivní pravidla výsledků. Nikdy nezobrazíme variantu,
-        # která filtr porušuje.
-        try:
-            if _safe_variant_condition(example.variant_condition, source_env) and _variant_results_ok(example, source_env):
-                chosen=list(source)
-            else:
-                raise ValueError('v daném rozsahu se nepodařilo najít variantu splňující pravidla výsledků')
-        except Exception:
-            raise ValueError('v daném rozsahu se nepodařilo najít variantu splňující pravidla výsledků')
 
-    target_env={f'n{i+1}':v for i,v in enumerate(chosen)}
-    # V44: druhá, nezávislá kontrola těsně před sestavením studentské varianty.
-    # Tím je obecně zaručeno, že se studentovi nikdy nevykreslí kandidát, který
-    # neodpovídá nastaveným pravidlům (celá čísla, znaménko, rozsah, desetinná místa).
-    if not _variant_results_ok(example, target_env):
-        raise ValueError('vygenerovaná varianta nesplňuje pravidla výsledků')
-    steps={}
+    if chosen is None:
+        # Fail closed: nikdy neposílat studentovi neověřenou náhodnou variantu.
+        source_env = {f'n{i+1}': v for i, v in enumerate(source)}
+        try:
+            source_results = _variant_computed_values(example, source_env)
+            if (_safe_variant_condition(example.variant_condition, source_env)
+                    and _variant_values_match_filter(example, source_results)):
+                chosen = list(source)
+                chosen_env = source_env
+                chosen_results = source_results
+            else:
+                raise ValueError
+        except Exception:
+            raise ValueError('v daném rozsahu se nepodařilo najít bezpečnou variantu splňující filtr výsledků')
+
+    # 4. až nyní vykreslit texty a správné odpovědi
+    source_env = {f'n{i+1}': v for i, v in enumerate(source)}
+    steps = {}
     for st in example.steps:
-        expected_text=str(st.expected or '')
-        replacements=[]
+        expected_text = str(st.expected or '')
+        replacements = []
         if str(getattr(st, 'result_formula', '') or '').strip():
-            # Vypočtené výsledky nejprve ochráníme značkami, pak měníme vstupní čísla
-            # a nakonec vložíme nové vypočtené hodnoty. Funguje i pro více výsledků.
-            expected_text,replacements=_computed_result_markers(
-                expected_text, source_env, target_env, st.result_formula,
+            expected_text, replacements = _computed_result_markers(
+                expected_text, source_env, chosen_env, st.result_formula,
                 getattr(st, 'result_decimals', 2)
             )
-        expected_text=_replace_variant_numbers(expected_text, source, chosen)
-        expected_text=_restore_computed_result_markers(expected_text,replacements)
-        steps[st.id]={
-            'instruction':_replace_variant_numbers(st.instruction, source, chosen),
-            'expected':expected_text,
-            'hint':_replace_variant_numbers(st.hint, source, chosen)
+        expected_text = _replace_variant_numbers(expected_text, source, chosen)
+        expected_text = _restore_computed_result_markers(expected_text, replacements)
+        steps[st.id] = {
+            'instruction': _replace_variant_numbers(st.instruction, source, chosen),
+            'expected': expected_text,
+            'hint': _replace_variant_numbers(st.hint, source, chosen)
         }
-    rendered_problem=_replace_variant_numbers(example.problem, source, chosen)
-    rendered_prose=_render_variant_prose(getattr(example, 'prose_problem', '') or '', target_env)
-    # V45: poslední kontrola výsledků proběhne až po sestavení finální studentské varianty.
-    # Používá stejný target_env, z něhož byly naplněny šablonové sloty.
-    final_values=_variant_computed_values(example, target_env)
-    if not _variant_values_match_filter(example, final_values):
-        raise ValueError('finální studentská varianta nesplňuje pravidla výsledků')
-    return {'problem':rendered_problem, 'prose_problem':rendered_prose,
-            'steps':steps, 'variant_values':chosen}
 
+    rendered_problem = _replace_variant_numbers(example.problem, source, chosen)
+    rendered_prose = _replace_variant_numbers(getattr(example, 'prose_problem', '') or '', source, chosen)
+
+    # 5. nezávislá poslední pojistka těsně před returnem.
+    verify_results = _variant_computed_values(example, chosen_env)
+    if not _variant_values_match_filter(example, verify_results):
+        raise ValueError('V47 bezpečnostní kontrola odmítla finální variantu')
+
+    return {
+        'problem': rendered_problem,
+        'prose_problem': rendered_prose,
+        'steps': steps,
+        'variant_values': chosen,
+        'variant_results': chosen_results,
+    }
 
 def generated_math_variant(example, user_id):
     """Stabilní varianta pro žáka. Nový obecný režim má přednost; původní lineární generátor zůstává jako fallback."""
     if getattr(example, 'variant_enabled', False):
         try:
             return _generic_math_variant(example, user_id)
-        except Exception:
-            # U žáka nikdy nezobrazíme náhodný kandidát, který porušuje filtr.
-            # Bezpečný fallback je učitelův vzor; ten je při ukládání validován.
+        except Exception as e:
+            # V47: aktivní filtr se nesmí obejít fallbackem.
+            _, _, _, _, _, filter_active = _variant_filter_settings(example)
+            if filter_active:
+                raise ValueError(f'Náhodnou variantu nelze bezpečně vytvořit: {e}')
             return {'problem':example.problem, 'prose_problem':_render_variant_prose(getattr(example, 'prose_problem', '') or '', {f'n{i+1}':v for i,v in enumerate(_parse_variant_values(getattr(example,'variant_values','') or ''))}), 'steps':{st.id:{'instruction':st.instruction,'expected':st.expected,'hint':st.hint} for st in example.steps}, 'variant_fallback': True}
 
     problem = str(example.problem or '')
