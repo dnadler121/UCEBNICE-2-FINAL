@@ -277,6 +277,9 @@ class MathAttempt(db.Model):
     status = db.Column(db.String(60), default='rozpracováno')
     focus_lost = db.Column(db.Integer, default=0)
     answers_json = db.Column(db.Text, default='[]')
+    # Stabilně uložené náhodné varianty pro jednotlivé příklady této lekce.
+    # JSON: {"example_id": [n1, n2, ...]}
+    variant_json = db.Column(db.Text, default='{}')
     updated_at = db.Column(db.DateTime, default=datetime.utcnow)
     user = db.relationship('User')
     lesson = db.relationship('MathLesson')
@@ -3069,29 +3072,84 @@ def _generic_math_variant(example, user_id):
     if filter_active and not formulas_present:
         raise ValueError('je nastaven filtr výsledků, ale chybí vzorec pro přepočet výsledku')
 
-    seed_src = f'{app.config.get("SECRET_KEY")}:{user_id}:{example.id}:math-generic-variant-v47'
-    seed = int(hashlib.sha256(seed_src.encode()).hexdigest()[:16], 16)
-    rng = random.Random(seed)
+    # V50: skutečné náhodné losování. Varianta už není odvozena deterministicky
+    # z user_id. Po prvním vylosování ji uložíme k pokusu žáka, takže při obnově
+    # stránky zůstane stejná. Současně se pokud možno vyhneme variantám, které už
+    # mají jiní žáci u stejného příkladu.
+    attempt = MathAttempt.query.filter_by(user_id=user_id, lesson_id=example.lesson_id).first()
+    if not attempt:
+        attempt = MathAttempt(user_id=user_id, lesson_id=example.lesson_id)
+        db.session.add(attempt)
+        db.session.flush()
+
+    saved_variants = _safe_json(getattr(attempt, 'variant_json', '{}') or '{}', {})
+    if not isinstance(saved_variants, dict):
+        saved_variants = {}
+    saved = saved_variants.get(str(example.id))
 
     chosen = None
     chosen_env = None
     chosen_results = None
-    for _ in range(50000):
-        vals = [lo + rng.randrange(count)*step for _ in source]
-        env = {f'n{i+1}': v for i, v in enumerate(vals)}
+
+    # Jestli už žák variantu jednou dostal a stále vyhovuje aktuálním pravidlům,
+    # použijeme ji znovu. Učitel tak může bezpečně obnovit stránku bez změny zadání.
+    if isinstance(saved, list) and len(saved) == len(source):
         try:
-            # 1. podmínka nad vstupy
-            if not _safe_variant_condition(example.variant_condition, env):
-                continue
-            # 2. SKUTEČNĚ vypočítat výsledky kandidáta
+            vals = [float(v) for v in saved]
+            env = {f'n{i+1}': v for i, v in enumerate(vals)}
             results = _variant_computed_values(example, env)
-            # 3. teprve vypočtené výsledky pustit přes obecný filtr
-            if not _variant_values_match_filter(example, results):
+            if (_safe_variant_condition(example.variant_condition, env)
+                    and _variant_values_match_filter(example, results)):
+                chosen, chosen_env, chosen_results = vals, env, results
+        except (TypeError, ZeroDivisionError, ValueError, OverflowError):
+            pass
+
+    # Varianty už přidělené jiným žákům. Nejsou absolutním zákazem: když je
+    # možných variant méně než žáků, po delším hledání dovolíme opakování.
+    used = set()
+    if chosen is None:
+        for other in MathAttempt.query.filter_by(lesson_id=example.lesson_id).all():
+            if other.user_id == user_id:
                 continue
-            chosen, chosen_env, chosen_results = vals, env, results
-            break
-        except (ZeroDivisionError, ValueError, OverflowError):
-            continue
+            data = _safe_json(getattr(other, 'variant_json', '{}') or '{}', {})
+            vals = data.get(str(example.id)) if isinstance(data, dict) else None
+            if isinstance(vals, list) and len(vals) == len(source):
+                try:
+                    used.add(tuple(round(float(v), 12) for v in vals))
+                except (TypeError, ValueError):
+                    pass
+
+        rng = random.SystemRandom()
+        duplicate_candidate = None
+        # Prvních 50 000 losů hledá platnou a dosud nepoužitou variantu.
+        for _ in range(50000):
+            vals = [lo + rng.randrange(count)*step for _ in source]
+            env = {f'n{i+1}': v for i, v in enumerate(vals)}
+            try:
+                if not _safe_variant_condition(example.variant_condition, env):
+                    continue
+                results = _variant_computed_values(example, env)
+                if not _variant_values_match_filter(example, results):
+                    continue
+                key = tuple(round(float(v), 12) for v in vals)
+                if key in used:
+                    if duplicate_candidate is None:
+                        duplicate_candidate = (vals, env, results)
+                    continue
+                chosen, chosen_env, chosen_results = vals, env, results
+                break
+            except (ZeroDivisionError, ValueError, OverflowError):
+                continue
+
+        # Pokud jsou všechny snadno dosažitelné platné varianty už rozdané,
+        # použijeme náhodně nalezenou duplicitní variantu místo chyby.
+        if chosen is None and duplicate_candidate is not None:
+            chosen, chosen_env, chosen_results = duplicate_candidate
+
+        if chosen is not None:
+            saved_variants[str(example.id)] = [float(v) for v in chosen]
+            attempt.variant_json = json.dumps(saved_variants, ensure_ascii=False)
+            db.session.commit()
 
     if chosen is None:
         # Fail closed: nikdy neposílat studentovi neověřenou náhodnou variantu.
@@ -4303,7 +4361,8 @@ def ensure_schema_updates():
             'focus_lost': 'INTEGER DEFAULT 0'
         },
         'math_attempt': {
-            'answers_json': "TEXT DEFAULT '[]'"
+            'answers_json': "TEXT DEFAULT '[]'",
+            'variant_json': "TEXT DEFAULT '{}'"
         },
         'math_step': {
             'result_formula': "TEXT DEFAULT ''",
