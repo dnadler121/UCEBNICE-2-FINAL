@@ -2700,6 +2700,51 @@ def _parse_variant_values(raw):
     return vals
 
 
+def _parse_variant_variable_names(raw):
+    """Nový režim: učitel může místo vzorových čísel zadat n1;n2;n3;..."""
+    parts=[x.strip() for x in re.split(r'[;\n]+', str(raw or '')) if x.strip()]
+    if not parts or not all(re.fullmatch(r'n[1-9]\d*', x) for x in parts):
+        return []
+    expected=[f'n{i+1}' for i in range(len(parts))]
+    if parts != expected:
+        raise ValueError('proměnné musí být postupně n1; n2; n3; ...')
+    return parts
+
+
+def _replace_variant_variables(text_value, env):
+    """Dosadí n1, n2, ... jako samostatné matematické tokeny a také {n1} v textu."""
+    out=str(text_value or '')
+    for name,value in sorted((env or {}).items(), key=lambda kv: len(str(kv[0])), reverse=True):
+        val=_variant_number_text(value)
+        out=out.replace('{'+str(name)+'}', val)
+        out=re.sub(rf'(?<![A-Za-z0-9_]){re.escape(str(name))}(?![A-Za-z0-9_])', val, out)
+    return out
+
+
+def _formula_assignment(formula):
+    """Vrátí (alias, výraz). Podporuje např. h=n1/n3 i původní degrees(...)."""
+    raw=str(formula or '').strip()
+    m=re.fullmatch(r'([A-Za-z][A-Za-z0-9_]*)\s*=\s*(.+)', raw, flags=re.S)
+    return (m.group(1), m.group(2).strip()) if m else (None, raw)
+
+
+def _render_variable_mode_step(st, env):
+    expected=_replace_variant_variables(st.expected, env)
+    aliases={}
+    for formula in _split_result_formulas(getattr(st, 'result_formula', '') or ''):
+        alias,expr=_formula_assignment(formula)
+        value=_safe_variant_formula(expr, env)
+        if alias:
+            aliases[alias]=_format_result_number(value, getattr(st, 'result_decimals', 2))
+    for alias,value in aliases.items():
+        expected=re.sub(rf'(?<![A-Za-z0-9_]){re.escape(alias)}(?![A-Za-z0-9_])', value, expected)
+    return {
+        'instruction': _replace_variant_variables(st.instruction, env),
+        'expected': expected,
+        'hint': _replace_variant_variables(st.hint, env),
+    }
+
+
 def _safe_variant_condition(condition, env):
     """Bezpečně vyhodnotí obecnou matematickou podmínku n1, n2, ..."""
     cond = str(condition or '').strip()
@@ -2725,6 +2770,7 @@ def _safe_variant_condition(condition, env):
 def _safe_variant_formula(formula, env):
     """Bezpečně spočítá číselný výsledek z n1, n2, ... bez eval přístupu k Pythonu."""
     expr = str(formula or '').strip()
+    _alias, expr = _formula_assignment(expr)
     if not expr:
         raise ValueError('vzorec pro výpočet výsledku je prázdný')
     tree = ast.parse(expr, mode='eval')
@@ -2960,9 +3006,11 @@ def _generic_math_variant(example, user_id):
     result_formula a ty projdou obecným filtrem výsledků. Není zde žádná logika
     specifická pro rovnice/soustavy; stejný postup platí pro každý matematický typ.
     """
-    source = _parse_variant_values(example.variant_values)
+    variable_names = _parse_variant_variable_names(example.variant_values)
+    variable_mode = bool(variable_names)
+    source = ([1.0] * len(variable_names)) if variable_mode else _parse_variant_values(example.variant_values)
     if not source:
-        raise ValueError('nejsou zadaná čísla ze vzoru')
+        raise ValueError('nejsou zadané proměnné ani čísla ze vzoru')
 
     lo = float(example.variant_min if example.variant_min is not None else 1)
     hi = float(example.variant_max if example.variant_max is not None else 30)
@@ -3019,6 +3067,18 @@ def _generic_math_variant(example, user_id):
             raise ValueError('v daném rozsahu se nepodařilo najít bezpečnou variantu splňující filtr výsledků')
 
     # 4. až nyní vykreslit texty a správné odpovědi
+    if variable_mode:
+        steps={st.id:_render_variable_mode_step(st, chosen_env) for st in example.steps}
+        rendered_problem=_replace_variant_variables(example.problem, chosen_env)
+        rendered_prose=_replace_variant_variables(getattr(example, 'prose_problem', '') or '', chosen_env)
+        verify_results=_variant_computed_values(example, chosen_env)
+        if not _variant_values_match_filter(example, verify_results):
+            raise ValueError('bezpečnostní kontrola odmítla finální variantu')
+        return {
+            'problem': rendered_problem, 'prose_problem': rendered_prose, 'steps': steps,
+            'variant_values': chosen, 'variant_results': chosen_results, 'variable_mode': True,
+        }
+
     source_env = {f'n{i+1}': v for i, v in enumerate(source)}
     steps = {}
     for st in example.steps:
@@ -3157,7 +3217,14 @@ def validate_math_payload(payload):
                     formulas=_split_result_formulas(formula)
                     if not formulas:
                         raise ValueError('zadej alespoň jeden vzorec')
-                    _computed_result_markers(expected, source_env, source_env, formula, d)
+                    if variable_mode:
+                        for f in formulas:
+                            alias, expr = _formula_assignment(f)
+                            _safe_variant_formula(expr, source_env)
+                            if alias and not re.search(rf'(?<![A-Za-z0-9_]){re.escape(alias)}(?![A-Za-z0-9_])', expected):
+                                raise ValueError(f've správné odpovědi chybí proměnná {alias}')
+                    else:
+                        _computed_result_markers(expected, source_env, source_env, formula, d)
                 except Exception as e:
                     return {'message': f"Příklad {ei}, krok {si}: chyba ve vzorci výsledku – {e}.", 'field': f'examples.{ei-1}.steps.{si-1}.result_formula'}
             ok, why = validate_math_expression(expected)

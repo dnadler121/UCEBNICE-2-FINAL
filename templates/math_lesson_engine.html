@@ -62,7 +62,9 @@
     {% if prose %}
     <div style="font-size:1.18rem;font-weight:650;padding:8px 0;white-space:pre-line">{{prose}}</div>
     {% endif %}
+    {% if not (variant.get('variable_mode') and prose) %}
     <div style="font-size:1.3rem;font-weight:700;padding:8px 0;white-space:pre-line">{{variant.get('problem', ex.problem)|math_display}}</div>
+    {% endif %}
 
     {% for answer in saved %}
       <div style="display:flex;gap:10px;align-items:center;padding:8px 0;font-size:1.25rem">
