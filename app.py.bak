@@ -2711,12 +2711,6 @@ def _parse_variant_variable_names(raw):
     return parts
 
 
-
-
-def _is_variable_declaration(text, variable_names):
-    parts=[x.strip() for x in re.split(r'[;\n]+', str(text or '')) if x.strip()]
-    return bool(variable_names) and parts == list(variable_names)
-
 def _replace_variant_variables(text_value, env):
     """Dosadí n1, n2, ... jako samostatné matematické tokeny a také {n1} v textu."""
     out=str(text_value or '')
@@ -2734,57 +2728,16 @@ def _formula_assignment(formula):
     return (m.group(1), m.group(2).strip()) if m else (None, raw)
 
 
-def _formula_returns_degrees(expr):
-    """Pozná pomocný výsledek typu degrees(...), aby student dostal pevný znak °."""
-    return bool(re.match(r'^\s*degrees\s*\(', str(expr or ''), flags=re.IGNORECASE))
-
-
-def _render_alias_in_text(text, alias, value, expr, decimals):
-    """Dosadí pomocnou proměnnou do učitelova správného stavu.
-
-    U d=degrees(...) se automaticky vytvoří např. 36.87deg. Studentský renderer
-    pak ponechá α, = a ° napevno a student doplňuje jen číslice výsledku.
-    """
-    rendered=_format_result_number(value, decimals)
-    if _formula_returns_degrees(expr):
-        rendered += 'deg'
-    return re.sub(rf'(?<![A-Za-z0-9_]){re.escape(alias)}(?![A-Za-z0-9_])', rendered, str(text or ''))
-
-
-def _evaluate_variable_steps(example, base_env, render=False):
-    """Vyhodnotí kroky postupně a dovolí navazující pomocné proměnné.
-
-    Např. h=n1/n3 v kroku 1 vytvoří číselné h pro další kroky a
-    d=degrees(asin(h)) v kroku 2 na něj může přímo navázat.
-    """
-    env=dict(base_env or {})
-    values=[]
-    rendered_steps={}
-    for st in sorted(example.steps, key=lambda x: x.order):
-        expected=_replace_variant_variables(st.expected, env)
-        instruction=_replace_variant_variables(st.instruction, env)
-        hint=_replace_variant_variables(st.hint, env)
-        for formula in _split_result_formulas(getattr(st, 'result_formula', '') or ''):
-            alias,expr=_formula_assignment(formula)
-            value=_safe_variant_formula(expr, env)
-            values.append(value)
-            if alias:
-                env[alias]=value
-                expected=_render_alias_in_text(expected, alias, value, expr, getattr(st, 'result_decimals', 2))
-                instruction=_render_alias_in_text(instruction, alias, value, expr, getattr(st, 'result_decimals', 2))
-                hint=_render_alias_in_text(hint, alias, value, expr, getattr(st, 'result_decimals', 2))
-        # Po výpočtu pomocných proměnných ještě jednou dosaď všechna n1,n2,...
-        expected=_replace_variant_variables(expected, env)
-        instruction=_replace_variant_variables(instruction, env)
-        hint=_replace_variant_variables(hint, env)
-        if render:
-            rendered_steps[st.id]={'instruction':instruction,'expected':expected,'hint':hint}
-    return values, env, rendered_steps
-
-
 def _render_variable_mode_step(st, env):
-    """Zachováno pro kompatibilitu; nový režim používá sekvenční pipeline."""
     expected=_replace_variant_variables(st.expected, env)
+    aliases={}
+    for formula in _split_result_formulas(getattr(st, 'result_formula', '') or ''):
+        alias,expr=_formula_assignment(formula)
+        value=_safe_variant_formula(expr, env)
+        if alias:
+            aliases[alias]=_format_result_number(value, getattr(st, 'result_decimals', 2))
+    for alias,value in aliases.items():
+        expected=re.sub(rf'(?<![A-Za-z0-9_]){re.escape(alias)}(?![A-Za-z0-9_])', value, expected)
     return {
         'instruction': _replace_variant_variables(st.instruction, env),
         'expected': expected,
@@ -2984,8 +2937,13 @@ def _render_variant_prose(text_value, env):
     return '\n'.join(kept).strip()
 
 def _variant_computed_values(example, env):
-    """Dopočítá všechny pomocné výsledky v pořadí kroků včetně návazností."""
-    values, _env, _steps = _evaluate_variable_steps(example, env, render=False)
+    values=[]
+    for st in example.steps:
+        raw=str(getattr(st, 'result_formula', '') or '').strip()
+        if not raw:
+            continue
+        for formula in _split_result_formulas(raw):
+            values.append(_safe_variant_formula(formula, env))
     return values
 
 
@@ -3110,19 +3068,15 @@ def _generic_math_variant(example, user_id):
 
     # 4. až nyní vykreslit texty a správné odpovědi
     if variable_mode:
-        verify_results, final_env, steps = _evaluate_variable_steps(example, chosen_env, render=True)
-        rendered_problem=_replace_variant_variables(example.problem, final_env)
-        rendered_prose=_replace_variant_variables(getattr(example, 'prose_problem', '') or '', final_env)
-        # Pokud je matematický vzor jen technický seznam vstupních proměnných,
-        # studentovi ho vůbec neukazujeme.
-        if _is_variable_declaration(example.problem, variable_names):
-            rendered_problem=''
+        steps={st.id:_render_variable_mode_step(st, chosen_env) for st in example.steps}
+        rendered_problem=_replace_variant_variables(example.problem, chosen_env)
+        rendered_prose=_replace_variant_variables(getattr(example, 'prose_problem', '') or '', chosen_env)
+        verify_results=_variant_computed_values(example, chosen_env)
         if not _variant_values_match_filter(example, verify_results):
             raise ValueError('bezpečnostní kontrola odmítla finální variantu')
         return {
             'problem': rendered_problem, 'prose_problem': rendered_prose, 'steps': steps,
             'variant_values': chosen, 'variant_results': chosen_results, 'variable_mode': True,
-            'computed_env': final_env,
         }
 
     source_env = {f'n{i+1}': v for i, v in enumerate(source)}
@@ -3165,16 +3119,11 @@ def generated_math_variant(example, user_id):
         try:
             return _generic_math_variant(example, user_id)
         except Exception as e:
-            # V49: proměnný režim se nikdy nesmí vrátit k parseru starých čísel.
-            # Chybná / nemožná podmínka se hlásí přímo, místo pádu na 500 při parsování n1;n2;...
-            if _parse_variant_variable_names(getattr(example, 'variant_values', '') or ''):
-                raise ValueError(f'Náhodnou variantu nelze vytvořit: {e}')
+            # V47: aktivní filtr se nesmí obejít fallbackem.
             _, _, _, _, _, filter_active = _variant_filter_settings(example)
             if filter_active:
                 raise ValueError(f'Náhodnou variantu nelze bezpečně vytvořit: {e}')
-            legacy_vals=_parse_variant_values(getattr(example,'variant_values','') or '')
-            legacy_env={f'n{i+1}':v for i,v in enumerate(legacy_vals)}
-            return {'problem':example.problem, 'prose_problem':_render_variant_prose(getattr(example, 'prose_problem', '') or '', legacy_env), 'steps':{st.id:{'instruction':st.instruction,'expected':st.expected,'hint':st.hint} for st in example.steps}, 'variant_fallback': True}
+            return {'problem':example.problem, 'prose_problem':_render_variant_prose(getattr(example, 'prose_problem', '') or '', {f'n{i+1}':v for i,v in enumerate(_parse_variant_values(getattr(example,'variant_values','') or ''))}), 'steps':{st.id:{'instruction':st.instruction,'expected':st.expected,'hint':st.hint} for st in example.steps}, 'variant_fallback': True}
 
     problem = str(example.problem or '')
     compact = normalize_math_answer(problem).replace('**', '^')
@@ -3215,35 +3164,20 @@ def validate_math_payload(payload):
     for ei, ex in enumerate(payload, 1):
         if not (ex.get('steps') or []):
             return {'message': f'Příklad {ei} nemá žádné kroky.', 'field': f'examples.{ei-1}.steps'}
-        problem_text=str(ex.get("problem", "") or '').strip()
-        variable_mode=False
+        ok, why = validate_math_expression(ex.get("problem", ""))
+        if not ok:
+            return {'message': f"Příklad {ei}: {why}. Oprav matematický vzor.", 'field': f'examples.{ei-1}.problem'}
         vals=[]
         source_env={}
-        helper_env={}
         if ex.get("variant_enabled"):
             try:
-                variable_names=_parse_variant_variable_names(ex.get("variant_values", ""))
-                variable_mode=bool(variable_names)
-                if variable_mode:
-                    # Čísla učitel nezadává. Pro kontrolu syntaxe použijeme pouze dočasné
-                    # bezpečné hodnoty; pravdivost podmínky se ověřuje až generátorem.
-                    source_env={name: float(i+2) for i,name in enumerate(variable_names)}
-                else:
-                    vals=_parse_variant_values(ex.get("variant_values", ""))
-                    if not vals:
-                        return {'message': f"Příklad {ei}: zadej vstupní proměnné, např. n1;n2;n3.", 'field': f'examples.{ei-1}.variant_values'}
-                    source_env={f'n{i+1}':v for i,v in enumerate(vals)}
+                vals=_parse_variant_values(ex.get("variant_values", ""))
+                if not vals:
+                    return {'message': f"Příklad {ei}: zadej alespoň jedno číslo ze vzoru pro obecné generování.", 'field': f'examples.{ei-1}.variant_values'}
+                source_env={f'n{i+1}':v for i,v in enumerate(vals)}
                 _safe_variant_condition(ex.get("variant_condition", ""), source_env)
-                helper_env=dict(source_env)
             except Exception as e:
-                return {'message': f"Příklad {ei}: chyba ve vstupních proměnných nebo podmínce – {e}.", 'field': f'examples.{ei-1}.variant_condition'}
-        # U slovní úlohy v novém proměnném režimu může být matematický vzor prázdný.
-        if problem_text:
-            ok, why = validate_math_expression(problem_text)
-            if not ok:
-                return {'message': f"Příklad {ei}: {why}. Oprav matematický zápis.", 'field': f'examples.{ei-1}.problem'}
-        elif not variable_mode:
-            return {'message': f"Příklad {ei}: matematický zápis je prázdný.", 'field': f'examples.{ei-1}.problem'}
+                return {'message': f"Příklad {ei}: chyba v podmínce generování – {e}.", 'field': f'examples.{ei-1}.variant_condition'}
             try:
                 lo=float(ex.get("variant_min",1)); hi=float(ex.get("variant_max",30)); step=float(ex.get("variant_step",1))
                 if step<=0 or hi<lo:
@@ -3286,9 +3220,9 @@ def validate_math_payload(payload):
                     if variable_mode:
                         for f in formulas:
                             alias, expr = _formula_assignment(f)
-                            value=_safe_variant_formula(expr, helper_env)
-                            if alias:
-                                helper_env[alias]=value
+                            _safe_variant_formula(expr, source_env)
+                            if alias and not re.search(rf'(?<![A-Za-z0-9_]){re.escape(alias)}(?![A-Za-z0-9_])', expected):
+                                raise ValueError(f've správné odpovědi chybí proměnná {alias}')
                     else:
                         _computed_result_markers(expected, source_env, source_env, formula, d)
                 except Exception as e:
@@ -3386,7 +3320,7 @@ def new_math_lesson():
             ex_row=MathExample(
                 lesson_id=lesson_row.id, order=ei,
                 title=str(ex.get('title') or f'Příklad {ei}'),
-                problem=(str(ex.get('problem') or '').strip() or (str(ex.get('variant_values') or '').strip() if _parse_variant_variable_names(ex.get('variant_values','')) else '')),
+                problem=str(ex.get('problem') or '').strip(),
                 prose_problem=str(ex.get('prose_problem') or '').strip(),
                 image_stored=image_stored,
                 variant_enabled=bool(ex.get('variant_enabled')),
@@ -3583,7 +3517,7 @@ def edit_math_lesson(lesson_id):
                 lesson_id=item.id,
                 order=ei,
                 title=str(ex.get('title') or f'Příklad {ei}'),
-                problem=(str(ex.get('problem') or '').strip() or (str(ex.get('variant_values') or '').strip() if _parse_variant_variable_names(ex.get('variant_values','')) else '')),
+                problem=str(ex.get('problem') or '').strip(),
                 prose_problem=str(ex.get('prose_problem') or '').strip(),
                 image_stored=image_stored,
                 variant_enabled=bool(ex.get('variant_enabled')),
@@ -3641,7 +3575,7 @@ def edit_math_lesson(lesson_id):
     for ex in sorted(item.examples, key=lambda x:x.order):
         examples_data.append({
             'title': ex.title,
-            'problem': ('' if _is_variable_declaration(ex.problem, _parse_variant_variable_names(ex.variant_values or '')) else ex.problem),
+            'problem': ex.problem,
             'prose_problem': ex.prose_problem or '',
             'image_stored': ex.image_stored or '',
             'remove_image': False,

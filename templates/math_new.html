@@ -67,19 +67,19 @@ function render(){
    const wrap=document.createElement("div"); wrap.className="course-card"; wrap.style="padding:18px;margin:14px 0;background:#fafcff";
    wrap.innerHTML=`<div style="display:flex;justify-content:space-between"><h3>Příklad ${ei+1}</h3><button type="button" class="link-button danger" onclick="removeExample(${ei})">✕</button></div>
    <label>Název příkladu<input value="${esc(ex.title)}" oninput="examples[${ei}].title=this.value"></label>
-   <label><b>Slovní zadání pro žáka</b><textarea rows="3" placeholder="např. V pravoúhlém trojúhelníku jsou strany 3 cm, 4 cm a 5 cm. Urči sin α." oninput="examples[${ei}].prose_problem=this.value">${ex.prose_problem||""}</textarea><small>Sem piš normálně česky. Matematický vzor se studentovi zobrazí zvlášť. Náhodné hodnoty můžeš do věty vložit jako {n1}, {n2}, ... .</small></label>
-   <label><b>Matematický vzor pro engine</b><textarea rows="3" data-field="examples.${ei}.problem" placeholder="např. 2x+y=7\nx-y=2" oninput="examples[${ei}].problem=this.value">${escText(ex.problem)}</textarea><small>Sem patří pouze matematický zápis. Pro soustavy napiš každou rovnici na nový řádek. Engine podporuje libovolný počet matematických řádků a zachová jejich strukturu.</small></label>
+   <label><b>Slovní zadání pro žáka</b><textarea rows="3" placeholder="např. V pravoúhlém trojúhelníku je odvěsna {n1} cm a přepona {n3} cm. Urči α." oninput="examples[${ei}].prose_problem=this.value">${ex.prose_problem||""}</textarea><small>Ve slovním zadání používej přímo {n1}, {n2}, {n3}… Aplikace je každému studentovi nahradí jeho čísly.</small></label>
+   <label><b>Matematický zápis (u čistě slovní úlohy může zůstat prázdný)</b><textarea rows="3" data-field="examples.${ei}.problem" placeholder="např. n1*x+n2=n3" oninput="examples[${ei}].problem=this.value">${escText(ex.problem)}</textarea><small>Pokud je potřeba matematické zadání, používej už jen vstupní proměnné n1, n2, n3… Žádná vzorová čísla se zadávat nemusí.</small></label>
    <div style="margin:12px 0;padding:12px;border:1px solid #dbe4ee;border-radius:10px;background:#f8fbff">
      <label style="display:flex;align-items:center;gap:8px"><input type="checkbox" ${ex.variant_enabled ? "checked" : ""} onchange="examples[${ei}].variant_enabled=this.checked;render()"> <b>Obecné náhodné varianty pro každého žáka</b></label>
      ${ex.variant_enabled ? `<div style="margin-top:10px">
-       <label><b>Proměnné pro náhodné hodnoty</b><input value="${esc(ex.variant_values||"")}" data-field="examples.${ei}.variant_values" placeholder="např. n1;n2;n3 (doporučeno) nebo 3;4;5" oninput="examples[${ei}].variant_values=this.value;updateAliases(${ei})"><small>Doporučeno: napiš n1;n2;n3;... a stejné proměnné používej všude v příkladu. Starší zápis 3;4;5 zůstává podporovaný.</small></label>
+       <label><b>Vstupní proměnné</b><input value="${esc(ex.variant_values||"")}" data-field="examples.${ei}.variant_values" placeholder="např. n1;n2;n3" oninput="examples[${ei}].variant_values=this.value;updateAliases(${ei})"><small>Na začátku pouze pojmenuj vstupy: n1;n2;n3;… Potom už všude pracuj jen s těmito proměnnými. Čísla generuje aplikace sama.</small></label>
        <div id="aliases-${ei}" style="padding:8px 10px;margin:6px 0;background:white;border-radius:8px;font-family:monospace"></div>
        <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px">
          <label>Od<input data-field="examples.${ei}.variant_range" type="number" step="any" value="${ex.variant_min ?? 1}" oninput="examples[${ei}].variant_min=this.value"></label>
          <label>Do<input type="number" step="any" value="${ex.variant_max ?? 30}" oninput="examples[${ei}].variant_max=this.value"></label>
          <label>Krok<input type="number" step="any" min="0.000001" value="${ex.variant_step ?? 1}" oninput="examples[${ei}].variant_step=this.value"></label>
        </div>
-       <label><b>Doplňující matematická podmínka (nepovinná)</b><input value="${esc(ex.variant_condition||"")}" data-field="examples.${ei}.variant_condition" placeholder="např. n1**2 + n2**2 == n3**2" oninput="examples[${ei}].variant_condition=this.value"><small>n1 je první číslo výše, n2 druhé atd. Lze použít +, −, *, /, **, %, &lt;, &gt;, ==, !=, and, or, sqrt(), abs(), min(), max().</small></label>
+       <label><b>Podmínka pro vstupní proměnné (nepovinná)</b><input value="${esc(ex.variant_condition||"")}" data-field="examples.${ei}.variant_condition" placeholder="např. n1**2 + n2**2 == n3**2" oninput="examples[${ei}].variant_condition=this.value"><small>Tady určíš vztah, který musí náhodné hodnoty splnit. Např. pro pravoúhlý trojúhelník n1**2+n2**2==n3**2.</small></label>
        <div style="margin-top:10px;padding:10px;border:1px solid #cfe3d4;border-radius:9px;background:#f6fbf7">
          <b>Obecná pravidla pro vygenerované výsledky</b>
          <small style="display:block;margin:3px 0 8px">Generátor variantu použije až tehdy, když všechny dopočítané výsledky splní tato pravidla. Funguje obecně pro soustavy, geometrii, goniometrii, logaritmy, fyziku atd.</small>
@@ -105,9 +105,9 @@ function render(){
       const d=document.createElement("div"); d.style="padding:12px;margin:10px 0;border:1px solid #e0e6ec;border-radius:10px;background:white";
       d.innerHTML=`<b>Krok ${si+1}</b>
       <label>Co má student udělat<input value="${esc(st.instruction)}" oninput="examples[${ei}].steps[${si}].instruction=this.value"></label>
-      <label>Správný stav / odpověď<textarea data-field="examples.${ei}.steps.${si}.expected" rows="2" oninput="examples[${ei}].steps[${si}].expected=this.value">${escText(st.expected)}</textarea><small>Jeden výsledek např. alpha=36.87deg. Více výsledků (např. x a y) napiš každý na nový řádek.</small></label>
+      <label>Správný stav / odpověď<textarea data-field="examples.${ei}.steps.${si}.expected" rows="2" oninput="examples[${ei}].steps[${si}].expected=this.value">${escText(st.expected)}</textarea><small>Používej proměnné. Např. sin(alpha)=n1/n3 nebo alpha=d. Student uvidí α, =, funkce, zlomkovou čáru a ° napevno; doplňuje jen hodnoty.</small></label>
       ${ex.variant_enabled ? `<div style="padding:10px;margin:8px 0;background:#f6fbf7;border:1px solid #cfe3d4;border-radius:9px">
-        <label><b>Vzorec / vzorce pro přepočet výsledku (nepovinné)</b><textarea data-field="examples.${ei}.steps.${si}.result_formula" rows="2" placeholder="např. degrees(asin(n1/n3))" oninput="examples[${ei}].steps[${si}].result_formula=this.value">${esc(st.result_formula||"")}</textarea><small>Můžeš psát přímo pomocnou proměnnou, např. d=degrees(asin(n1/n3)) a ve správné odpovědi alpha=d. Starší zápis bez d= zůstává podporovaný.</small></label>
+        <label><b>Nová pomocná proměnná / výpočet (nepovinné)</b><textarea data-field="examples.${ei}.steps.${si}.result_formula" rows="2" placeholder="např. d=degrees(asin(n1/n3))" oninput="examples[${ei}].steps[${si}].result_formula=this.value">${esc(st.result_formula||"")}</textarea><small>Můžeš vytvořit další proměnnou, např. h=n1/n3 nebo d=degrees(asin(h)). Proměnná zůstává dostupná i v dalších krocích. Pokud je výpočet přes degrees(...), student dostane znak ° automaticky napevno.</small></label>
         <label>Zaokrouhlit na počet desetinných míst<input type="number" min="0" max="10" step="1" value="${st.result_decimals ?? 2}" oninput="examples[${ei}].steps[${si}].result_decimals=this.value"></label>
       </div>` : ``}
       <label>Moje nápověda<input value="${esc(st.hint)}" oninput="examples[${ei}].steps[${si}].hint=this.value"></label>
@@ -126,7 +126,7 @@ function applyMathError(){
 function updateAliases(ei){
  const el=document.getElementById(`aliases-${ei}`); if(!el)return;
  const vals=String(examples[ei].variant_values||"").split(/[;\n]+/).map(x=>x.trim()).filter(Boolean);
- el.textContent=vals.length ? vals.map((v,i)=>`n${i+1} = ${v}`).join("   |   ") : "Zadej čísla ze vzoru, např. 3; 4; 5";
+ el.textContent=vals.length ? "Vstupy: " + vals.join("   |   ") : "Zadej vstupní proměnné, např. n1;n2;n3";
 }
 function addExample(copy){
  let steps=[{instruction:"",expected:"",hint:"",result_formula:"",result_decimals:2}];
