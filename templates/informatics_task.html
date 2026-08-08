@@ -5,14 +5,21 @@
 <a class="switch" href="{{url_for('informatics_lesson',lesson_id=item.id)}}">← Přehled lekce</a></div>
 {% with messages=get_flashed_messages() %}{% if messages %}<div class="notice">{% for m in messages %}<p>{{m}}</p>{% endfor %}</div>{% endif %}{% endwith %}
 
+{% if html_content %}
+<section class="course-card" style="padding:22px;margin-bottom:18px">
+<h2>📘 Manuál / výklad</h2>
+<div class="lesson-html-content">{{ html_content|safe }}</div>
+</section>
+{% endif %}
+
 {% if teacher_preview %}
 <section class="course-card" style="padding:22px">
 <h2>Hotový výsledek – ukázka</h2>
-{% if teacher_preview.kind=='table' %}
-<p><b>List:</b> {{teacher_preview.title}}</p>
-<div style="overflow:auto"><table style="border-collapse:collapse;width:100%">
-{% for row in teacher_preview.rows %}<tr>{% for cell in row %}<td style="border:1px solid #ccd5df;padding:7px">{{cell if cell is not none else ''}}</td>{% endfor %}</tr>{% endfor %}
-</table></div>
+{% if task.file_type in ['Word','Excel','PowerPoint'] %}
+<p>Takto vypadá učitelův vzor. Náhled slouží jako vizuální ukázka; hodnotí se pouze kontroly vybrané učitelem.</p>
+<iframe src="{{url_for('informatics_teacher_preview_pdf', task_id=task.id)}}#toolbar=0&navpanes=0"
+        style="width:100%;height:720px;border:1px solid #ccd5df;border-radius:12px;background:white"
+        title="Vizuální náhled vzorového souboru"></iframe>
 {% elif teacher_preview.kind=='code' %}
 <pre style="white-space:pre-wrap;overflow:auto;background:#f5f7fa;padding:16px;border-radius:12px">{{teacher_preview.text}}</pre>
 {% else %}

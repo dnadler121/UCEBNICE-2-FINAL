@@ -1,0 +1,10 @@
+Testovací verze Informatiky – 2026-08-08
+
+Nový modul: informatics_engine_v2.py
+- Word: rozšířené strukturální kontroly včetně oddílů, číslování, obsahu,
+  obrázků, stylů nadpisů, titulků, citací a seznamů.
+- Excel: výsledky vzorců, formátování, sloučení, podmíněné formátování,
+  tabulky, grafy a detekce kontingenčních tabulek.
+- PowerPoint: tabulky, grafy, tvary, formátování, počet animací a přechody.
+- Python: skrytý učitelský zdroj, funkční testy podle vstupů/výstupů.
+- Studentské pracovní soubory: stálý podepsaný token pro studenta + úkol.

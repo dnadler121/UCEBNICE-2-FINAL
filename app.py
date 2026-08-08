@@ -1948,7 +1948,12 @@ def _create_student_work_file(task, user):
     filename = f'{safe_base}_student_{user.id}{ext}'
     path = user_dir / filename
 
-    # Student dostává čistý pracovní soubor stejného typu, nikoli učitelovo hotové řešení.
+    # Každý student má pro daný úkol jeden stálý podepsaný originál.
+    # Opakované stažení už nezneplatní dříve rozpracovanou kopii stejného studenta.
+    row = InformaticsWorkFile.query.filter_by(user_id=user.id, task_id=task.id).first()
+    token = row.token if row and row.token and _informatics_verify_token(row.token, user.id, task.id) else _informatics_make_token(user.id, task.id)
+
+    # Vytvoříme čistý pracovní soubor stejného typu, nikoli učitelovo řešení.
     if ext in ('.xlsx', '.xlsm'):
         import openpyxl
         wb = openpyxl.Workbook()
@@ -1965,17 +1970,46 @@ def _create_student_work_file(task, user):
     else:
         raise ValueError('Nepodporovaný typ pracovního souboru.')
 
-    token = _informatics_make_token(user.id, task.id)
     _embed_work_token(path, ext, token)
-    row = InformaticsWorkFile.query.filter_by(user_id=user.id, task_id=task.id).first()
     if not row:
         row = InformaticsWorkFile(user_id=user.id, task_id=task.id, token=token, original_name=filename, stored_name=filename)
         db.session.add(row)
     else:
-        row.token = token; row.original_name = filename; row.stored_name = filename; row.downloaded_at = datetime.utcnow()
+        row.token = token
+        row.original_name = filename
+        row.stored_name = filename
+        row.downloaded_at = datetime.utcnow()
     db.session.commit()
     return path, filename
 
+
+# --- Informatika Engine 2.1: rozšířené kontroly Office + funkční testy Pythonu ---
+from informatics_engine_v2 import (
+    analyze_file as _inf2_analyze_file,
+    generated_assignment as _inf2_generated_assignment,
+    check_hint as _inf2_check_hint,
+    evaluate as _inf2_evaluate,
+    preview as _inf2_preview,
+)
+
+# Přepíšeme původní univerzální funkce novou verzí. Starší implementace výše
+# zůstává v souboru jen kvůli snadnému návratu při testování.
+def analyze_informatics_file(path, original_name):
+    return _inf2_analyze_file(path, original_name)
+
+def generated_assignment(info):
+    return _inf2_generated_assignment(info)
+
+def check_hint(code):
+    return _inf2_check_hint(code)
+
+def evaluate_informatics_file(student_path, student_name, task):
+    teacher = _safe_json(task.analysis_json, {})
+    raw_checks = _safe_json(task.checks_json, [])
+    return _inf2_evaluate(student_path, student_name, teacher, raw_checks)
+
+def informatics_preview(path, original_name, teacher=False):
+    return _inf2_preview(path, original_name, teacher=teacher)
 
 @app.route('/informatics-task/<int:task_id>/download-workfile')
 def download_informatics_workfile(task_id):
@@ -2114,7 +2148,7 @@ def review_informatics_lesson():
 
     for t in data.get('tasks', []):
         source_path = INFORMATICS_SOURCE_DIR / t.get('source_stored','')
-        t['preview'] = informatics_preview(source_path, t.get('source_original','')) if source_path.exists() else None
+        t['preview'] = informatics_preview(source_path, t.get('source_original',''), teacher=True) if source_path.exists() else None
     return render_template('informatics_review.html', course=course_from_lesson(None), lesson=None, data=data)
 
 
@@ -2179,6 +2213,42 @@ def informatics_lesson(lesson_id):
     html_content = render_informatics_html(item.html_stored)
     return render_template('informatics_lesson.html', course=course, lesson=lesson_obj, item=item, states=states, html_content=html_content)
 
+
+@app.route('/informatics-task/<int:task_id>/teacher-preview.pdf')
+def informatics_teacher_preview_pdf(task_id):
+    """Věrný vizuální náhled učitelského Word/Excel/PowerPoint souboru pro studenta."""
+    r = require_login()
+    if r: return r
+    task = db.session.get(InformaticsTask, task_id)
+    if not task:
+        return 'Úkol nebyl nalezen.', 404
+    ext = Path(task.source_original or '').suffix.lower()
+    if ext not in ('.docx', '.xlsx', '.xlsm', '.pptx'):
+        return 'Pro tento typ souboru není PDF náhled.', 404
+    source = INFORMATICS_SOURCE_DIR / task.source_stored
+    if not source.exists():
+        return 'Vzorový soubor nebyl nalezen.', 404
+    preview_dir = INFORMATICS_SOURCE_DIR / '_visual_previews'
+    preview_dir.mkdir(parents=True, exist_ok=True)
+    out_pdf = preview_dir / f'task_{task.id}.pdf'
+    try:
+        if (not out_pdf.exists()) or out_pdf.stat().st_mtime < source.stat().st_mtime:
+            import subprocess, tempfile, shutil
+            with tempfile.TemporaryDirectory(prefix='infpreview_') as td:
+                td = Path(td)
+                local = td / source.name
+                shutil.copy2(source, local)
+                subprocess.run([
+                    'libreoffice', '--headless', '--convert-to', 'pdf', '--outdir', str(td), str(local)
+                ], check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=60)
+                made = td / (local.stem + '.pdf')
+                if not made.exists():
+                    raise RuntimeError('LibreOffice nevytvořil PDF náhled.')
+                shutil.copy2(made, out_pdf)
+        return send_file(out_pdf, mimetype='application/pdf', as_attachment=False,
+                         download_name=f'nahled_{task.id}.pdf')
+    except Exception as exc:
+        return f'Náhled se nepodařilo vytvořit: {exc}', 500
 
 @app.route('/informatics-task/<int:task_id>', methods=['GET','POST'])
 def informatics_task(task_id):
@@ -2275,7 +2345,7 @@ def informatics_task(task_id):
     teacher_preview = None
     teacher_source = INFORMATICS_SOURCE_DIR / task.source_stored
     if teacher_source.exists():
-        teacher_preview = informatics_preview(teacher_source, task.source_original)
+        teacher_preview = informatics_preview(teacher_source, task.source_original, teacher=True)
     html_content = render_informatics_html(item.html_stored)
     return render_template('informatics_task.html', course=course, lesson=lesson_obj,
                            item=item, task=task, feedback=feedback, preview=preview,
