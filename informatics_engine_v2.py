@@ -217,17 +217,20 @@ def analyze_word(path, original_name):
         root = _xml(z,'word/document.xml')
         fields=[]
         if root is not None:
-            # Word může kód pole rozdělit do několika instrText uzlů; fldSimple ho má v atributu instr.
-            instr_parts=[]
-            for instr in root.findall('.//{%s}instrText' % NS_W):
-                if instr.text:
-                    instr_parts.append(instr.text)
-                    fields.append(instr.text.strip())
-            for fld in root.findall('.//{%s}fldSimple' % NS_W):
-                val=_attr(fld,NS_W,'instr','')
-                if val: fields.append(val.strip())
-            if instr_parts:
-                fields.append(''.join(instr_parts).strip())
+            # Čti Word pole po jednotlivých odstavcích. U složených polí Word často
+            # rozdělí instrukci do více w:instrText uzlů, proto je spojíme jen v
+            # rámci stejného odstavce (nikoli přes celý dokument).
+            for p_el in root.findall('.//{%s}p' % NS_W):
+                parts=[]
+                for instr in p_el.findall('.//{%s}instrText' % NS_W):
+                    if instr.text:
+                        parts.append(instr.text)
+                if parts:
+                    val=''.join(parts).strip()
+                    if val: fields.append(val)
+                for fld in p_el.findall('.//{%s}fldSimple' % NS_W):
+                    val=_attr(fld,NS_W,'instr','')
+                    if val: fields.append(val.strip())
         field_text=' '.join(fields).upper()
         # Automatický obsah uznáme jen tehdy, když dokument skutečně obsahuje
         # pole TOC. Samotný content-control/docPartGallery nestačí: Word jej může
@@ -242,37 +245,34 @@ def analyze_word(path, original_name):
             up = (' ' + str(field).upper() + ' ')
             return bool(re.search(r'\\[CA](?=\s|$)', up))
         info['has_toc'] = any(not _is_list_toc(f) for f in toc_fields)
-        info['has_bibliography'] = 'BIBLIOGRAPHY' in field_text or bool(re.search(r'BIBLIOGRAF', document_xml, flags=re.I))
+        bibliography_fields = [f for f in fields if re.search(r'(^|\s)BIBLIOGRAPHY(?=\s|$|\\)', f.upper())]
+        info['has_bibliography'] = bool(bibliography_fields)
         info['citation_field_count'] = len(re.findall(r'\bCITATION\b', field_text))
         info['has_list_of_figures'] = any(_is_list_toc(f) for f in toc_fields)
         info['page_break_count'] = document_xml.count('w:type="page"') + document_xml.count("w:type='page'")
-        # Numbered headings. Word very often stores numbering in the heading STYLE
-        # (styles.xml), not directly in each paragraph. Therefore check both places.
-        numbered=0
-        numbered_style_ids=set()
+        # Číslování nadpisů může být přímo v odstavci NEBO zděděné ze stylu.
+        style_num_ids={}
         styles_root=_xml(z,'word/styles.xml') if 'word/styles.xml' in names else None
         if styles_root is not None:
             for st in styles_root.findall('.//{%s}style' % NS_W):
                 sid=_attr(st,NS_W,'styleId','')
-                name_el=st.find('{%s}name' % NS_W)
-                style_name=_attr(name_el,NS_W,'val','').lower() if name_el is not None else ''
-                sid_low=sid.lower()
-                is_heading=('heading' in style_name or 'nadpis' in style_name or
-                            sid_low.startswith('heading') or sid_low.startswith('nadpis'))
                 ppr=st.find('{%s}pPr' % NS_W)
-                if is_heading and ppr is not None and ppr.find('{%s}numPr' % NS_W) is not None:
-                    numbered_style_ids.add(sid)
+                numpr=ppr.find('{%s}numPr' % NS_W) if ppr is not None else None
+                numid=numpr.find('{%s}numId' % NS_W) if numpr is not None else None
+                if sid and numid is not None:
+                    style_num_ids[sid]=_attr(numid,NS_W,'val','')
+        numbered=0
         if root is not None:
-            for p in root.findall('.//{%s}p' % NS_W):
-                ppr=p.find('{%s}pPr' % NS_W)
+            for p_el in root.findall('.//{%s}p' % NS_W):
+                ppr=p_el.find('{%s}pPr' % NS_W)
                 if ppr is None: continue
                 pstyle=ppr.find('{%s}pStyle' % NS_W)
-                sid=_attr(pstyle,NS_W,'val','') if pstyle is not None else ''
-                sid_low=sid.lower()
-                is_heading=('heading' in sid_low or 'nadpis' in sid_low)
-                direct_num=ppr.find('{%s}numPr' % NS_W) is not None
-                if is_heading and (direct_num or sid in numbered_style_ids):
-                    numbered += 1
+                sid=_attr(pstyle,NS_W,'val','')
+                low=sid.lower()
+                if not ('heading' in low or 'nadpis' in low): continue
+                direct=ppr.find('{%s}numPr' % NS_W) is not None
+                inherited=bool(style_num_ids.get(sid))
+                if direct or inherited: numbered += 1
         info['numbered_heading_count']=numbered
         # Page numbering starts: pgNumType in section properties.
         starts=[]
@@ -320,7 +320,7 @@ def analyze_word(path, original_name):
         'word_heading_numbering':info['numbered_heading_count']>0, 'word_captions':info['caption_count']>0,
         'word_citations':info['citation_field_count']>0, 'word_sources':info['bibliography_source_count']>0,
         'word_pages':bool(info['saved_page_count']), 'word_list_figures':info['has_list_of_figures'],
-        'word_bibliography':info['has_bibliography'] or info['bibliography_source_count']>0,
+        'word_bibliography':info['has_bibliography'],
     }
     # U Wordu zobrazujeme učiteli všechny podporované kontroly. Automatická detekce
     # pouze určuje, co je ve vzoru nalezené; učitel ale musí mít možnost zvolit i
@@ -638,7 +638,7 @@ def evaluate(student_path, student_name, teacher, raw_checks):
         elif code=='word_title_first': ok=bool(student.get('first_paragraph_text')) and (str(student.get('first_paragraph_style','')).lower() in ('title','nadpis') or student.get('first_paragraph_text')==teacher.get('first_paragraph_text')); label='Nadpis na první stránce'
         elif code=='word_toc': ok=bool(student.get('has_toc')); label='Automatický obsah'
         elif code=='word_heading_styles': ok=(teacher.get('heading_styles') or {})==(student.get('heading_styles') or {}); label='Styly a počet nadpisů'
-        elif code=='word_heading_numbering': ok=int(student.get('numbered_heading_count',0))>=int(teacher.get('numbered_heading_count',0)); label='Číslování nadpisů'
+        elif code=='word_heading_numbering': ok=int(student.get('numbered_heading_count',0))==int(teacher.get('numbered_heading_count',0)) and int(teacher.get('numbered_heading_count',0))>0; label='Číslování nadpisů'
         elif code=='word_captions': ok=int(student.get('caption_count',0))>=int(teacher.get('caption_count',0)) and int(student.get('centered_caption_count',0))>=int(teacher.get('centered_caption_count',0)); label='Titulky obrázků'
         elif code=='word_citations':
             want=max(1,int(teacher.get('citation_field_count',0) or 0)); ok=int(student.get('citation_field_count',0) or 0)>=want; label='Vložené citace'
@@ -646,7 +646,7 @@ def evaluate(student_path, student_name, teacher, raw_checks):
             want=max(1,int(teacher.get('bibliography_source_count',0) or 0)); ok=int(student.get('bibliography_source_count',0) or 0)>=want; label='Vložené zdroje citací'
         elif code=='word_pages': ok=bool(student.get('saved_page_count')) and int(student.get('saved_page_count'))>=int(teacher.get('saved_page_count') or 0); label='Počet stran'
         elif code=='word_list_figures': ok=bool(student.get('has_list_of_figures')); label='Seznam obrázků'
-        elif code=='word_bibliography': ok=bool(student.get('has_bibliography') or student.get('bibliography_source_count')); label='Seznam citací'
+        elif code=='word_bibliography': ok=bool(student.get('has_bibliography')); label='Bibliografie'
         elif code=='ppt_slides': ok=int(student.get('slide_count',0))>=int(teacher.get('slide_count',0)); label='Počet snímků'
         elif code=='ppt_titles': ok=int(student.get('title_count',0))>=int(teacher.get('title_count',0)); label='Nadpisy snímků'
         elif code=='ppt_images': ok=int(student.get('image_count',0))>=int(teacher.get('image_count',0)); label='Obrázky'
