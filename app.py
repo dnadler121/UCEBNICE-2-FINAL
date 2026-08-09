@@ -2076,6 +2076,7 @@ def new_informatics_lesson():
             return redirect(url_for('new_informatics_lesson'))
 
         source_files = request.files.getlist('task_files')
+        preview_files = request.files.getlist('task_preview_files')
         task_titles = request.form.getlist('task_titles')
         valid = [(i,f) for i,f in enumerate(source_files) if f and f.filename]
         if not valid:
@@ -2090,11 +2091,20 @@ def new_informatics_lesson():
                 flash(f'{f.filename}: podporovaný je Excel, Word, PowerPoint nebo Python.')
                 return redirect(url_for('new_informatics_lesson'))
             stored = _save_uploaded_file(f, INFORMATICS_SOURCE_DIR, 'teacher')
+            preview_stored = ''
+            if ext == '.docx' and i < len(preview_files):
+                pf = preview_files[i]
+                if pf and pf.filename:
+                    if Path(pf.filename).suffix.lower() != '.pdf':
+                        flash(f'{pf.filename}: náhled Wordu musí být PDF.')
+                        return redirect(url_for('new_informatics_lesson'))
+                    preview_stored = _save_uploaded_file(pf, INFORMATICS_SOURCE_DIR, 'teacher_preview')
             analysis, suggested = analyze_informatics_file(INFORMATICS_SOURCE_DIR/stored, f.filename)
             prepared.append({
                 'title': (task_titles[i].strip() if i < len(task_titles) else '') or f'Úkol {len(prepared)+1}',
                 'source_original': f.filename,
                 'source_stored': stored,
+                'preview_stored': preview_stored,
                 'analysis': analysis,
                 'suggested': suggested,
                 'assignment': generated_assignment(analysis),
@@ -2150,7 +2160,7 @@ def review_informatics_lesson():
                 file_type=t['analysis'].get('type',''),
                 analysis_json=json.dumps(t['analysis'], ensure_ascii=False),
                 checks_json=json.dumps(check_items, ensure_ascii=False),
-                image_file=''
+                image_file=t.get('preview_stored','')
             ))
 
         db.session.commit()
