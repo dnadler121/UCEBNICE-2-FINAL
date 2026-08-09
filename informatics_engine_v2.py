@@ -246,15 +246,32 @@ def analyze_word(path, original_name):
         info['citation_field_count'] = len(re.findall(r'\bCITATION\b', field_text))
         info['has_list_of_figures'] = any(_is_list_toc(f) for f in toc_fields)
         info['page_break_count'] = document_xml.count('w:type="page"') + document_xml.count("w:type='page'")
-        # Numbered headings: numPr inside paragraphs using heading style.
+        # Numbered headings. Word very often stores numbering in the heading STYLE
+        # (styles.xml), not directly in each paragraph. Therefore check both places.
         numbered=0
+        numbered_style_ids=set()
+        styles_root=_xml(z,'word/styles.xml') if 'word/styles.xml' in names else None
+        if styles_root is not None:
+            for st in styles_root.findall('.//{%s}style' % NS_W):
+                sid=_attr(st,NS_W,'styleId','')
+                name_el=st.find('{%s}name' % NS_W)
+                style_name=_attr(name_el,NS_W,'val','').lower() if name_el is not None else ''
+                sid_low=sid.lower()
+                is_heading=('heading' in style_name or 'nadpis' in style_name or
+                            sid_low.startswith('heading') or sid_low.startswith('nadpis'))
+                ppr=st.find('{%s}pPr' % NS_W)
+                if is_heading and ppr is not None and ppr.find('{%s}numPr' % NS_W) is not None:
+                    numbered_style_ids.add(sid)
         if root is not None:
             for p in root.findall('.//{%s}p' % NS_W):
                 ppr=p.find('{%s}pPr' % NS_W)
                 if ppr is None: continue
                 pstyle=ppr.find('{%s}pStyle' % NS_W)
-                val=_attr(pstyle,NS_W,'val','').lower()
-                if ('heading' in val or 'nadpis' in val) and ppr.find('{%s}numPr' % NS_W) is not None:
+                sid=_attr(pstyle,NS_W,'val','') if pstyle is not None else ''
+                sid_low=sid.lower()
+                is_heading=('heading' in sid_low or 'nadpis' in sid_low)
+                direct_num=ppr.find('{%s}numPr' % NS_W) is not None
+                if is_heading and (direct_num or sid in numbered_style_ids):
                     numbered += 1
         info['numbered_heading_count']=numbered
         # Page numbering starts: pgNumType in section properties.
@@ -620,7 +637,7 @@ def evaluate(student_path, student_name, teacher, raw_checks):
         elif code=='word_image_center': ok=int(student.get('centered_image_count',0))>=int(teacher.get('centered_image_count',0)); label='Obrázky na střed'
         elif code=='word_title_first': ok=bool(student.get('first_paragraph_text')) and (str(student.get('first_paragraph_style','')).lower() in ('title','nadpis') or student.get('first_paragraph_text')==teacher.get('first_paragraph_text')); label='Nadpis na první stránce'
         elif code=='word_toc': ok=bool(student.get('has_toc')); label='Automatický obsah'
-        elif code=='word_heading_styles': ok=set((teacher.get('heading_styles') or {}).keys()).issubset(set((student.get('heading_styles') or {}).keys())); label='Styly nadpisů'
+        elif code=='word_heading_styles': ok=(teacher.get('heading_styles') or {})==(student.get('heading_styles') or {}); label='Styly a počet nadpisů'
         elif code=='word_heading_numbering': ok=int(student.get('numbered_heading_count',0))>=int(teacher.get('numbered_heading_count',0)); label='Číslování nadpisů'
         elif code=='word_captions': ok=int(student.get('caption_count',0))>=int(teacher.get('caption_count',0)) and int(student.get('centered_caption_count',0))>=int(teacher.get('centered_caption_count',0)); label='Titulky obrázků'
         elif code=='word_citations':
