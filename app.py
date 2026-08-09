@@ -2233,6 +2233,17 @@ def edit_informatics_lesson(lesson_id):
                 except Exception:
                     pass
 
+            # Volitelný přesný PDF/screenshot učitelského vzoru. Slouží jen k náhledu v okně.
+            visual_preview = request.files.get(f'preview_file_{task.id}')
+            if visual_preview and visual_preview.filename:
+                pext = Path(visual_preview.filename).suffix.lower()
+                if pext not in ('.pdf','.png','.jpg','.jpeg','.webp'):
+                    flash(f'{visual_preview.filename}: náhled musí být PDF nebo obrázek PNG/JPG/WEBP.')
+                    return redirect(url_for('edit_informatics_lesson', lesson_id=item.id))
+                task.image_file = _save_uploaded_file(visual_preview, INFORMATICS_SOURCE_DIR, 'teacher_preview')
+            if request.form.get(f'remove_preview_{task.id}') == '1':
+                task.image_file = ''
+
         db.session.commit()
         flash('Informatická lekce byla upravena.')
         return redirect(url_for('teacher_home'))
@@ -2496,44 +2507,209 @@ def _office_visual_html_fallback(source, ext, title='Vzorový soubor'):
         return shell_head+'<div class="word-page"><div class="word-page-inner" style="padding:95px"><div class="word-content"><h2>Náhled souboru</h2><p>'+esc(str(exc))+'</p></div></div></div>'+end
     return shell_head+'<div class="word-page"><div class="word-page-inner" style="padding:95px"><div class="word-content"><p>Náhled tohoto souboru není dostupný.</p></div></div></div>'+end
 
+
+def _make_office_preview_pdf(source, ext, out_pdf):
+    """Vytvoří PDF náhled. Nejprve LibreOffice; u Wordu má Python PDF fallback."""
+    source = Path(source); out_pdf = Path(out_pdf)
+    if out_pdf.exists() and out_pdf.stat().st_mtime >= source.stat().st_mtime:
+        return out_pdf
+    import subprocess, tempfile, shutil
+    try:
+        with tempfile.TemporaryDirectory(prefix='infpreview_') as td:
+            td=Path(td); local=td/source.name; shutil.copy2(source, local)
+            subprocess.run(['libreoffice','--headless','--convert-to','pdf','--outdir',str(td),str(local)],
+                           check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=60)
+            made=td/(local.stem+'.pdf')
+            if made.exists():
+                shutil.copy2(made,out_pdf); return out_pdf
+    except Exception:
+        pass
+    if ext == '.docx':
+        _docx_preview_pdf_python(source, out_pdf)
+        return out_pdf
+    raise RuntimeError('PDF náhled nelze vytvořit bez LibreOffice.')
+
+
+def _docx_preview_pdf_python(source, out_pdf):
+    """Nouzový PDF náhled DOCX v čistém Pythonu; zachová text včetně TOC/bibliografie a obrázky."""
+    from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Image as RLImage, PageBreak, Table, TableStyle
+    from reportlab.lib.pagesizes import A4
+    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+    from reportlab.lib.enums import TA_LEFT, TA_CENTER, TA_RIGHT, TA_JUSTIFY
+    from reportlab.lib import colors
+    from reportlab.lib.units import mm
+    from docx import Document
+    from docx.oxml.ns import qn
+    from xml.sax.saxutils import escape
+    import io, zipfile
+
+    doc=Document(str(source)); styles=getSampleStyleSheet()
+    normal=ParagraphStyle('WordNormal', parent=styles['BodyText'], fontName='Helvetica', fontSize=10.5,
+                          leading=14, spaceAfter=5)
+    title=ParagraphStyle('WordTitle', parent=normal, fontSize=18, leading=22, alignment=TA_CENTER, spaceAfter=10)
+    h1=ParagraphStyle('WordH1', parent=normal, fontSize=15, leading=19, spaceBefore=8, spaceAfter=6, textColor=colors.HexColor('#17365d'))
+    h2=ParagraphStyle('WordH2', parent=normal, fontSize=12.5, leading=16, spaceBefore=6, spaceAfter=5, textColor=colors.HexColor('#17365d'))
+    story=[]
+    body=doc.element.body
+    media=[]
+    try:
+        with zipfile.ZipFile(source) as z:
+            for n in z.namelist():
+                if n.startswith('word/media/'):
+                    media.append((n,z.read(n)))
+    except Exception:
+        pass
+    media_i=0
+    section_idx=0
+    for child in body.iterchildren():
+        tag=child.tag.rsplit('}',1)[-1]
+        if tag=='p':
+            texts=[t.text or '' for t in child.iter(qn('w:t'))]
+            txt=''.join(texts).strip()
+            pstyle=''
+            ppr=child.find(qn('w:pPr'))
+            if ppr is not None:
+                ps=ppr.find(qn('w:pStyle'))
+                if ps is not None: pstyle=ps.get(qn('w:val')) or ''
+            if not txt:
+                # vložené obrázky přibližně na místě výskytu
+                drawings=list(child.iter(qn('w:drawing')))
+                if drawings and media_i < len(media):
+                    try:
+                        img=RLImage(io.BytesIO(media[media_i][1])); media_i+=1
+                        maxw=150*mm; maxh=180*mm
+                        scale=min(maxw/img.imageWidth,maxh/img.imageHeight,1)
+                        img.drawWidth*=scale; img.drawHeight*=scale
+                        story += [Spacer(1,4*mm),img,Spacer(1,4*mm)]
+                    except Exception: pass
+                continue
+            st=normal
+            low=pstyle.lower()
+            if 'title' in low or 'titul' in low: st=title
+            elif 'heading1' in low or 'nadpis1' in low or low.endswith('1'): st=h1
+            elif 'heading2' in low or 'nadpis2' in low or low.endswith('2'): st=h2
+            # zarovnání
+            align=None
+            if ppr is not None:
+                jc=ppr.find(qn('w:jc'))
+                if jc is not None: align=jc.get(qn('w:val'))
+            if align:
+                amap={'center':TA_CENTER,'right':TA_RIGHT,'both':TA_JUSTIFY,'left':TA_LEFT}
+                if align in amap:
+                    st=ParagraphStyle('dyn'+str(len(story)), parent=st, alignment=amap[align])
+            story.append(Paragraph(escape(txt), st))
+            drawings=list(child.iter(qn('w:drawing')))
+            if drawings and media_i < len(media):
+                try:
+                    img=RLImage(io.BytesIO(media[media_i][1])); media_i+=1
+                    maxw=150*mm; maxh=180*mm
+                    scale=min(maxw/img.imageWidth,maxh/img.imageHeight,1)
+                    img.drawWidth*=scale; img.drawHeight*=scale
+                    story += [Spacer(1,3*mm),img,Spacer(1,3*mm)]
+                except Exception: pass
+        elif tag=='tbl':
+            rows=[]
+            for tr in child.iter(qn('w:tr')):
+                row=[]
+                for tc in tr.findall(qn('w:tc')):
+                    cell=''.join((t.text or '') for t in tc.iter(qn('w:t'))).strip()
+                    row.append(Paragraph(escape(cell), normal))
+                if row: rows.append(row)
+            if rows:
+                table=Table(rows, repeatRows=1)
+                table.setStyle(TableStyle([('GRID',(0,0),(-1,-1),0.4,colors.grey),('VALIGN',(0,0),(-1,-1),'TOP'),('LEFTPADDING',(0,0),(-1,-1),4),('RIGHTPADDING',(0,0),(-1,-1),4)]))
+                story += [table,Spacer(1,4*mm)]
+        elif tag=='sectPr':
+            section_idx += 1
+    # přidej nevyužité obrázky (aby v náhledu nic nezmizelo)
+    while media_i < len(media):
+        try:
+            img=RLImage(io.BytesIO(media[media_i][1])); media_i+=1
+            maxw=150*mm; maxh=180*mm; scale=min(maxw/img.imageWidth,maxh/img.imageHeight,1)
+            img.drawWidth*=scale; img.drawHeight*=scale; story += [Spacer(1,3*mm),img]
+        except Exception: media_i+=1
+    pdf=SimpleDocTemplate(str(out_pdf), pagesize=A4, rightMargin=18*mm,leftMargin=18*mm,topMargin=18*mm,bottomMargin=18*mm)
+    pdf.build(story)
+
+
 @app.route('/informatics-task/<int:task_id>/teacher-preview.pdf')
 def informatics_teacher_preview_pdf(task_id):
-    """Věrný vizuální náhled učitelského Word/Excel/PowerPoint souboru pro studenta."""
+    """PDF/obrázek učitelského vzoru zobrazený přímo v iframe, bez stahování."""
     r = require_login()
     if r: return r
     task = db.session.get(InformaticsTask, task_id)
     if not task:
         return 'Úkol nebyl nalezen.', 404
-    ext = Path(task.source_original or '').suffix.lower()
-    if ext not in ('.docx', '.xlsx', '.xlsm', '.pptx'):
-        return 'Pro tento typ souboru není PDF náhled.', 404
+
+    # Nejvyšší priorita: učitelův přesný PDF export / screenshot.
+    if task.image_file:
+        manual_preview = INFORMATICS_SOURCE_DIR / task.image_file
+        if manual_preview.exists():
+            suffix = manual_preview.suffix.lower()
+            mimetype = {'.pdf':'application/pdf','.png':'image/png','.jpg':'image/jpeg',
+                        '.jpeg':'image/jpeg','.webp':'image/webp'}.get(suffix,'application/octet-stream')
+            resp = send_file(manual_preview, mimetype=mimetype, as_attachment=False,
+                             download_name=f'nahled_{task.id}{suffix}')
+            resp.headers['Content-Disposition'] = 'inline'
+            resp.headers['Cache-Control'] = 'no-store'
+            return resp
+
     source = INFORMATICS_SOURCE_DIR / task.source_stored
     if not source.exists():
         return 'Vzorový soubor nebyl nalezen.', 404
+    ext = Path(task.source_original or '').suffix.lower()
+    if ext not in ('.docx','.xlsx','.xlsm','.pptx'):
+        return 'Pro tento typ souboru není PDF náhled.', 404
+
     preview_dir = INFORMATICS_SOURCE_DIR / '_visual_previews'
     preview_dir.mkdir(parents=True, exist_ok=True)
     out_pdf = preview_dir / f'task_{task.id}.pdf'
     try:
-        if (not out_pdf.exists()) or out_pdf.stat().st_mtime < source.stat().st_mtime:
-            import subprocess, tempfile, shutil
-            with tempfile.TemporaryDirectory(prefix='infpreview_') as td:
-                td = Path(td)
-                local = td / source.name
-                shutil.copy2(source, local)
-                subprocess.run([
-                    'libreoffice', '--headless', '--convert-to', 'pdf', '--outdir', str(td), str(local)
-                ], check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=60)
-                made = td / (local.stem + '.pdf')
-                if not made.exists():
-                    raise RuntimeError('LibreOffice nevytvořil PDF náhled.')
-                shutil.copy2(made, out_pdf)
-        return send_file(out_pdf, mimetype='application/pdf', as_attachment=False,
+        _make_office_preview_pdf(source, ext, out_pdf)
+        resp = send_file(out_pdf, mimetype='application/pdf', as_attachment=False,
                          download_name=f'nahled_{task.id}.pdf')
+        resp.headers['Content-Disposition'] = 'inline'
+        resp.headers['Cache-Control'] = 'no-store'
+        return resp
     except Exception:
-        # Render a další čistě Python prostředí nemusí mít systémový LibreOffice.
-        # Student proto dostane vizuální HTML náhled místo chybové stránky.
         fallback = _office_visual_html_fallback(source, ext, task.source_original or f'Vzor {task.id}')
-        return fallback, 200, {'Content-Type':'text/html; charset=utf-8', 'Cache-Control':'no-store'}
+        return fallback, 200, {'Content-Type':'text/html; charset=utf-8','Cache-Control':'no-store'}
+
+
+@app.route('/informatics-submission/<int:submission_id>/preview.pdf')
+def informatics_submission_preview_pdf(submission_id):
+    """Náhled studentovy právě zkontrolované práce přímo v okně lekce."""
+    r = require_login()
+    if r: return r
+    submission = db.session.get(InformaticsSubmission, submission_id)
+    if not submission:
+        return 'Odevzdaná práce nebyla nalezena.', 404
+    user = current_user()
+    if user.role == 'student' and submission.user_id != user.id:
+        return 'K této práci nemáš přístup.', 403
+    task = db.session.get(InformaticsTask, submission.task_id)
+    if not task:
+        return 'Úkol nebyl nalezen.', 404
+    source = INFORMATICS_SUBMISSION_DIR / str(submission.user_id) / submission.stored_name
+    if not source.exists():
+        return 'Soubor práce nebyl nalezen.', 404
+    ext = Path(submission.original_name or '').suffix.lower()
+    if ext not in ('.docx','.xlsx','.xlsm','.pptx'):
+        return 'Pro tento typ souboru není PDF náhled.', 404
+    preview_dir = INFORMATICS_SUBMISSION_DIR / str(submission.user_id) / '_visual_previews'
+    preview_dir.mkdir(parents=True, exist_ok=True)
+    out_pdf = preview_dir / f'submission_{submission.id}.pdf'
+    try:
+        _make_office_preview_pdf(source, ext, out_pdf)
+        resp = send_file(out_pdf, mimetype='application/pdf', as_attachment=False,
+                         download_name=f'prace_{submission.id}.pdf')
+        resp.headers['Content-Disposition'] = 'inline'
+        resp.headers['Cache-Control'] = 'no-store'
+        return resp
+    except Exception as exc:
+        fallback = _office_visual_html_fallback(source, ext, submission.original_name or 'Práce studenta')
+        return fallback, 200, {'Content-Type':'text/html; charset=utf-8','Cache-Control':'no-store'}
+
 
 @app.route('/informatics-task/<int:task_id>', methods=['GET','POST'])
 def informatics_task(task_id):

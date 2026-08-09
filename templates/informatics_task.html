@@ -94,7 +94,10 @@
 {% if preview %}
 <section class="course-card" style="padding:22px;margin-top:18px">
 <h2>Tvoje nahraná práce</h2>
-{% if preview.kind=='table' %}<div style="overflow:auto"><table style="border-collapse:collapse;width:100%">
+{% if checked_submission and task.file_type in ['Word','Excel','PowerPoint'] %}
+<p>Takto aktuálně vypadá tvoje práce. Náhled je přímo na stránce; nic nemusíš stahovat.</p>
+<iframe class="informatics-office-preview" src="{{url_for('informatics_submission_preview_pdf', submission_id=checked_submission.id)}}#toolbar=0&navpanes=0" title="Náhled práce studenta"></iframe>
+{% elif preview.kind=='table' %}<div style="overflow:auto"><table style="border-collapse:collapse;width:100%">
 {% for row in preview.rows %}<tr>{% for cell in row %}<td style="border:1px solid #ccd5df;padding:7px">{{cell if cell is not none else ''}}</td>{% endfor %}</tr>{% endfor %}
 </table></div>
 {% elif preview.kind=='code' %}<pre style="white-space:pre-wrap;overflow:auto;background:#f5f7fa;padding:16px;border-radius:12px">{{preview.text}}</pre>

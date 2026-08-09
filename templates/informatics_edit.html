@@ -35,6 +35,11 @@
     <input type="file" name="source_file_{{t.id}}" accept=".xlsx,.xlsm,.docx,.pptx,.py">
     <small>Aktuálně: {{t.source_original}}. Pokud nic nevybereš, zůstane původní soubor.</small>
   </label>
+  <label><b>Přesný náhled v okně pro studenta (volitelné)</b>
+    <input type="file" name="preview_file_{{t.id}}" accept=".pdf,.png,.jpg,.jpeg,.webp">
+    <small>Nejlépe PDF exportované přímo z Wordu. Student ho uvidí uvnitř stránky; soubor se mu nenabízí ke stažení.</small>
+  </label>
+  {% if t.image_file %}<label style="display:flex;gap:8px;align-items:center"><input type="checkbox" name="remove_preview_{{t.id}}" value="1"> Odstranit vlastní náhled</label>{% endif %}
   {% if x.options %}
   <h4>Kontroly, úkoly a nápovědy</h4>
   <p style="margin-top:-4px;color:#52606d">Zaškrtni, co se má u studenta skutečně hodnotit. Názvy jsou zobrazené česky; technické kódy jsou skryté.</p>
