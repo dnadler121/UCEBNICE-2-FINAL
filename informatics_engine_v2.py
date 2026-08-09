@@ -234,10 +234,17 @@ def analyze_word(path, original_name):
         # v DOCX ponechat i po smazání viditelného obsahu, což dříve vedlo k
         # falešnému výsledku „Splněno“.
         toc_fields = [f for f in fields if re.search(r'(^|\s)TOC(?=\s|$|\\)', f.upper())]
-        info['has_toc'] = bool(toc_fields)
+        # Word používá stejné pole TOC i pro Seznam obrázků/tabulek.
+        # Např. `TOC \h \z \c "Obrázek"` je seznam obrázků, NE obsah kapitol.
+        # Automatický obsah proto uznáme jen u TOC pole bez přepínače \c / \a.
+        # Běžný obsah z Wordu mívá např. `TOC \o "1-3" \h \z \u`.
+        def _is_list_toc(field):
+            up = (' ' + str(field).upper() + ' ')
+            return bool(re.search(r'\\[CA](?=\s|$)', up))
+        info['has_toc'] = any(not _is_list_toc(f) for f in toc_fields)
         info['has_bibliography'] = 'BIBLIOGRAPHY' in field_text or bool(re.search(r'BIBLIOGRAF', document_xml, flags=re.I))
         info['citation_field_count'] = len(re.findall(r'\bCITATION\b', field_text))
-        info['has_list_of_figures'] = any(('TOC' in f.upper() and ('\\C' in f.upper() or '\\A' in f.upper())) for f in fields)
+        info['has_list_of_figures'] = any(_is_list_toc(f) for f in toc_fields)
         info['page_break_count'] = document_xml.count('w:type="page"') + document_xml.count("w:type='page'")
         # Numbered headings: numPr inside paragraphs using heading style.
         numbered=0
