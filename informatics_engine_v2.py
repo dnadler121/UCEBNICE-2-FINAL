@@ -229,9 +229,12 @@ def analyze_word(path, original_name):
             if instr_parts:
                 fields.append(''.join(instr_parts).strip())
         field_text=' '.join(fields).upper()
-        # Automatický obsah může být uložen jako pole TOC nebo jako content-control galerie Table of Contents.
-        toc_gallery = bool(re.search(r'(TABLE OF CONTENTS|OBSAH)', document_xml, flags=re.I)) and ('docPartGallery' in document_xml)
-        info['has_toc'] = bool(re.search(r'\bTOC\b', field_text)) or toc_gallery
+        # Automatický obsah uznáme jen tehdy, když dokument skutečně obsahuje
+        # pole TOC. Samotný content-control/docPartGallery nestačí: Word jej může
+        # v DOCX ponechat i po smazání viditelného obsahu, což dříve vedlo k
+        # falešnému výsledku „Splněno“.
+        toc_fields = [f for f in fields if re.search(r'(^|\s)TOC(?=\s|$|\\)', f.upper())]
+        info['has_toc'] = bool(toc_fields)
         info['has_bibliography'] = 'BIBLIOGRAPHY' in field_text or bool(re.search(r'BIBLIOGRAF', document_xml, flags=re.I))
         info['citation_field_count'] = len(re.findall(r'\bCITATION\b', field_text))
         info['has_list_of_figures'] = any(('TOC' in f.upper() and ('\\C' in f.upper() or '\\A' in f.upper())) for f in fields)
