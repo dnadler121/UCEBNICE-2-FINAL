@@ -2092,11 +2092,14 @@ def new_informatics_lesson():
                 return redirect(url_for('new_informatics_lesson'))
             stored = _save_uploaded_file(f, INFORMATICS_SOURCE_DIR, 'teacher')
             preview_stored = ''
-            if ext == '.docx' and i < len(preview_files):
+            # Přesný vizuální vzor dodává učitel jako PDF pro libovolný typ úkolu
+            # (Word, Excel, PowerPoint i Python). Zdrojový Office/Python soubor se
+            # používá pro hodnocení; PDF pouze pro zobrazení studentovi v okně.
+            if i < len(preview_files):
                 pf = preview_files[i]
                 if pf and pf.filename:
                     if Path(pf.filename).suffix.lower() != '.pdf':
-                        flash(f'{pf.filename}: náhled Wordu musí být PDF.')
+                        flash(f'{pf.filename}: náhled učitelského vzoru musí být PDF.')
                         return redirect(url_for('new_informatics_lesson'))
                     preview_stored = _save_uploaded_file(pf, INFORMATICS_SOURCE_DIR, 'teacher_preview')
             analysis, suggested = analyze_informatics_file(INFORMATICS_SOURCE_DIR/stored, f.filename)
@@ -2243,12 +2246,13 @@ def edit_informatics_lesson(lesson_id):
                 except Exception:
                     pass
 
-            # Volitelný přesný PDF/screenshot učitelského vzoru. Slouží jen k náhledu v okně.
+            # Přesný učitelský náhled pro Word, Excel, PowerPoint i Python.
+            # Je to pouze vizuální PDF v okně; hodnocení stále vychází ze zdrojového souboru.
             visual_preview = request.files.get(f'preview_file_{task.id}')
             if visual_preview and visual_preview.filename:
                 pext = Path(visual_preview.filename).suffix.lower()
-                if pext not in ('.pdf','.png','.jpg','.jpeg','.webp'):
-                    flash(f'{visual_preview.filename}: náhled musí být PDF nebo obrázek PNG/JPG/WEBP.')
+                if pext != '.pdf':
+                    flash(f'{visual_preview.filename}: náhled učitelského vzoru musí být PDF.')
                     return redirect(url_for('edit_informatics_lesson', lesson_id=item.id))
                 task.image_file = _save_uploaded_file(visual_preview, INFORMATICS_SOURCE_DIR, 'teacher_preview')
             if request.form.get(f'remove_preview_{task.id}') == '1':

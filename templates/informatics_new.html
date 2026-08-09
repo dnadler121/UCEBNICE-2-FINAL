@@ -64,9 +64,9 @@ function addInfTask(){
     <input type="file" name="task_files" accept=".xlsx,.xlsm,.docx,.pptx,.py" required>
     <small>Excel, Word, PowerPoint nebo Python. Typ rozpozná aplikace sama.</small>
   </label>
-  <label><b>PDF náhled učitelského vzoru (pro Word)</b>
+  <label><b>PDF náhled učitelského vzoru</b>
     <input type="file" name="task_preview_files" accept=".pdf">
-    <small>U úkolu ve Wordu nahraj PDF vytvořené přímo ve Wordu. Student ho uvidí přesně v okně stránky. U ostatních typů není potřeba.</small>
+    <small>Nahraj svůj přesný PDF vzor pro Word, Excel, PowerPoint nebo Python. Student ho uvidí přímo v okně stránky; PDF se používá jen jako ukázka, hodnocení vychází ze zdrojového souboru.</small>
   </label>`;
   document.getElementById('infTasks').appendChild(d);
 }

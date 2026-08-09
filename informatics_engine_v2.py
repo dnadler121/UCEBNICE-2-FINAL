@@ -66,6 +66,82 @@ def _formula_result_map(path):
         return {}
 
 
+
+
+def _excel_ooxml_profile(path):
+    """Read structural Excel features directly from the OOXML package."""
+    prof = {'sheet_xml_count':0,'formula_cells':{},'merge_refs':{},'auto_filters':{},
+            'conditional_counts':{},'table_part_counts':{},'drawing_counts':{},
+            'table_xml_count':0,'chart_xml_count':0,'pivot_xml_count':0}
+    try:
+        with zipfile.ZipFile(path) as z:
+            names=z.namelist()
+            prof['table_xml_count']=sum(1 for n in names if re.match(r'xl/tables/table\d+\.xml$',n))
+            prof['chart_xml_count']=sum(1 for n in names if re.match(r'xl/charts/chart\d+\.xml$',n))
+            prof['pivot_xml_count']=sum(1 for n in names if re.match(r'xl/pivotTables/pivotTable\d+\.xml$',n))
+            for n in sorted(x for x in names if re.match(r'xl/worksheets/sheet\d+\.xml$',x)):
+                root=_xml(z,n)
+                if root is None: continue
+                prof['sheet_xml_count'] += 1
+                key=Path(n).stem
+                ns='{http://schemas.openxmlformats.org/spreadsheetml/2006/main}'
+                formulas={}
+                for c in root.iter(ns+'c'):
+                    f=c.find(ns+'f')
+                    if f is not None:
+                        formulas[c.attrib.get('r','')]=(f.text or '').strip()
+                prof['formula_cells'][key]=formulas
+                merges=root.find(ns+'mergeCells')
+                prof['merge_refs'][key]=sorted(mc.attrib.get('ref','') for mc in (list(merges) if merges is not None else []))
+                af=root.find(ns+'autoFilter')
+                prof['auto_filters'][key]=af.attrib.get('ref','') if af is not None else ''
+                prof['conditional_counts'][key]=len(root.findall(ns+'conditionalFormatting'))
+                tp=root.find(ns+'tableParts')
+                prof['table_part_counts'][key]=len(list(tp)) if tp is not None else 0
+                prof['drawing_counts'][key]=len(root.findall(ns+'drawing'))
+    except Exception:
+        pass
+    return prof
+
+
+def _ppt_ooxml_profile(path):
+    """Read per-slide PowerPoint structure directly from the OOXML package."""
+    slides=[]
+    try:
+        with zipfile.ZipFile(path) as z:
+            slide_names=sorted((n for n in z.namelist() if re.match(r'ppt/slides/slide\d+\.xml$',n)),
+                               key=lambda n:int(re.search(r'(\d+)',Path(n).stem).group(1)))
+            for n in slide_names:
+                root=_xml(z,n)
+                if root is None: continue
+                counts=Counter(); positions=[]; texts=[]
+                for sp in root.iter('{%s}sp' % NS_P):
+                    counts['shapes'] += 1
+                    tx=sp.find('.//{%s}txBody' % NS_P)
+                    if tx is not None:
+                        t=''.join((e.text or '') for e in tx.iter('{%s}t' % NS_A)).strip()
+                        if t: texts.append(t)
+                for _ in root.iter('{%s}pic' % NS_P): counts['pictures'] += 1
+                for gf in root.iter('{%s}graphicFrame' % NS_P):
+                    counts['graphic_frames'] += 1
+                    xml=ET.tostring(gf,encoding='unicode')
+                    if '/chart' in xml: counts['charts'] += 1
+                    if '/table' in xml or '<a:tbl' in xml: counts['tables'] += 1
+                for xfrm in root.iter('{%s}xfrm' % NS_A):
+                    off=xfrm.find('{%s}off' % NS_A); ext=xfrm.find('{%s}ext' % NS_A)
+                    if off is not None and ext is not None:
+                        positions.append((off.attrib.get('x'),off.attrib.get('y'),ext.attrib.get('cx'),ext.attrib.get('cy')))
+                trans=root.find('{%s}transition' % NS_P)
+                transition = ET.tostring(trans,encoding='unicode') if trans is not None else ''
+                anim=0
+                tags={'anim','animClr','animEffect','animMotion','animRot','animScale','set','cmd'}
+                for e in root.iter():
+                    if e.tag.startswith('{%s}' % NS_P) and e.tag.split('}',1)[1] in tags: anim += 1
+                slides.append({'counts':dict(counts),'positions':positions,'texts':texts,'transition':bool(transition),'animations':anim})
+    except Exception:
+        pass
+    return {'slides':slides}
+
 def analyze_excel(path, original_name):
     import openpyxl
     from openpyxl.styles.borders import Border
@@ -141,7 +217,7 @@ def analyze_excel(path, original_name):
         'table_count': table_count, 'pivot_count': pivot_count, 'merged_count': merged_count,
         'conditional_format_count': conditional_count, 'filter_count': filter_count,
         'font_names': dict(font_names), 'font_sizes': dict(font_sizes), 'number_formats': dict(number_formats),
-        'formatting': dict(formatting),
+        'formatting': dict(formatting), 'ooxml': _excel_ooxml_profile(path),
     }
     checks = [
         ('excel_sheets','Počet a názvy listů'), ('excel_headers','Záhlaví tabulky'),
@@ -376,7 +452,7 @@ def analyze_powerpoint(path, original_name):
           'chart_count':stats['charts'],'shape_count':stats['autoshapes'],'textbox_count':stats['textboxes'],
           'bullet_count':stats['bullets'],'font_names':dict(font_names),'font_sizes':dict(font_sizes),
           'alignments':dict(alignments),'animation_count':animation_count,'transition_slide_count':transition_slides,
-          'has_transition':transition_slides>0}
+          'has_transition':transition_slides>0,'ooxml':_ppt_ooxml_profile(path)}
     checks=[('ppt_slides','Počet snímků'),('ppt_titles','Nadpisy snímků'),('ppt_images','Obrázky'),
             ('ppt_tables','Tabulky'),('ppt_charts','Grafy'),('ppt_shapes','Tvary a textová pole'),('ppt_bullets','Odrážky'),
             ('ppt_format','Formátování textu – písmo, velikost a zarovnání'),('ppt_animations','Počet animací'),
@@ -617,13 +693,13 @@ def evaluate(student_path, student_name, teacher, raw_checks):
         elif code=='excel_format':
             ok=_subset_counts(teacher.get('font_names') or {},student.get('font_names') or {}) and _subset_counts(teacher.get('font_sizes') or {},student.get('font_sizes') or {}) and _subset_counts(teacher.get('formatting') or {},student.get('formatting') or {}); label='Formátování buněk'
         elif code=='excel_number_format': ok=_subset_counts(teacher.get('number_formats') or {},student.get('number_formats') or {}); label='Formát čísel'
-        elif code=='excel_merged': ok=int(student.get('merged_count',0))>=int(teacher.get('merged_count',0)); label='Sloučené buňky'
-        elif code=='excel_conditional': ok=int(student.get('conditional_format_count',0))>=int(teacher.get('conditional_format_count',0)); label='Podmíněné formátování'
-        elif code=='excel_filter': ok=int(student.get('filter_count',0))>=int(teacher.get('filter_count',0)); label='Filtr'
-        elif code=='excel_table': ok=int(student.get('table_count',0))>=int(teacher.get('table_count',0)); label='Excelová tabulka'
-        elif code=='excel_chart': ok=int(student.get('chart_count',0))>=int(teacher.get('chart_count',0)); label='Grafy'
+        elif code=='excel_merged': ok=(teacher.get('ooxml',{}).get('merge_refs',{})==student.get('ooxml',{}).get('merge_refs',{})); label='Sloučené buňky'
+        elif code=='excel_conditional': ok=(teacher.get('ooxml',{}).get('conditional_counts',{})==student.get('ooxml',{}).get('conditional_counts',{})); label='Podmíněné formátování'
+        elif code=='excel_filter': ok=(teacher.get('ooxml',{}).get('auto_filters',{})==student.get('ooxml',{}).get('auto_filters',{})); label='Filtr'
+        elif code=='excel_table': ok=(teacher.get('ooxml',{}).get('table_xml_count',0)==student.get('ooxml',{}).get('table_xml_count',0) and teacher.get('ooxml',{}).get('table_part_counts',{})==student.get('ooxml',{}).get('table_part_counts',{})); label='Excelová tabulka'
+        elif code=='excel_chart': ok=int(student.get('ooxml',{}).get('chart_xml_count',0))==int(teacher.get('ooxml',{}).get('chart_xml_count',0)); label='Grafy'
         elif code=='excel_chart_type': ok=_subset_counts(teacher.get('chart_types') or {},student.get('chart_types') or {}); label='Typy grafů'
-        elif code=='excel_pivot': ok=int(student.get('pivot_count',0))>=int(teacher.get('pivot_count',0)); label='Kontingenční tabulka'
+        elif code=='excel_pivot': ok=int(student.get('ooxml',{}).get('pivot_xml_count',0))==int(teacher.get('ooxml',{}).get('pivot_xml_count',0)); label='Kontingenční tabulka'
         elif code=='word_sections': ok=int(student.get('section_count',0))>=int(teacher.get('section_count',0)); label='Počet oddílů'
         elif code=='word_unlinked':
             want=teacher.get('section_specs') or []; have=student.get('section_specs') or []
@@ -647,17 +723,17 @@ def evaluate(student_path, student_name, teacher, raw_checks):
         elif code=='word_pages': ok=bool(student.get('saved_page_count')) and int(student.get('saved_page_count'))>=int(teacher.get('saved_page_count') or 0); label='Počet stran'
         elif code=='word_list_figures': ok=bool(student.get('has_list_of_figures')); label='Seznam obrázků'
         elif code=='word_bibliography': ok=bool(student.get('has_bibliography')); label='Bibliografie'
-        elif code=='ppt_slides': ok=int(student.get('slide_count',0))>=int(teacher.get('slide_count',0)); label='Počet snímků'
-        elif code=='ppt_titles': ok=int(student.get('title_count',0))>=int(teacher.get('title_count',0)); label='Nadpisy snímků'
-        elif code=='ppt_images': ok=int(student.get('image_count',0))>=int(teacher.get('image_count',0)); label='Obrázky'
-        elif code=='ppt_tables': ok=int(student.get('table_count',0))>=int(teacher.get('table_count',0)); label='Tabulky'
-        elif code=='ppt_charts': ok=int(student.get('chart_count',0))>=int(teacher.get('chart_count',0)); label='Grafy'
-        elif code=='ppt_shapes': ok=int(student.get('shape_count',0))+int(student.get('textbox_count',0))>=int(teacher.get('shape_count',0))+int(teacher.get('textbox_count',0)); label='Tvary a textová pole'
-        elif code=='ppt_bullets': ok=int(student.get('bullet_count',0))>=int(teacher.get('bullet_count',0)); label='Odrážky'
+        elif code=='ppt_slides': ok=int(student.get('slide_count',0))==int(teacher.get('slide_count',0)); label='Počet snímků'
+        elif code=='ppt_titles': ok=(student.get('titles') or [])==(teacher.get('titles') or []); label='Nadpisy snímků'
+        elif code=='ppt_images': ok=int(student.get('image_count',0))==int(teacher.get('image_count',0)); label='Obrázky'
+        elif code=='ppt_tables': ok=int(student.get('table_count',0))==int(teacher.get('table_count',0)); label='Tabulky'
+        elif code=='ppt_charts': ok=int(student.get('chart_count',0))==int(teacher.get('chart_count',0)); label='Grafy'
+        elif code=='ppt_shapes': ok=[x.get('counts',{}) for x in student.get('ooxml',{}).get('slides',[])]==[x.get('counts',{}) for x in teacher.get('ooxml',{}).get('slides',[])]; label='Tvary a textová pole'
+        elif code=='ppt_bullets': ok=int(student.get('bullet_count',0))==int(teacher.get('bullet_count',0)); label='Odrážky'
         elif code=='ppt_format': ok=_subset_counts(teacher.get('font_names') or {},student.get('font_names') or {}) and _subset_counts(teacher.get('font_sizes') or {},student.get('font_sizes') or {}); label='Formátování textu'
-        elif code=='ppt_animations': ok=int(student.get('animation_count',0))>=int(teacher.get('animation_count',0)); label='Počet animací'
-        elif code=='ppt_transition': ok=bool(student.get('has_transition')); label='Přechod mezi snímky'
-        elif code=='ppt_transition_count': ok=int(student.get('transition_slide_count',0))>=int(teacher.get('transition_slide_count',0)); label='Počet snímků s přechodem'
+        elif code=='ppt_animations': ok=[x.get('animations',0) for x in student.get('ooxml',{}).get('slides',[])]==[x.get('animations',0) for x in teacher.get('ooxml',{}).get('slides',[])]; label='Počet animací'
+        elif code=='ppt_transition': ok=[x.get('transition',False) for x in student.get('ooxml',{}).get('slides',[])]==[x.get('transition',False) for x in teacher.get('ooxml',{}).get('slides',[])]; label='Přechod mezi snímky'
+        elif code=='ppt_transition_count': ok=int(student.get('transition_slide_count',0))==int(teacher.get('transition_slide_count',0)); label='Počet snímků s přechodem'
         elif code=='py_functionality':
             ok=True
             for tc in teacher.get('python_tests') or []:

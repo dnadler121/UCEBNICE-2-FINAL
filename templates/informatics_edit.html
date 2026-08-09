@@ -36,8 +36,8 @@
     <small>Aktuálně: {{t.source_original}}. Pokud nic nevybereš, zůstane původní soubor.</small>
   </label>
   <label><b>Přesný náhled v okně pro studenta (volitelné)</b>
-    <input type="file" name="preview_file_{{t.id}}" accept=".pdf,.png,.jpg,.jpeg,.webp">
-    <small>Nejlépe PDF exportované přímo z Wordu. Student ho uvidí uvnitř stránky; soubor se mu nenabízí ke stažení.</small>
+    <input type="file" name="preview_file_{{t.id}}" accept=".pdf">
+    <small>Nahraj přesný PDF vzor pro Word, Excel, PowerPoint nebo Python. Student ho uvidí přímo v okně stránky; PDF slouží pouze jako vizuální ukázka.</small>
   </label>
   {% if t.image_file %}<label style="display:flex;gap:8px;align-items:center"><input type="checkbox" name="remove_preview_{{t.id}}" value="1"> Odstranit vlastní náhled</label>{% endif %}
   {% if x.options %}

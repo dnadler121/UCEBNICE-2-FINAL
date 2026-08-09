@@ -13,17 +13,22 @@
 </section>
 {% endif %}
 
-{% if teacher_preview %}
+{% if teacher_preview or task.image_file %}
 <section class="course-card" style="padding:22px">
 <h2>Hotový výsledek – ukázka</h2>
-{% if task.file_type in ['Word','Excel','PowerPoint'] %}
+{% if task.image_file %}
+<p>Takto vypadá učitelův vzor. PDF je pouze vizuální ukázka; hodnocení vychází ze zdrojového souboru a vybraných kontrol.</p>
+<iframe class="informatics-office-preview"
+        src="{{url_for('informatics_teacher_preview_pdf', task_id=task.id)}}#toolbar=0&navpanes=0"
+        title="Vizuální náhled vzorového souboru"></iframe>
+{% elif task.file_type in ['Word','Excel','PowerPoint'] %}
 <p>Takto vypadá učitelův vzor. Náhled slouží jako vizuální ukázka; hodnotí se pouze kontroly vybrané učitelem.</p>
 <iframe class="informatics-office-preview"
         src="{{url_for('informatics_teacher_preview_pdf', task_id=task.id)}}#toolbar=0&navpanes=0"
         title="Vizuální náhled vzorového souboru"></iframe>
-{% elif teacher_preview.kind=='code' %}
+{% elif teacher_preview and teacher_preview.kind=='code' %}
 <pre style="white-space:pre-wrap;overflow:auto;background:#f5f7fa;padding:16px;border-radius:12px">{{teacher_preview.text}}</pre>
-{% else %}
+{% elif teacher_preview %}
 <div style="white-space:pre-line;background:#f8fafc;padding:16px;border-radius:12px">{{teacher_preview.text}}</div>
 {% endif %}
 </section>
