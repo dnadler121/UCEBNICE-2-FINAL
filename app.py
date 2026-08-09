@@ -2152,6 +2152,81 @@ def review_informatics_lesson():
     return render_template('informatics_review.html', course=course_from_lesson(None), lesson=None, data=data)
 
 
+
+@app.route('/teacher/informatics/<int:lesson_id>/edit', methods=['GET','POST'])
+def edit_informatics_lesson(lesson_id):
+    r = require_teacher()
+    if r: return r
+    item = db.session.get(InformaticsLesson, lesson_id)
+    if not item:
+        flash('Informatická lekce nebyla nalezena.')
+        return redirect(url_for('teacher_home'))
+
+    tasks = InformaticsTask.query.filter_by(lesson_id=item.id).order_by(InformaticsTask.order).all()
+
+    if request.method == 'POST':
+        item.school = request.form.get('school','').strip()
+        item.grade_name = request.form.get('grade_name','').strip()
+        item.topic = request.form.get('topic','').strip()
+        item.title = request.form.get('title','').strip()
+        item.intro = request.form.get('intro','').strip()
+        if not all((item.school, item.grade_name, item.topic, item.title)):
+            flash('Vyplň školu/třídu, ročník, téma a název lekce.')
+            return redirect(url_for('edit_informatics_lesson', lesson_id=item.id))
+
+        html_file = request.files.get('lesson_html')
+        if html_file and html_file.filename:
+            if Path(html_file.filename).suffix.lower() not in ('.html','.htm'):
+                flash('Společný výklad musí být HTML soubor.')
+                return redirect(url_for('edit_informatics_lesson', lesson_id=item.id))
+            item.html_original = html_file.filename
+            item.html_stored = _save_uploaded_file(html_file, INFORMATICS_SOURCE_DIR, 'lesson_html')
+
+        allowed={'.xlsx','.xlsm','.docx','.pptx','.py'}
+        for task in tasks:
+            task.title = request.form.get(f'task_title_{task.id}', task.title).strip() or task.title
+            task.assignment = request.form.get(f'assignment_{task.id}', task.assignment).strip()
+
+            # Otázky a nápovědy lze upravovat bez ztráty vybraných kontrol.
+            checks=_safe_json(task.checks_json, [])
+            edited=[]
+            for j,ch in enumerate(checks):
+                code=ch.get('code','')
+                q=request.form.get(f'question_{task.id}_{j}', ch.get('question','')).strip()
+                hint=request.form.get(f'hint_{task.id}_{j}', ch.get('hint','')).strip()
+                edited.append({'code':code,'question':q,'hint':hint})
+            task.checks_json=json.dumps(edited, ensure_ascii=False)
+
+            replacement=request.files.get(f'source_file_{task.id}')
+            if replacement and replacement.filename:
+                ext=Path(replacement.filename).suffix.lower()
+                if ext not in allowed:
+                    flash(f'{replacement.filename}: podporovaný je Excel, Word, PowerPoint nebo Python.')
+                    return redirect(url_for('edit_informatics_lesson', lesson_id=item.id))
+                stored=_save_uploaded_file(replacement, INFORMATICS_SOURCE_DIR, 'teacher')
+                analysis, suggested=analyze_informatics_file(INFORMATICS_SOURCE_DIR/stored, replacement.filename)
+                task.source_original=replacement.filename
+                task.source_stored=stored
+                task.file_type=analysis.get('type','')
+                task.analysis_json=json.dumps(analysis, ensure_ascii=False)
+                # Smažeme starý vygenerovaný PDF náhled, aby se po změně souboru nepoužil cache.
+                try:
+                    cached=INFORMATICS_SOURCE_DIR/'_visual_previews'/f'task_{task.id}.pdf'
+                    if cached.exists(): cached.unlink()
+                except Exception:
+                    pass
+
+        db.session.commit()
+        flash('Informatická lekce byla upravena.')
+        return redirect(url_for('teacher_home'))
+
+    task_data=[]
+    for task in tasks:
+        task_data.append({'task':task,'checks':_safe_json(task.checks_json, [])})
+    return render_template('informatics_edit.html', item=item, task_data=task_data,
+                           course=course_from_lesson(None), lesson=None)
+
+
 @app.route('/teacher/informatics/<int:lesson_id>/delete', methods=['POST'])
 def delete_informatics_lesson(lesson_id):
     r = require_teacher()
@@ -2216,35 +2291,90 @@ def informatics_lesson(lesson_id):
 
 
 def _office_visual_html_fallback(source, ext, title='Vzorový soubor'):
-    # HTML náhled Office souboru bez závislosti na systémovém LibreOffice.
+    """Vizuální Office náhled bez systémového LibreOffice."""
     esc = html.escape
-    shell_head = f'''<!doctype html><html lang="cs"><head><meta charset="utf-8">
+    shell_head = '''<!doctype html><html lang="cs"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>{esc(title)}</title><style>
-*{{box-sizing:border-box}} body{{margin:0;background:#e9edf2;color:#111827;font-family:Arial,Segoe UI,sans-serif;padding:28px}}
-.page{{width:min(794px,100%);min-height:1040px;margin:0 auto 24px;background:#fff;padding:76px 74px;box-shadow:0 8px 30px rgba(15,23,42,.18)}}
-.page p{{margin:0 0 10px;line-height:1.35;white-space:pre-wrap;overflow-wrap:anywhere}}
-table{{border-collapse:collapse;width:100%;margin:12px 0}} td,th{{border:1px solid #cbd5e1;padding:7px;vertical-align:top}}
-.doc-image{{display:block;max-width:100%;height:auto;margin:12px auto}}
-.sheet{{max-width:1200px;margin:auto;background:#fff;padding:20px;box-shadow:0 8px 30px rgba(15,23,42,.18);overflow:auto}}
-.slide{{position:relative;width:min(960px,100%);aspect-ratio:16/9;margin:0 auto 24px;background:#fff;box-shadow:0 8px 30px rgba(15,23,42,.18);padding:48px;overflow:hidden}}
-.slide-num{{position:absolute;right:12px;bottom:8px;color:#64748b;font-size:12px}}
-</style></head><body>'''
+<title>__TITLE__</title><style>
+*{box-sizing:border-box} body{margin:0;background:#e9edf2;color:#111827;font-family:Arial,Segoe UI,sans-serif;padding:28px}
+.word-page{position:relative;width:min(794px,100%);height:1123px;margin:0 auto 24px;background:#fff;box-shadow:0 8px 30px rgba(15,23,42,.18);overflow:hidden}
+.word-page-inner{height:100%;display:flex;flex-direction:column}.word-content{width:100%}
+.word-page.vcenter .word-page-inner{justify-content:center}.word-page.vbottom .word-page-inner{justify-content:flex-end}
+.word-page p{line-height:1.35;white-space:pre-wrap;overflow-wrap:anywhere}
+.word-page table{border-collapse:collapse;width:100%;margin:12px 0}.word-page td,.word-page th{border:1px solid #cbd5e1;padding:7px;vertical-align:top}
+.doc-image{display:block;max-width:100%;height:auto;margin:10px auto}
+.sheet{max-width:1200px;margin:auto;background:#fff;padding:20px;box-shadow:0 8px 30px rgba(15,23,42,.18);overflow:auto}
+.slide{position:relative;width:min(960px,100%);aspect-ratio:16/9;margin:0 auto 24px;background:#fff;box-shadow:0 8px 30px rgba(15,23,42,.18);padding:48px;overflow:hidden}
+.slide-num{position:absolute;right:12px;bottom:8px;color:#64748b;font-size:12px}
+@media(max-width:840px){body{padding:10px}.word-page{height:auto;min-height:calc((100vw - 20px)*1.414)}}
+</style></head><body>'''.replace('__TITLE__', esc(title))
     end='</body></html>'
     try:
         if ext == '.docx':
             from docx import Document
             from docx.enum.text import WD_ALIGN_PARAGRAPH
-            import zipfile as _zipfile, base64 as _base64, mimetypes as _mimetypes
-            doc=Document(source)
-            parts=[]
-            for par in doc.paragraphs:
+            from docx.oxml.ns import qn
+            import base64 as _base64
+            doc = Document(source)
+
+            def twips_to_px(v, default=0):
+                try: return max(0, round(int(v) / 15))
+                except Exception: return default
+
+            def sect_layout(sectPr):
+                top = right = bottom = left = 95
+                valign = 'top'
+                if sectPr is not None:
+                    pgmar = sectPr.find(qn('w:pgMar'))
+                    if pgmar is not None:
+                        top = twips_to_px(pgmar.get(qn('w:top')), top)
+                        right = twips_to_px(pgmar.get(qn('w:right')), right)
+                        bottom = twips_to_px(pgmar.get(qn('w:bottom')), bottom)
+                        left = twips_to_px(pgmar.get(qn('w:left')), left)
+                    va = sectPr.find(qn('w:vAlign'))
+                    if va is not None:
+                        valign = (va.get(qn('w:val')) or 'top').lower()
+                return top,right,bottom,left,valign
+
+            def image_html_from_paragraph(par):
+                imgs=[]
+                try:
+                    for blip in par._p.xpath('.//a:blip'):
+                        rid = blip.get(qn('r:embed'))
+                        if not rid or rid not in doc.part.rels: continue
+                        part = doc.part.rels[rid].target_part
+                        b64 = _base64.b64encode(part.blob).decode('ascii')
+                        mime = getattr(part,'content_type',None) or 'image/png'
+                        width_style=''
+                        for inline in par._p.xpath('.//wp:inline'):
+                            extent = inline.find(qn('wp:extent'))
+                            if extent is not None and extent.get('cx'):
+                                width=max(1, round(int(extent.get('cx')) / 9525))
+                                width_style=f'width:{width}px;'
+                                break
+                        imgs.append(f'<img class="doc-image" style="{width_style}" src="data:{mime};base64,{b64}" alt="Obrázek z dokumentu">')
+                except Exception:
+                    pass
+                return ''.join(imgs)
+
+            def paragraph_html(par):
                 align={WD_ALIGN_PARAGRAPH.CENTER:'center',WD_ALIGN_PARAGRAPH.RIGHT:'right',WD_ALIGN_PARAGRAPH.JUSTIFY:'justify'}.get(par.alignment,'left')
+                pf=par.paragraph_format
+                pst=[f'text-align:{align}', 'margin-top:0', 'margin-bottom:10px']
+                if pf.space_before: pst.append(f'margin-top:{max(0,pf.space_before.pt):.1f}pt')
+                if pf.space_after: pst.append(f'margin-bottom:{max(0,pf.space_after.pt):.1f}pt')
+                if pf.left_indent: pst.append(f'margin-left:{pf.left_indent.pt:.1f}pt')
+                if pf.right_indent: pst.append(f'margin-right:{pf.right_indent.pt:.1f}pt')
+                if pf.first_line_indent: pst.append(f'text-indent:{pf.first_line_indent.pt:.1f}pt')
+                nm=(par.style.name.lower() if par.style and par.style.name else '')
+                if 'title' in nm: pst += ['font-size:24pt','font-weight:700','margin-bottom:18px']
+                elif 'heading 1' in nm: pst += ['font-size:18pt','font-weight:700','margin-top:18px']
+                elif 'heading 2' in nm: pst += ['font-size:15pt','font-weight:700','margin-top:15px']
+                elif 'caption' in nm: pst += ['font-size:9pt','font-style:italic','text-align:center']
                 runs=[]
                 for run in par.runs:
                     txt=esc(run.text)
-                    if not txt:
-                        continue
+                    if not txt: continue
                     st=[]
                     if run.bold: st.append('font-weight:700')
                     if run.italic: st.append('font-style:italic')
@@ -2254,40 +2384,53 @@ table{{border-collapse:collapse;width:100%;margin:12px 0}} td,th{{border:1px sol
                     color=getattr(getattr(run.font,'color',None),'rgb',None)
                     if color: st.append('color:#'+str(color))
                     runs.append('<span style="'+esc(';'.join(st),quote=True)+'">'+txt+'</span>')
-                if not runs and not par.text:
-                    runs=['&nbsp;']
-                style=f'text-align:{align};'
-                if par.style and par.style.name:
-                    nm=par.style.name.lower()
-                    if 'title' in nm: style+='font-size:24pt;font-weight:700;margin-bottom:18px;'
-                    elif 'heading 1' in nm: style+='font-size:18pt;font-weight:700;margin-top:18px;'
-                    elif 'heading 2' in nm: style+='font-size:15pt;font-weight:700;margin-top:15px;'
-                parts.append('<p style="'+style+'">'+''.join(runs)+'</p>')
-            for tbl in doc.tables:
+                body=''.join(runs) if runs else ('&nbsp;' if not par.text else esc(par.text))
+                return '<p style="'+esc(';'.join(pst),quote=True)+'">'+body+'</p>'+image_html_from_paragraph(par)
+
+            def table_html(tbl):
                 rows=[]
                 for row in tbl.rows:
                     cells=''.join('<td>'+esc(cell.text).replace('\\n','<br>')+'</td>' for cell in row.cells)
                     rows.append('<tr>'+cells+'</tr>')
-                parts.append('<table>'+''.join(rows)+'</table>')
-            try:
-                with _zipfile.ZipFile(source) as z:
-                    media=[n for n in z.namelist() if n.startswith('word/media/')]
-                    for name in media:
-                        data=z.read(name)
-                        mime=_mimetypes.guess_type(name)[0] or 'image/png'
-                        b64=_base64.b64encode(data).decode('ascii')
-                        parts.append(f'<img class="doc-image" src="data:{mime};base64,{b64}" alt="Obrázek z dokumentu">')
-            except Exception:
-                pass
-            return shell_head+'<div class="page">'+''.join(parts)+'</div>'+end
+                return '<table>'+''.join(rows)+'</table>'
+
+            pages=[]; current=[]
+            body=doc._element.body
+            final_sect=body.sectPr
+            def finish_page(sectPr=None):
+                nonlocal current
+                if not current: return
+                top,right,bottom,left,valign=sect_layout(sectPr if sectPr is not None else final_sect)
+                cls='word-page'
+                if valign=='center': cls+=' vcenter'
+                elif valign in ('bottom','both'): cls+=' vbottom'
+                inner=f'<div class="word-page-inner" style="padding:{top}px {right}px {bottom}px {left}px"><div class="word-content">'+''.join(current)+'</div></div>'
+                pages.append(f'<section class="{cls}">{inner}</section>')
+                current=[]
+
+            from docx.text.paragraph import Paragraph
+            from docx.table import Table
+            for child in body.iterchildren():
+                if child.tag == qn('w:p'):
+                    par=Paragraph(child, doc._body)
+                    current.append(paragraph_html(par))
+                    ppr=child.find(qn('w:pPr'))
+                    sect=ppr.find(qn('w:sectPr')) if ppr is not None else None
+                    if sect is not None:
+                        finish_page(sect)
+                    elif child.xpath('.//w:br[@w:type="page"]'):
+                        finish_page(final_sect)
+                elif child.tag == qn('w:tbl'):
+                    current.append(table_html(Table(child, doc._body)))
+            finish_page(final_sect)
+            return shell_head+''.join(pages)+end
 
         if ext in ('.xlsx','.xlsm'):
             import openpyxl
             wb=openpyxl.load_workbook(source,data_only=False)
             sections=[]
             for ws in wb.worksheets:
-                if ws.title=='__UCEBNICE_ID__':
-                    continue
+                if ws.title=='__UCEBNICE_ID__': continue
                 maxr=min(ws.max_row or 1,80); maxc=min(ws.max_column or 1,24)
                 trs=[]
                 for row in ws.iter_rows(min_row=1,max_row=maxr,max_col=maxc):
@@ -2298,7 +2441,7 @@ table{{border-collapse:collapse;width:100%;margin:12px 0}} td,th{{border:1px sol
                         if c.font and c.font.bold: sty.append('font-weight:700')
                         if c.alignment and c.alignment.horizontal: sty.append('text-align:'+c.alignment.horizontal)
                         if c.fill and getattr(c.fill,'fgColor',None) and c.fill.fgColor.type=='rgb' and c.fill.fgColor.rgb:
-                            rgb=str(c.fill.fgColor.rgb)[-6:]; sty.append('background:#'+rgb)
+                            sty.append('background:#'+str(c.fill.fgColor.rgb)[-6:])
                         tds.append('<td style="'+esc(';'.join(sty),quote=True)+'">'+val+'</td>')
                     trs.append('<tr>'+''.join(tds)+'</tr>')
                 sections.append('<h2>'+esc(ws.title)+'</h2><table>'+''.join(trs)+'</table>')
@@ -2306,18 +2449,16 @@ table{{border-collapse:collapse;width:100%;margin:12px 0}} td,th{{border:1px sol
 
         if ext == '.pptx':
             from pptx import Presentation
-            prs=Presentation(source)
-            slides=[]
+            prs=Presentation(source); slides=[]
             for i,slide in enumerate(prs.slides,1):
                 texts=[]
                 for sh in slide.shapes:
-                    if hasattr(sh,'text') and sh.text.strip():
-                        texts.append('<div style="margin:8px 0;white-space:pre-wrap">'+esc(sh.text)+'</div>')
+                    if hasattr(sh,'text') and sh.text.strip(): texts.append('<div style="margin:8px 0;white-space:pre-wrap">'+esc(sh.text)+'</div>')
                 slides.append('<div class="slide">'+''.join(texts)+f'<span class="slide-num">Snímek {i}</span></div>')
             return shell_head+''.join(slides)+end
     except Exception as exc:
-        return shell_head+'<div class="page"><h2>Náhled souboru</h2><p>'+esc(str(exc))+'</p></div>'+end
-    return shell_head+'<div class="page"><p>Náhled tohoto souboru není dostupný.</p></div>'+end
+        return shell_head+'<div class="word-page"><div class="word-page-inner" style="padding:95px"><div class="word-content"><h2>Náhled souboru</h2><p>'+esc(str(exc))+'</p></div></div></div>'+end
+    return shell_head+'<div class="word-page"><div class="word-page-inner" style="padding:95px"><div class="word-content"><p>Náhled tohoto souboru není dostupný.</p></div></div></div>'+end
 
 @app.route('/informatics-task/<int:task_id>/teacher-preview.pdf')
 def informatics_teacher_preview_pdf(task_id):

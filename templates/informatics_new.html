@@ -36,9 +36,12 @@
 <section class="course-card" style="padding:22px;margin-top:18px">
 <h2>Existující informatické lekce</h2>
 {% for l in lessons %}
+<div class="teacher-lesson-row">
 <a class="lesson-row big" href="{{url_for('informatics_lesson',lesson_id=l.id)}}">
 <b>{{l.title}}</b><small>{{l.school}} · {{l.grade_name}} · {{l.topic}}</small>
 </a>
+<div class="row-actions"><a class="toplink" href="{{url_for('edit_informatics_lesson',lesson_id=l.id)}}">✏️ Upravit</a></div>
+</div>
 {% endfor %}
 </section>
 {% endif %}

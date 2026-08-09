@@ -91,6 +91,7 @@
             💻 <b>{{l.title}}</b><small>{{l.school}} · {{l.grade_name}} · {{l.topic}}</small>
           </a>
           <div class="row-actions">
+            <a class="toplink" href="{{url_for('edit_informatics_lesson',lesson_id=l.id)}}">✏️ Upravit</a>
             <form method="post" action="{{url_for('delete_informatics_lesson',lesson_id=l.id)}}" onsubmit="return confirm('Smazat informatickou lekci {{l.title}}?');">
               <button class="link-button danger" type="submit">🗑️ Smazat</button>
             </form>
