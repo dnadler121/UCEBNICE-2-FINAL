@@ -2003,6 +2003,18 @@ def generated_assignment(info):
 def check_hint(code):
     return _inf2_check_hint(code)
 
+# České názvy kontrol v učitelském rozhraní. Technické kódy student ani učitel vidět nemusí.
+INFORMATICS_CHECK_LABELS = {
+    'word_sections':'Počet oddílů', 'word_unlinked':'Vypnuté „Propojit s předchozím“',
+    'word_page_numbering':'Číslování stránek', 'word_alignment':'Vodorovné a svislé zarovnání',
+    'word_images':'Vložené obrázky', 'word_image_size':'Velikost obrázků', 'word_image_center':'Obrázky zarovnané na střed',
+    'word_title_first':'Titul / nadpis na první stránce', 'word_toc':'Automatický obsah',
+    'word_heading_styles':'Styly nadpisů', 'word_heading_numbering':'Číslování nadpisů',
+    'word_captions':'Titulky obrázků', 'word_citations':'Vložené citace', 'word_sources':'Vložené zdroje citací',
+    'word_pages':'Počet stran', 'word_list_figures':'Seznam obrázků', 'word_bibliography':'Závěrečná bibliografie / seznam literatury',
+}
+WORD_CHECK_CODES = list(INFORMATICS_CHECK_LABELS)
+
 def evaluate_informatics_file(student_path, student_name, task):
     teacher = _safe_json(task.analysis_json, {})
     raw_checks = _safe_json(task.checks_json, [])
@@ -2187,13 +2199,18 @@ def edit_informatics_lesson(lesson_id):
             task.title = request.form.get(f'task_title_{task.id}', task.title).strip() or task.title
             task.assignment = request.form.get(f'assignment_{task.id}', task.assignment).strip()
 
-            # Otázky a nápovědy lze upravovat bez ztráty vybraných kontrol.
-            checks=_safe_json(task.checks_json, [])
+            # Učitel může při editaci kontroly nejen přepsat, ale také přidat/odebrat.
+            old_checks={ch.get('code',''):ch for ch in _safe_json(task.checks_json, []) if ch.get('code')}
+            selected_codes=request.form.getlist(f'checks_{task.id}')
             edited=[]
-            for j,ch in enumerate(checks):
-                code=ch.get('code','')
-                q=request.form.get(f'question_{task.id}_{j}', ch.get('question','')).strip()
-                hint=request.form.get(f'hint_{task.id}_{j}', ch.get('hint','')).strip()
+            for code in selected_codes:
+                old=old_checks.get(code,{})
+                q=request.form.get(f'question_{task.id}_{code}', old.get('question','')).strip()
+                hint=request.form.get(f'hint_{task.id}_{code}', old.get('hint','')).strip()
+                if not q:
+                    q='Splň požadavek: '+INFORMATICS_CHECK_LABELS.get(code, code)+'.'
+                if not hint:
+                    hint=check_hint(code)
                 edited.append({'code':code,'question':q,'hint':hint})
             task.checks_json=json.dumps(edited, ensure_ascii=False)
 
@@ -2222,7 +2239,26 @@ def edit_informatics_lesson(lesson_id):
 
     task_data=[]
     for task in tasks:
-        task_data.append({'task':task,'checks':_safe_json(task.checks_json, [])})
+        current=_safe_json(task.checks_json, [])
+        current_map={ch.get('code',''):ch for ch in current if ch.get('code')}
+        analysis=_safe_json(task.analysis_json,{})
+        options=[]
+        if str(task.file_type or analysis.get('type','')).lower() == 'word':
+            # U Wordu zobrazíme všechny podporované kontroly. Učitel tak může doplnit i obsah,
+            # citace, zdroje a bibliografii, i když je starší analyzátor při prvním importu nenavrhl.
+            codes=WORD_CHECK_CODES
+        else:
+            source=INFORMATICS_SOURCE_DIR/task.source_stored
+            try:
+                _, suggested=analyze_informatics_file(source, task.source_original) if source.exists() else ({},[])
+                codes=list(dict.fromkeys([c.get('code') for c in suggested if c.get('code')] + list(current_map)))
+            except Exception:
+                codes=list(current_map)
+        for code in codes:
+            ch=current_map.get(code,{})
+            options.append({'code':code,'label':INFORMATICS_CHECK_LABELS.get(code, code),
+                            'selected':code in current_map,'question':ch.get('question',''),'hint':ch.get('hint',check_hint(code))})
+        task_data.append({'task':task,'checks':current,'options':options})
     return render_template('informatics_edit.html', item=item, task_data=task_data,
                            course=course_from_lesson(None), lesson=None)
 

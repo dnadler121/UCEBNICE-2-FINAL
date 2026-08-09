@@ -217,12 +217,23 @@ def analyze_word(path, original_name):
         root = _xml(z,'word/document.xml')
         fields=[]
         if root is not None:
+            # Word může kód pole rozdělit do několika instrText uzlů; fldSimple ho má v atributu instr.
+            instr_parts=[]
             for instr in root.findall('.//{%s}instrText' % NS_W):
-                if instr.text: fields.append(instr.text.strip())
+                if instr.text:
+                    instr_parts.append(instr.text)
+                    fields.append(instr.text.strip())
+            for fld in root.findall('.//{%s}fldSimple' % NS_W):
+                val=_attr(fld,NS_W,'instr','')
+                if val: fields.append(val.strip())
+            if instr_parts:
+                fields.append(''.join(instr_parts).strip())
         field_text=' '.join(fields).upper()
-        info['has_toc'] = bool(re.search(r'\bTOC\b', field_text))
-        info['has_bibliography'] = 'BIBLIOGRAPHY' in field_text
-        info['citation_field_count'] = sum(1 for f in fields if 'CITATION ' in f.upper())
+        # Automatický obsah může být uložen jako pole TOC nebo jako content-control galerie Table of Contents.
+        toc_gallery = bool(re.search(r'(TABLE OF CONTENTS|OBSAH)', document_xml, flags=re.I)) and ('docPartGallery' in document_xml)
+        info['has_toc'] = bool(re.search(r'\bTOC\b', field_text)) or toc_gallery
+        info['has_bibliography'] = 'BIBLIOGRAPHY' in field_text or bool(re.search(r'BIBLIOGRAF', document_xml, flags=re.I))
+        info['citation_field_count'] = len(re.findall(r'\bCITATION\b', field_text))
         info['has_list_of_figures'] = any(('TOC' in f.upper() and ('\\C' in f.upper() or '\\A' in f.upper())) for f in fields)
         info['page_break_count'] = document_xml.count('w:type="page"') + document_xml.count("w:type='page'")
         # Numbered headings: numPr inside paragraphs using heading style.
@@ -259,7 +270,7 @@ def analyze_word(path, original_name):
             if n.startswith('customXml/') and n.endswith('.xml'):
                 try:
                     txt=z.read(n).decode('utf-8','replace')
-                    source_count += len(re.findall(r'<b:Source\b',txt))
+                    source_count += len(re.findall(r'<(?:[A-Za-z0-9_]+:)?Source\b',txt))
                 except Exception: pass
         info['bibliography_source_count']=source_count
 
@@ -271,7 +282,7 @@ def analyze_word(path, original_name):
         ('word_title_first','Nadpis / titul na první stránce'), ('word_toc','Automatický obsah'),
         ('word_heading_styles','Použité styly nadpisů'), ('word_heading_numbering','Číslování nadpisů'),
         ('word_captions','Titulky pod obrázky a jejich zarovnání'), ('word_citations','Vložené citace'),
-        ('word_pages','Počet stran dokumentu'), ('word_list_figures','Seznam obrázků'),
+        ('word_sources','Vložené zdroje citací'), ('word_pages','Počet stran dokumentu'), ('word_list_figures','Seznam obrázků'),
         ('word_bibliography','Seznam citací / bibliografie'),
     ]
     pred={
@@ -280,11 +291,14 @@ def analyze_word(path, original_name):
         'word_images':info['image_count']>0, 'word_image_size':info['image_count']>0, 'word_image_center':info['image_count']>0,
         'word_title_first':True, 'word_toc':info['has_toc'], 'word_heading_styles':bool(info['heading_styles']),
         'word_heading_numbering':info['numbered_heading_count']>0, 'word_captions':info['caption_count']>0,
-        'word_citations':info['citation_field_count']>0 or info['bibliography_source_count']>0,
+        'word_citations':info['citation_field_count']>0, 'word_sources':info['bibliography_source_count']>0,
         'word_pages':bool(info['saved_page_count']), 'word_list_figures':info['has_list_of_figures'],
         'word_bibliography':info['has_bibliography'] or info['bibliography_source_count']>0,
     }
-    return info,[{'code':c,'label':l} for c,l in checks if pred.get(c,False)]
+    # U Wordu zobrazujeme učiteli všechny podporované kontroly. Automatická detekce
+    # pouze určuje, co je ve vzoru nalezené; učitel ale musí mít možnost zvolit i
+    # obsah, citace, zdroje nebo bibliografii, i když Word daný prvek uloží jiným způsobem.
+    return info,[{'code':c,'label':l,'detected':bool(pred.get(c,False))} for c,l in checks]
 
 
 def _ppt_shape_stats(prs):
@@ -519,7 +533,8 @@ HINTS={
 'word_images':'Zkontroluj počet obrázků.','word_image_size':'Zkontroluj rozměry obrázků.','word_image_center':'Zarovnej odstavce s obrázky na střed.',
 'word_title_first':'Zkontroluj nadpis/titul na začátku dokumentu.','word_toc':'Vlož automatický obsah pomocí funkce Wordu.',
 'word_heading_styles':'Použij skutečné styly Nadpis 1, Nadpis 2 atd.','word_heading_numbering':'Nadpisy očísluj pomocí víceúrovňového seznamu.',
-'word_captions':'Použij titulky obrázků a zarovnej je na střed.','word_citations':'Citace vlož funkcí Citace ve Wordu.',
+'word_captions':'Použij titulky obrázků a zarovnej je na střed.','word_citations':'Citace vlož pomocí nástroje Citace ve Wordu.',
+'word_sources':'Zkontroluj, že jsou zdroje vložené přes Správce pramenů / Citace ve Wordu.',
 'word_pages':'Zkontroluj požadovaný rozsah dokumentu.','word_list_figures':'Vlož automatický seznam obrázků.','word_bibliography':'Vlož seznam citací/bibliografii.',
 'ppt_slides':'Zkontroluj počet snímků.','ppt_titles':'Zkontroluj nadpisy snímků.','ppt_images':'Zkontroluj obrázky.',
 'ppt_tables':'Zkontroluj tabulky.','ppt_charts':'Zkontroluj grafy.','ppt_shapes':'Zkontroluj tvary a textová pole.','ppt_bullets':'Zkontroluj odrážky.',
@@ -598,7 +613,10 @@ def evaluate(student_path, student_name, teacher, raw_checks):
         elif code=='word_heading_styles': ok=set((teacher.get('heading_styles') or {}).keys()).issubset(set((student.get('heading_styles') or {}).keys())); label='Styly nadpisů'
         elif code=='word_heading_numbering': ok=int(student.get('numbered_heading_count',0))>=int(teacher.get('numbered_heading_count',0)); label='Číslování nadpisů'
         elif code=='word_captions': ok=int(student.get('caption_count',0))>=int(teacher.get('caption_count',0)) and int(student.get('centered_caption_count',0))>=int(teacher.get('centered_caption_count',0)); label='Titulky obrázků'
-        elif code=='word_citations': ok=int(student.get('citation_field_count',0))+int(student.get('bibliography_source_count',0))>=int(teacher.get('citation_field_count',0))+int(teacher.get('bibliography_source_count',0)); label='Citace'
+        elif code=='word_citations':
+            want=max(1,int(teacher.get('citation_field_count',0) or 0)); ok=int(student.get('citation_field_count',0) or 0)>=want; label='Vložené citace'
+        elif code=='word_sources':
+            want=max(1,int(teacher.get('bibliography_source_count',0) or 0)); ok=int(student.get('bibliography_source_count',0) or 0)>=want; label='Vložené zdroje citací'
         elif code=='word_pages': ok=bool(student.get('saved_page_count')) and int(student.get('saved_page_count'))>=int(teacher.get('saved_page_count') or 0); label='Počet stran'
         elif code=='word_list_figures': ok=bool(student.get('has_list_of_figures')); label='Seznam obrázků'
         elif code=='word_bibliography': ok=bool(student.get('has_bibliography') or student.get('bibliography_source_count')); label='Seznam citací'

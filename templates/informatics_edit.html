@@ -35,13 +35,17 @@
     <input type="file" name="source_file_{{t.id}}" accept=".xlsx,.xlsm,.docx,.pptx,.py">
     <small>Aktuálně: {{t.source_original}}. Pokud nic nevybereš, zůstane původní soubor.</small>
   </label>
-  {% if x.checks %}
-  <h4>Kontroly, otázky a nápovědy</h4>
-  {% for ch in x.checks %}
+  {% if x.options %}
+  <h4>Kontroly, úkoly a nápovědy</h4>
+  <p style="margin-top:-4px;color:#52606d">Zaškrtni, co se má u studenta skutečně hodnotit. Názvy jsou zobrazené česky; technické kódy jsou skryté.</p>
+  {% for ch in x.options %}
   <div style="padding:14px;border:1px solid #dbe5df;border-radius:12px;margin:10px 0;background:#fbfdfc">
-    <div style="font-weight:700;margin-bottom:8px">{{ch.code}}</div>
-    <label><b>Co student musí splnit</b><input name="question_{{t.id}}_{{loop.index0}}" value="{{ch.question}}"></label>
-    <label><b>Nápověda při chybě</b><textarea name="hint_{{t.id}}_{{loop.index0}}" rows="2">{{ch.hint}}</textarea></label>
+    <label style="display:flex;gap:10px;align-items:center;font-weight:700;margin-bottom:10px">
+      <input type="checkbox" name="checks_{{t.id}}" value="{{ch.code}}" {% if ch.selected %}checked{% endif %}>
+      {{ch.label}}
+    </label>
+    <label><b>Co student musí splnit</b><input name="question_{{t.id}}_{{ch.code}}" value="{{ch.question}}" placeholder="Napiš požadavek pro studenta"></label>
+    <label><b>Nápověda při chybě</b><textarea name="hint_{{t.id}}_{{ch.code}}" rows="2">{{ch.hint}}</textarea></label>
   </div>
   {% endfor %}
   {% endif %}
