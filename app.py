@@ -2214,6 +2214,111 @@ def informatics_lesson(lesson_id):
     return render_template('informatics_lesson.html', course=course, lesson=lesson_obj, item=item, states=states, html_content=html_content)
 
 
+
+def _office_visual_html_fallback(source, ext, title='Vzorový soubor'):
+    # HTML náhled Office souboru bez závislosti na systémovém LibreOffice.
+    esc = html.escape
+    shell_head = f'''<!doctype html><html lang="cs"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>{esc(title)}</title><style>
+*{{box-sizing:border-box}} body{{margin:0;background:#e9edf2;color:#111827;font-family:Arial,Segoe UI,sans-serif;padding:28px}}
+.page{{width:min(794px,100%);min-height:1040px;margin:0 auto 24px;background:#fff;padding:76px 74px;box-shadow:0 8px 30px rgba(15,23,42,.18)}}
+.page p{{margin:0 0 10px;line-height:1.35;white-space:pre-wrap;overflow-wrap:anywhere}}
+table{{border-collapse:collapse;width:100%;margin:12px 0}} td,th{{border:1px solid #cbd5e1;padding:7px;vertical-align:top}}
+.doc-image{{display:block;max-width:100%;height:auto;margin:12px auto}}
+.sheet{{max-width:1200px;margin:auto;background:#fff;padding:20px;box-shadow:0 8px 30px rgba(15,23,42,.18);overflow:auto}}
+.slide{{position:relative;width:min(960px,100%);aspect-ratio:16/9;margin:0 auto 24px;background:#fff;box-shadow:0 8px 30px rgba(15,23,42,.18);padding:48px;overflow:hidden}}
+.slide-num{{position:absolute;right:12px;bottom:8px;color:#64748b;font-size:12px}}
+</style></head><body>'''
+    end='</body></html>'
+    try:
+        if ext == '.docx':
+            from docx import Document
+            from docx.enum.text import WD_ALIGN_PARAGRAPH
+            import zipfile as _zipfile, base64 as _base64, mimetypes as _mimetypes
+            doc=Document(source)
+            parts=[]
+            for par in doc.paragraphs:
+                align={WD_ALIGN_PARAGRAPH.CENTER:'center',WD_ALIGN_PARAGRAPH.RIGHT:'right',WD_ALIGN_PARAGRAPH.JUSTIFY:'justify'}.get(par.alignment,'left')
+                runs=[]
+                for run in par.runs:
+                    txt=esc(run.text)
+                    if not txt:
+                        continue
+                    st=[]
+                    if run.bold: st.append('font-weight:700')
+                    if run.italic: st.append('font-style:italic')
+                    if run.underline: st.append('text-decoration:underline')
+                    if run.font.size: st.append(f'font-size:{run.font.size.pt:.1f}pt')
+                    if run.font.name: st.append('font-family:'+esc(run.font.name)+',Arial,sans-serif')
+                    color=getattr(getattr(run.font,'color',None),'rgb',None)
+                    if color: st.append('color:#'+str(color))
+                    runs.append('<span style="'+esc(';'.join(st),quote=True)+'">'+txt+'</span>')
+                if not runs and not par.text:
+                    runs=['&nbsp;']
+                style=f'text-align:{align};'
+                if par.style and par.style.name:
+                    nm=par.style.name.lower()
+                    if 'title' in nm: style+='font-size:24pt;font-weight:700;margin-bottom:18px;'
+                    elif 'heading 1' in nm: style+='font-size:18pt;font-weight:700;margin-top:18px;'
+                    elif 'heading 2' in nm: style+='font-size:15pt;font-weight:700;margin-top:15px;'
+                parts.append('<p style="'+style+'">'+''.join(runs)+'</p>')
+            for tbl in doc.tables:
+                rows=[]
+                for row in tbl.rows:
+                    cells=''.join('<td>'+esc(cell.text).replace('\\n','<br>')+'</td>' for cell in row.cells)
+                    rows.append('<tr>'+cells+'</tr>')
+                parts.append('<table>'+''.join(rows)+'</table>')
+            try:
+                with _zipfile.ZipFile(source) as z:
+                    media=[n for n in z.namelist() if n.startswith('word/media/')]
+                    for name in media:
+                        data=z.read(name)
+                        mime=_mimetypes.guess_type(name)[0] or 'image/png'
+                        b64=_base64.b64encode(data).decode('ascii')
+                        parts.append(f'<img class="doc-image" src="data:{mime};base64,{b64}" alt="Obrázek z dokumentu">')
+            except Exception:
+                pass
+            return shell_head+'<div class="page">'+''.join(parts)+'</div>'+end
+
+        if ext in ('.xlsx','.xlsm'):
+            import openpyxl
+            wb=openpyxl.load_workbook(source,data_only=False)
+            sections=[]
+            for ws in wb.worksheets:
+                if ws.title=='__UCEBNICE_ID__':
+                    continue
+                maxr=min(ws.max_row or 1,80); maxc=min(ws.max_column or 1,24)
+                trs=[]
+                for row in ws.iter_rows(min_row=1,max_row=maxr,max_col=maxc):
+                    tds=[]
+                    for c in row:
+                        val='' if c.value is None else esc(str(c.value))
+                        sty=[]
+                        if c.font and c.font.bold: sty.append('font-weight:700')
+                        if c.alignment and c.alignment.horizontal: sty.append('text-align:'+c.alignment.horizontal)
+                        if c.fill and getattr(c.fill,'fgColor',None) and c.fill.fgColor.type=='rgb' and c.fill.fgColor.rgb:
+                            rgb=str(c.fill.fgColor.rgb)[-6:]; sty.append('background:#'+rgb)
+                        tds.append('<td style="'+esc(';'.join(sty),quote=True)+'">'+val+'</td>')
+                    trs.append('<tr>'+''.join(tds)+'</tr>')
+                sections.append('<h2>'+esc(ws.title)+'</h2><table>'+''.join(trs)+'</table>')
+            return shell_head+'<div class="sheet">'+''.join(sections)+'</div>'+end
+
+        if ext == '.pptx':
+            from pptx import Presentation
+            prs=Presentation(source)
+            slides=[]
+            for i,slide in enumerate(prs.slides,1):
+                texts=[]
+                for sh in slide.shapes:
+                    if hasattr(sh,'text') and sh.text.strip():
+                        texts.append('<div style="margin:8px 0;white-space:pre-wrap">'+esc(sh.text)+'</div>')
+                slides.append('<div class="slide">'+''.join(texts)+f'<span class="slide-num">Snímek {i}</span></div>')
+            return shell_head+''.join(slides)+end
+    except Exception as exc:
+        return shell_head+'<div class="page"><h2>Náhled souboru</h2><p>'+esc(str(exc))+'</p></div>'+end
+    return shell_head+'<div class="page"><p>Náhled tohoto souboru není dostupný.</p></div>'+end
+
 @app.route('/informatics-task/<int:task_id>/teacher-preview.pdf')
 def informatics_teacher_preview_pdf(task_id):
     """Věrný vizuální náhled učitelského Word/Excel/PowerPoint souboru pro studenta."""
@@ -2247,8 +2352,11 @@ def informatics_teacher_preview_pdf(task_id):
                 shutil.copy2(made, out_pdf)
         return send_file(out_pdf, mimetype='application/pdf', as_attachment=False,
                          download_name=f'nahled_{task.id}.pdf')
-    except Exception as exc:
-        return f'Náhled se nepodařilo vytvořit: {exc}', 500
+    except Exception:
+        # Render a další čistě Python prostředí nemusí mít systémový LibreOffice.
+        # Student proto dostane vizuální HTML náhled místo chybové stránky.
+        fallback = _office_visual_html_fallback(source, ext, task.source_original or f'Vzor {task.id}')
+        return fallback, 200, {'Content-Type':'text/html; charset=utf-8', 'Cache-Control':'no-store'}
 
 @app.route('/informatics-task/<int:task_id>', methods=['GET','POST'])
 def informatics_task(task_id):
