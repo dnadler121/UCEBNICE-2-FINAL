@@ -2509,25 +2509,24 @@ def _office_visual_html_fallback(source, ext, title='Vzorový soubor'):
 
 
 def _make_office_preview_pdf(source, ext, out_pdf):
-    """Vytvoří PDF náhled. Nejprve LibreOffice; u Wordu má Python PDF fallback."""
+    """Vytvoří skutečný PDF náhled přes LibreOffice/soffice. Žádný HTML/Python převod."""
     source = Path(source); out_pdf = Path(out_pdf)
     if out_pdf.exists() and out_pdf.stat().st_mtime >= source.stat().st_mtime:
         return out_pdf
     import subprocess, tempfile, shutil
-    try:
-        with tempfile.TemporaryDirectory(prefix='infpreview_') as td:
-            td=Path(td); local=td/source.name; shutil.copy2(source, local)
-            subprocess.run(['libreoffice','--headless','--convert-to','pdf','--outdir',str(td),str(local)],
-                           check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=60)
-            made=td/(local.stem+'.pdf')
-            if made.exists():
-                shutil.copy2(made,out_pdf); return out_pdf
-    except Exception:
-        pass
-    if ext == '.docx':
-        _docx_preview_pdf_python(source, out_pdf)
-        return out_pdf
-    raise RuntimeError('PDF náhled nelze vytvořit bez LibreOffice.')
+    office = shutil.which('libreoffice') or shutil.which('soffice')
+    if not office:
+        raise RuntimeError('Na serveru chybí LibreOffice pro převod dokumentu do PDF.')
+    out_pdf.parent.mkdir(parents=True, exist_ok=True)
+    with tempfile.TemporaryDirectory(prefix='infpreview_') as td:
+        td=Path(td); local=td/source.name; shutil.copy2(source, local)
+        proc=subprocess.run([office,'--headless','--convert-to','pdf','--outdir',str(td),str(local)],
+                            stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=90, text=True)
+        made=td/(local.stem+'.pdf')
+        if proc.returncode != 0 or not made.exists():
+            raise RuntimeError('Převod dokumentu do PDF se nezdařil.')
+        shutil.copy2(made,out_pdf)
+    return out_pdf
 
 
 def _docx_preview_pdf_python(source, out_pdf):
@@ -2671,9 +2670,9 @@ def informatics_teacher_preview_pdf(task_id):
         resp.headers['Content-Disposition'] = 'inline'
         resp.headers['Cache-Control'] = 'no-store'
         return resp
-    except Exception:
-        fallback = _office_visual_html_fallback(source, ext, task.source_original or f'Vzor {task.id}')
-        return fallback, 200, {'Content-Type':'text/html; charset=utf-8','Cache-Control':'no-store'}
+    except Exception as exc:
+        return ('<div style="font-family:Arial;padding:24px"><b>PDF náhled se nepodařilo vytvořit.</b><br>'
+                'Na serveru musí být nainstalovaný LibreOffice. Kontrola souboru tím není ovlivněna.</div>'), 503, {'Content-Type':'text/html; charset=utf-8','Cache-Control':'no-store'}
 
 
 @app.route('/informatics-submission/<int:submission_id>/preview.pdf')
@@ -2707,8 +2706,8 @@ def informatics_submission_preview_pdf(submission_id):
         resp.headers['Cache-Control'] = 'no-store'
         return resp
     except Exception as exc:
-        fallback = _office_visual_html_fallback(source, ext, submission.original_name or 'Práce studenta')
-        return fallback, 200, {'Content-Type':'text/html; charset=utf-8','Cache-Control':'no-store'}
+        return ('<div style="font-family:Arial;padding:24px"><b>PDF náhled práce se nepodařilo vytvořit.</b><br>'
+                'Na serveru musí být nainstalovaný LibreOffice. Kontrola práce tím není ovlivněna.</div>'), 503, {'Content-Type':'text/html; charset=utf-8','Cache-Control':'no-store'}
 
 
 @app.route('/informatics-task/<int:task_id>', methods=['GET','POST'])
