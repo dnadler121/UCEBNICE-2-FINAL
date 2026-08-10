@@ -358,6 +358,35 @@ def analyze_word(path, original_name):
                 if pg is not None and _attr(pg,NS_W,'start','') != '':
                     starts.append({'section':i,'start':_attr(pg,NS_W,'start','')})
         info['page_number_starts']=starts
+
+        # Skutečná pole čísla stránky (PAGE) v záhlaví/zápatí.
+        # Samotné w:pgNumType pouze nastavuje, od jakého čísla má oddíl začít,
+        # ale může v DOCX zůstat i po ručním odstranění viditelného čísla stránky.
+        # Proto číslování považujeme za přítomné jen tehdy, když v některém
+        # header*.xml / footer*.xml opravdu existuje pole PAGE.
+        page_fields=[]
+        for n in sorted(names):
+            if not (re.match(r'word/(?:header|footer)\d+\.xml$', n, flags=re.I)):
+                continue
+            part_root=_xml(z,n)
+            if part_root is None:
+                continue
+            for p_el in part_root.findall('.//{%s}p' % NS_W):
+                parts=[]
+                for instr in p_el.findall('.//{%s}instrText' % NS_W):
+                    if instr.text:
+                        parts.append(instr.text)
+                if parts:
+                    val=''.join(parts).strip()
+                    if re.search(r'(^|\s)PAGE(?=\s|$|\\)', val.upper()):
+                        page_fields.append({'part':n,'field':val})
+                for fld in p_el.findall('.//{%s}fldSimple' % NS_W):
+                    val=_attr(fld,NS_W,'instr','').strip()
+                    if val and re.search(r'(^|\s)PAGE(?=\s|$|\\)', val.upper()):
+                        page_fields.append({'part':n,'field':val})
+        info['page_field_count']=len(page_fields)
+        info['page_field_parts']=sorted(set(x['part'] for x in page_fields))
+
         # Saved page count from docProps/app.xml (Word/LibreOffice updates this when saved).
         pages=None
         appxml=_xml(z,'docProps/app.xml') if 'docProps/app.xml' in names else None
@@ -704,7 +733,15 @@ def evaluate(student_path, student_name, teacher, raw_checks):
         elif code=='word_unlinked':
             want=teacher.get('section_specs') or []; have=student.get('section_specs') or []
             ok=len(have)>=len(want) and all((i==0 or (not have[i].get('header_linked') and not have[i].get('footer_linked'))) for i in range(len(want)) if i==0 or (not want[i].get('header_linked') and not want[i].get('footer_linked'))); label='Propojení s předchozím vypnuto'
-        elif code=='word_page_numbering': ok=(student.get('page_number_starts') or [])==(teacher.get('page_number_starts') or []); label='Číslování stránek'
+        elif code=='word_page_numbering':
+            same_starts=(student.get('page_number_starts') or [])==(teacher.get('page_number_starts') or [])
+            teacher_page_fields=int(teacher.get('page_field_count',0) or 0)
+            student_page_fields=int(student.get('page_field_count',0) or 0)
+            # Musí sedět nastavení začátku číslování A zároveň musí být skutečně
+            # vloženo pole PAGE. Tím se odhalí situace, kdy žák číslo stránky
+            # smaže, ale w:pgNumType v document.xml zůstane zachované.
+            ok=same_starts and teacher_page_fields>0 and student_page_fields>=teacher_page_fields
+            label='Číslování stránek'
         elif code=='word_alignment':
             ws=teacher.get('section_specs') or []; hs=student.get('section_specs') or []
             ok=_subset_counts(teacher.get('paragraph_alignments') or {},student.get('paragraph_alignments') or {}) and len(hs)>=len(ws) and all(hs[i].get('vertical_alignment')==sp.get('vertical_alignment') for i,sp in enumerate(ws)); label='Vodorovné a svislé zarovnání'

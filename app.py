@@ -2018,6 +2018,22 @@ WORD_CHECK_CODES = list(INFORMATICS_CHECK_LABELS)
 def evaluate_informatics_file(student_path, student_name, task):
     teacher = _safe_json(task.analysis_json, {})
     raw_checks = _safe_json(task.checks_json, [])
+
+    # Starší úlohy mají v DB uloženou analýzu vytvořenou před kontrolou
+    # skutečného pole PAGE. Pokud je u nich zapnutá kontrola číslování,
+    # znovu načteme učitelský DOCX ze zdroje, aby nebylo nutné lekci mazat
+    # nebo znovu nahrávat jen kvůli této opravě.
+    check_codes = [x if isinstance(x,str) else x.get('code','') for x in raw_checks]
+    if 'word_page_numbering' in check_codes and 'page_field_count' not in teacher:
+        try:
+            source = INFORMATICS_SOURCE_DIR / task.source_stored
+            if source.exists():
+                refreshed, _ = _inf2_analyze_file(source, task.source_original or source.name)
+                if str(refreshed.get('type','')).lower() == 'word':
+                    teacher = refreshed
+        except Exception:
+            pass
+
     return _inf2_evaluate(student_path, student_name, teacher, raw_checks)
 
 def informatics_preview(path, original_name, teacher=False):
