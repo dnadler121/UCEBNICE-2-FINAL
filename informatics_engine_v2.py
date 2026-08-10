@@ -714,6 +714,23 @@ def _subset_counts(want,have):
     return all(int(have.get(k,0) or 0)>=int(v or 0) for k,v in want.items())
 
 
+def _normalize_excel_number_format(fmt):
+    """Treat visually equivalent Excel number formats as identical."""
+    s = str(fmt or '').strip()
+    # Excel may serialize a visible space as an escaped space after copy/paste.
+    s = s.replace('\\ ', ' ')
+    s = s.replace('\u00a0', ' ')
+    s = re.sub(r'\s+', ' ', s).strip()
+    return s
+
+
+def _normalized_number_format_counts(d):
+    out = Counter()
+    for k, v in (d or {}).items():
+        out[_normalize_excel_number_format(k)] += int(v or 0)
+    return dict(out)
+
+
 def _approx_image_specs(want,have,tol=0.12):
     if len(have)<len(want): return False
     unused=list(have)
@@ -755,8 +772,13 @@ def evaluate(student_path, student_name, teacher, raw_checks):
             label='Správné výsledky výpočtů'
         elif code=='excel_functions': ok=set(teacher.get('formula_functions') or []).issubset(set(student.get('formula_functions') or [])); label='Požadované funkce'
         elif code=='excel_format':
-            ok=_subset_counts(teacher.get('font_names') or {},student.get('font_names') or {}) and _subset_counts(teacher.get('font_sizes') or {},student.get('font_sizes') or {}) and _subset_counts(teacher.get('formatting') or {},student.get('formatting') or {}); label='Formátování buněk'
-        elif code=='excel_number_format': ok=_subset_counts(teacher.get('number_formats') or {},student.get('number_formats') or {}); label='Formát čísel'
+            # Při kopírování mezi sešity může Excel změnit výchozí font
+            # (např. Carlito <-> Calibri), i když vzhled a záměr formátování
+            # zůstane stejný. Generická kontrola proto ověřuje velikost písma
+            # a skutečné formátovací prvky, ne název výchozího fontu.
+            ok=_subset_counts(teacher.get('font_sizes') or {},student.get('font_sizes') or {}) and _subset_counts(teacher.get('formatting') or {},student.get('formatting') or {}); label='Formátování buněk'
+        elif code=='excel_number_format':
+            ok=_subset_counts(_normalized_number_format_counts(teacher.get('number_formats') or {}), _normalized_number_format_counts(student.get('number_formats') or {})); label='Formát čísel'
         elif code=='excel_merged': ok=int(student.get('merged_count',0))==int(teacher.get('merged_count',0)); label='Sloučené buňky'
         elif code=='excel_conditional': ok=int(student.get('conditional_format_count',0))==int(teacher.get('conditional_format_count',0)); label='Podmíněné formátování'
         elif code=='excel_filter': ok=int(student.get('filter_count',0))==int(teacher.get('filter_count',0)); label='Filtr'
