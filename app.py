@@ -2034,6 +2034,19 @@ def evaluate_informatics_file(student_path, student_name, task):
         except Exception:
             pass
 
+    # Starší již vytvořené Excelové úlohy nemají v analysis_json uložené
+    # operátory vzorců. Při první kontrole je znovu načteme z učitelského XLSX,
+    # takže kvůli této opravě není nutné úlohu mazat ani znovu vytvářet.
+    if 'excel_functions' in check_codes and 'formula_operators' not in teacher:
+        try:
+            source = INFORMATICS_SOURCE_DIR / task.source_stored
+            if source.exists():
+                refreshed, _ = _inf2_analyze_file(source, task.source_original or source.name)
+                if str(refreshed.get('type','')).lower() == 'excel':
+                    teacher = refreshed
+        except Exception:
+            pass
+
     return _inf2_evaluate(student_path, student_name, teacher, raw_checks)
 
 def informatics_preview(path, original_name, teacher=False):

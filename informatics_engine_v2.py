@@ -155,6 +155,7 @@ def analyze_excel(path, original_name):
     visible_sheets = [s for s in wb.sheetnames if s != '__UCEBNICE_ID__']
     total_nonempty = total_formulas = chart_count = table_count = 0
     functions = set()
+    formula_operators = Counter()
     sheet_specs = []
     formatting = Counter()
     font_names = Counter(); font_sizes = Counter(); number_formats = Counter()
@@ -193,6 +194,12 @@ def analyze_excel(path, original_name):
                     formula_cells.append(f'{ws.title}!{cell.coordinate}')
                     formulas.append({'cell': cell.coordinate, 'formula': cell.value})
                     for fn in re.findall(r'([A-Z][A-Z0-9_.]*)\s*\(', cell.value.upper()): functions.add(fn)
+                    # Kromě funkcí sledujeme i aritmetické operátory ve vzorcích.
+                    # Úvodní '=' není operátor výpočtu. Textové řetězce odstraníme,
+                    # aby např. '*' použitá jako zástupný znak v textu nebyla počítána.
+                    expr = re.sub(r'"(?:[^"]|"")*"', '', cell.value[1:])
+                    for op in re.findall(r'[+\-*/^&]', expr):
+                        formula_operators[op] += 1
         total_nonempty += nonempty
         charts = list(getattr(ws, '_charts', []) or [])
         chart_count += len(charts)
@@ -243,7 +250,7 @@ def analyze_excel(path, original_name):
     info = {
         'extension': Path(original_name).suffix.lower(), 'name': original_name, 'type': 'Excel',
         'sheets': visible_sheets, 'sheet_specs': sheet_specs, 'nonempty_count': total_nonempty,
-        'formula_count': total_formulas, 'formula_functions': sorted(functions), 'formula_cells': formula_cells,
+        'formula_count': total_formulas, 'formula_functions': sorted(functions), 'formula_operators': dict(formula_operators), 'formula_cells': formula_cells,
         'formula_results': result_map, 'chart_count': chart_count, 'chart_types': dict(chart_types),
         'chart_sources': chart_sources,
         'table_count': table_count, 'pivot_count': pivot_count, 'merged_count': merged_count,
@@ -688,7 +695,7 @@ def generated_assignment(info):
 HINTS={
 'excel_sheets':'Zkontroluj počet a názvy listů.','excel_headers':'Zkontroluj záhlaví tabulek.',
 'excel_size':'Zkontroluj rozsah tabulek.','excel_filled':'Zkontroluj, zda jsou požadované části vyplněné.',
-'excel_results':'Vzorec může být jiný, ale výsledná hodnota musí být správná.','excel_functions':'Zkontroluj použité funkce.',
+'excel_results':'Vzorec může být jiný, ale výsledná hodnota musí být správná.','excel_functions':'Zkontroluj použité funkce a operátory ve vzorcích.',
 'excel_format':'Zkontroluj písmo, velikost, zarovnání, výplň a ohraničení.','excel_number_format':'Zkontroluj formát měny, procent, data a desetinných míst.',
 'excel_merged':'Zkontroluj sloučené buňky.','excel_conditional':'Zkontroluj podmíněné formátování.',
 'excel_filter':'Zkontroluj filtr tabulky.','excel_table':'Zkontroluj, že data jsou vytvořená jako Excelová tabulka.',
@@ -770,13 +777,17 @@ def evaluate(student_path, student_name, teacher, raw_checks):
             if want: ok=all(k in have and _norm_value(have[k])==_norm_value(v) for k,v in want.items())
             else: ok=int(student.get('formula_count',0))>=int(teacher.get('formula_count',0))
             label='Správné výsledky výpočtů'
-        elif code=='excel_functions': ok=set(teacher.get('formula_functions') or []).issubset(set(student.get('formula_functions') or [])); label='Požadované funkce'
+        elif code=='excel_functions':
+            # Musí být použity stejné požadované Excelové funkce a alespoň stejný
+            # počet aritmetických operátorů. Např. vzor B2*C2 nesmí projít jako B2+C2.
+            funcs_ok=set(teacher.get('formula_functions') or []).issubset(set(student.get('formula_functions') or []))
+            ops_ok=_subset_counts(teacher.get('formula_operators') or {}, student.get('formula_operators') or {})
+            ok=funcs_ok and ops_ok; label='Požadované funkce'
         elif code=='excel_format':
-            # Při kopírování mezi sešity může Excel změnit výchozí font
-            # (např. Carlito <-> Calibri), i když vzhled a záměr formátování
-            # zůstane stejný. Generická kontrola proto ověřuje velikost písma
-            # a skutečné formátovací prvky, ne název výchozího fontu.
-            ok=_subset_counts(teacher.get('font_sizes') or {},student.get('font_sizes') or {}) and _subset_counts(teacher.get('formatting') or {},student.get('formatting') or {}); label='Formátování buněk'
+            # Název písma je skutečný požadavek učitele, proto se kontroluje.
+            # Formát čísel se naopak normalizuje níže, protože Excel může stejný
+            # vzhled uložit různým, ale ekvivalentním OOXML zápisem.
+            ok=_subset_counts(teacher.get('font_names') or {},student.get('font_names') or {}) and _subset_counts(teacher.get('font_sizes') or {},student.get('font_sizes') or {}) and _subset_counts(teacher.get('formatting') or {},student.get('formatting') or {}); label='Formátování buněk'
         elif code=='excel_number_format':
             ok=_subset_counts(_normalized_number_format_counts(teacher.get('number_formats') or {}), _normalized_number_format_counts(student.get('number_formats') or {})); label='Formát čísel'
         elif code=='excel_merged': ok=int(student.get('merged_count',0))==int(teacher.get('merged_count',0)); label='Sloučené buňky'
