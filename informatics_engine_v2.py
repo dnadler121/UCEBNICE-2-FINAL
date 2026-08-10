@@ -53,6 +53,7 @@ def _formula_result_map(path):
         wb_formula = openpyxl.load_workbook(path, data_only=False, read_only=False)
         wb_values = openpyxl.load_workbook(path, data_only=True, read_only=False)
         out = {}
+        sheet_index = 0
         for ws in wb_formula.worksheets:
             if ws.title == '__UCEBNICE_ID__':
                 continue
@@ -60,7 +61,11 @@ def _formula_result_map(path):
             for row in ws.iter_rows():
                 for c in row:
                     if isinstance(c.value, str) and c.value.startswith('='):
-                        out[f'{ws.title}!{c.coordinate}'] = _norm_value(wsv[c.coordinate].value)
+                        # Název listu je samostatná kontrola. Pro výsledky vzorců
+                        # používáme pořadí listu + souřadnici, aby přejmenování listu
+                        # neshodilo jinak správný výpočet.
+                        out[f'{sheet_index}!{c.coordinate}'] = _norm_value(wsv[c.coordinate].value)
+            sheet_index += 1
         return out
     except Exception:
         return {}
@@ -155,6 +160,7 @@ def analyze_excel(path, original_name):
     font_names = Counter(); font_sizes = Counter(); number_formats = Counter()
     merged_count = conditional_count = filter_count = 0
     chart_types = Counter()
+    chart_sources = []
     formula_cells = []
 
     for ws in wb.worksheets:
@@ -192,6 +198,31 @@ def analyze_excel(path, original_name):
         chart_count += len(charts)
         for ch in charts:
             chart_types[type(ch).__name__] += 1
+            # Ulož zdroje dat grafu bez názvu listu. Název listu se kontroluje
+            # samostatně; tady nás zajímá, zda graf opravdu používá správné buňky.
+            series_specs=[]
+            for ser in getattr(ch, 'ser', []) or []:
+                cat_ref = val_ref = ''
+                try:
+                    cat = getattr(ser, 'cat', None)
+                    if cat is not None:
+                        numref=getattr(cat,'numRef',None); strref=getattr(cat,'strRef',None)
+                        ref=numref or strref
+                        cat_ref=getattr(ref,'f','') or '' if ref is not None else ''
+                except Exception:
+                    pass
+                try:
+                    val = getattr(ser, 'val', None) or getattr(ser, 'yVal', None)
+                    if val is not None:
+                        numref=getattr(val,'numRef',None)
+                        val_ref=getattr(numref,'f','') or '' if numref is not None else ''
+                except Exception:
+                    pass
+                def _norm_ref(r):
+                    r=str(r or '').replace('$','').strip()
+                    return r.split('!',1)[-1].strip("'") if '!' in r else r
+                series_specs.append({'cat':_norm_ref(cat_ref),'val':_norm_ref(val_ref)})
+            chart_sources.append(series_specs)
         tables = getattr(ws, 'tables', {})
         table_count += len(tables)
         merged_count += len(ws.merged_cells.ranges)
@@ -214,6 +245,7 @@ def analyze_excel(path, original_name):
         'sheets': visible_sheets, 'sheet_specs': sheet_specs, 'nonempty_count': total_nonempty,
         'formula_count': total_formulas, 'formula_functions': sorted(functions), 'formula_cells': formula_cells,
         'formula_results': result_map, 'chart_count': chart_count, 'chart_types': dict(chart_types),
+        'chart_sources': chart_sources,
         'table_count': table_count, 'pivot_count': pivot_count, 'merged_count': merged_count,
         'conditional_format_count': conditional_count, 'filter_count': filter_count,
         'font_names': dict(font_names), 'font_sizes': dict(font_sizes), 'number_formats': dict(number_formats),
@@ -227,12 +259,13 @@ def analyze_excel(path, original_name):
         ('excel_number_format','Formát čísel – měna, procenta, datum, desetinná místa'),
         ('excel_merged','Sloučené buňky'), ('excel_conditional','Podmíněné formátování'),
         ('excel_filter','Filtr / automatický filtr'), ('excel_table','Excelová tabulka'),
-        ('excel_chart','Grafy'), ('excel_chart_type','Typy grafů'), ('excel_pivot','Kontingenční tabulka'),
+        ('excel_chart','Grafy'), ('excel_chart_data','Data použitá v grafu'), ('excel_chart_type','Typy grafů'), ('excel_pivot','Kontingenční tabulka'),
     ]
     # Only offer structure features if the teacher file uses them, but always offer core checks.
     core = {'excel_sheets','excel_headers','excel_size','excel_filled','excel_results','excel_functions','excel_format','excel_number_format'}
     feature_pred = {
         'excel_merged': merged_count, 'excel_conditional': conditional_count, 'excel_filter': filter_count,
+        'excel_chart_data': chart_count,
         'excel_table': table_count, 'excel_chart': chart_count, 'excel_chart_type': chart_count, 'excel_pivot': pivot_count,
     }
     return info, [{'code':c,'label':l} for c,l in checks if c in core or feature_pred.get(c,0)]
@@ -707,11 +740,13 @@ def evaluate(student_path, student_name, teacher, raw_checks):
         code=ch.get('code',''); ok=True; label=code
         if code=='excel_sheets': ok=(teacher.get('sheets') or [])==(student.get('sheets') or []); label='Počet a názvy listů'
         elif code=='excel_headers':
-            wm={x['name']:x.get('headers',[]) for x in teacher.get('sheet_specs',[])}; hm={x['name']:x.get('headers',[]) for x in student.get('sheet_specs',[])}
-            ok=all(hm.get(k)==v for k,v in wm.items()); label='Záhlaví tabulky'
+            # Název listu kontroluje excel_sheets. Ostatní kontroly porovnávají
+            # listy podle pořadí, takže přejmenování listu nevytvoří lavinu chyb.
+            want=teacher.get('sheet_specs') or []; have=student.get('sheet_specs') or []
+            ok=len(have)>=len(want) and all((have[i].get('headers') or [])==(sp.get('headers') or []) for i,sp in enumerate(want)); label='Záhlaví tabulky'
         elif code=='excel_size':
-            wm={x['name']:(x.get('rows',0),x.get('cols',0)) for x in teacher.get('sheet_specs',[])}; hm={x['name']:(x.get('rows',0),x.get('cols',0)) for x in student.get('sheet_specs',[])}
-            ok=all(k in hm and hm[k][0]>=v[0] and hm[k][1]>=v[1] for k,v in wm.items()); label='Rozsah tabulky'
+            want=teacher.get('sheet_specs') or []; have=student.get('sheet_specs') or []
+            ok=len(have)>=len(want) and all(have[i].get('rows',0)>=sp.get('rows',0) and have[i].get('cols',0)>=sp.get('cols',0) for i,sp in enumerate(want)); label='Rozsah tabulky'
         elif code=='excel_filled': ok=int(student.get('nonempty_count',0))>=int(teacher.get('nonempty_count',0)); label='Vyplněné části tabulky'
         elif code=='excel_results':
             want={k:v for k,v in (teacher.get('formula_results') or {}).items() if v is not None}; have=student.get('formula_results') or {}
@@ -722,11 +757,13 @@ def evaluate(student_path, student_name, teacher, raw_checks):
         elif code=='excel_format':
             ok=_subset_counts(teacher.get('font_names') or {},student.get('font_names') or {}) and _subset_counts(teacher.get('font_sizes') or {},student.get('font_sizes') or {}) and _subset_counts(teacher.get('formatting') or {},student.get('formatting') or {}); label='Formátování buněk'
         elif code=='excel_number_format': ok=_subset_counts(teacher.get('number_formats') or {},student.get('number_formats') or {}); label='Formát čísel'
-        elif code=='excel_merged': ok=(teacher.get('ooxml',{}).get('merge_refs',{})==student.get('ooxml',{}).get('merge_refs',{})); label='Sloučené buňky'
-        elif code=='excel_conditional': ok=(teacher.get('ooxml',{}).get('conditional_counts',{})==student.get('ooxml',{}).get('conditional_counts',{})); label='Podmíněné formátování'
-        elif code=='excel_filter': ok=(teacher.get('ooxml',{}).get('auto_filters',{})==student.get('ooxml',{}).get('auto_filters',{})); label='Filtr'
-        elif code=='excel_table': ok=(teacher.get('ooxml',{}).get('table_xml_count',0)==student.get('ooxml',{}).get('table_xml_count',0) and teacher.get('ooxml',{}).get('table_part_counts',{})==student.get('ooxml',{}).get('table_part_counts',{})); label='Excelová tabulka'
-        elif code=='excel_chart': ok=int(student.get('ooxml',{}).get('chart_xml_count',0))==int(teacher.get('ooxml',{}).get('chart_xml_count',0)); label='Grafy'
+        elif code=='excel_merged': ok=int(student.get('merged_count',0))==int(teacher.get('merged_count',0)); label='Sloučené buňky'
+        elif code=='excel_conditional': ok=int(student.get('conditional_format_count',0))==int(teacher.get('conditional_format_count',0)); label='Podmíněné formátování'
+        elif code=='excel_filter': ok=int(student.get('filter_count',0))==int(teacher.get('filter_count',0)); label='Filtr'
+        elif code=='excel_table': ok=int(student.get('table_count',0))==int(teacher.get('table_count',0)); label='Excelová tabulka'
+        elif code=='excel_chart': ok=int(student.get('chart_count',0))==int(teacher.get('chart_count',0)); label='Grafy'
+        elif code=='excel_chart_data':
+            ok=(teacher.get('chart_sources') or [])==(student.get('chart_sources') or []); label='Data použitá v grafu'
         elif code=='excel_chart_type': ok=_subset_counts(teacher.get('chart_types') or {},student.get('chart_types') or {}); label='Typy grafů'
         elif code=='excel_pivot': ok=int(student.get('ooxml',{}).get('pivot_xml_count',0))==int(teacher.get('ooxml',{}).get('pivot_xml_count',0)); label='Kontingenční tabulka'
         elif code=='word_sections': ok=int(student.get('section_count',0))>=int(teacher.get('section_count',0)); label='Počet oddílů'
