@@ -783,8 +783,24 @@ def evaluate(student_path, student_name, teacher, raw_checks):
         if isinstance(x,str): checks.append({'code':x,'question':'','hint':''})
         elif isinstance(x,dict) and x.get('code'): checks.append(x)
     results=[]
+    # Starší uložené úlohy mohly obsahovat volitelné kontroly, i když
+    # učitelský vzor daný prvek vůbec nemá. Takovou kontrolu při hodnocení
+    # úplně přeskočíme. Pokud ale vzor prvek obsahuje, kontrola zůstává aktivní
+    # a student jej musí zachovat.
+    excel_optional_feature_counts = {
+        'excel_merged': int(teacher.get('merged_count', 0) or 0),
+        'excel_conditional': int(teacher.get('conditional_format_count', 0) or 0),
+        'excel_filter': int(teacher.get('filter_count', 0) or 0),
+        'excel_table': int(teacher.get('table_count', 0) or 0),
+        'excel_chart': int(teacher.get('chart_count', 0) or 0),
+        'excel_chart_data': int(teacher.get('chart_count', 0) or 0),
+        'excel_chart_type': int(teacher.get('chart_count', 0) or 0),
+        'excel_pivot': int((teacher.get('ooxml') or {}).get('pivot_xml_count', 0) or 0),
+    }
     for ch in checks:
         code=ch.get('code',''); ok=True; label=code
+        if code in excel_optional_feature_counts and excel_optional_feature_counts[code] <= 0:
+            continue
         if code=='excel_sheets': ok=(teacher.get('sheets') or [])==(student.get('sheets') or []); label='Počet a názvy listů'
         elif code=='excel_headers':
             # Název listu kontroluje excel_sheets. Ostatní kontroly porovnávají
