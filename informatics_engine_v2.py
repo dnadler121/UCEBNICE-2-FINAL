@@ -240,9 +240,32 @@ def analyze_excel(path, original_name):
                             'headers': headers, 'nonempty': nonempty, 'formulas': formulas[:80]})
 
     pivot_count = 0
+    # Grafy kontrolujeme i přímo přes OOXML. openpyxl neumí načíst některé
+    # novější Excel grafy (např. Funnel uložený jako chartEx), takže by jinak
+    # změna typu grafu mohla projít jako správná.
     try:
         with zipfile.ZipFile(path) as z:
-            pivot_count = len([n for n in z.namelist() if n.startswith('xl/pivotTables/pivotTable') and n.endswith('.xml')])
+            names = z.namelist()
+            pivot_count = len([n for n in names if n.startswith('xl/pivotTables/pivotTable') and n.endswith('.xml')])
+            chart_parts = [n for n in names if (n.startswith('xl/charts/chart') or n.startswith('xl/drawings/charts/chart')) and n.endswith('.xml')]
+            chart_count = max(chart_count, len(chart_parts))
+            # Klasické grafy openpyxl již rozpozná. Z OOXML doplníme hlavně
+            # chartEx typy, které openpyxl ignoruje. layoutId je např. funnel.
+            for n in chart_parts:
+                if 'chartEx' not in n:
+                    continue
+                xml = z.read(n).decode('utf-8', 'ignore')
+                layouts = re.findall(r'layoutId=["\']([^"\']+)["\']', xml, flags=re.I)
+                # Skryté pomocné série mohou layout opakovat; jeden chart part
+                # představuje jeden graf, proto typ započteme jen jednou.
+                layout = next((x for x in layouts if x), 'chartEx')
+                canonical = {
+                    'funnel':'FunnelChart', 'waterfall':'WaterfallChart',
+                    'treemap':'TreemapChart', 'sunburst':'SunburstChart',
+                    'histogram':'HistogramChart', 'pareto':'ParetoChart',
+                    'boxWhisker':'BoxWhiskerChart'
+                }.get(layout, 'ChartEx:' + layout)
+                chart_types[canonical] += 1
     except Exception:
         pass
 
