@@ -1906,8 +1906,24 @@ def _embed_work_token(path, ext, token):
         doc.save(path)
         return
     if ext == '.pptx':
+        # PowerPoint: identita studenta je na prvním SKRYTÉM snímku.
+        # Kontrolní engine tento snímek pozná podle podepsaného UCEBNICE2 tokenu
+        # a úplně jej vynechá z počtu snímků i ze všech kontrol prezentace.
         from pptx import Presentation
+        from pptx.util import Inches, Pt
         prs = Presentation(path)
+        if len(prs.slides) == 0:
+            slide = prs.slides.add_slide(prs.slide_layouts[6])
+        else:
+            slide = prs.slides[0]
+        box = slide.shapes.add_textbox(Inches(0.1), Inches(0.1), Inches(12.0), Inches(0.5))
+        box.text_frame.clear()
+        run = box.text_frame.paragraphs[0].add_run()
+        run.text = token
+        run.font.size = Pt(1)
+        # p:sld show="0" = skrytý snímek v OOXML.
+        slide._element.set('show', '0')
+        # Druhá, záložní kopie tokenu kvůli kompatibilitě se staršími pracovními soubory.
         prs.core_properties.keywords = token
         prs.save(path)
         return
@@ -1929,6 +1945,24 @@ def _extract_work_token(path, ext):
             from docx import Document
             return str(Document(path).core_properties.keywords or '').strip()
         if ext == '.pptx':
+            # Primárně čteme podepsanou identitu přímo z OOXML skrytého snímku.
+            try:
+                import zipfile
+                from xml.etree import ElementTree as ET
+                _P='http://schemas.openxmlformats.org/presentationml/2006/main'
+                _A='http://schemas.openxmlformats.org/drawingml/2006/main'
+                with zipfile.ZipFile(path) as z:
+                    names=sorted((n for n in z.namelist() if re.match(r'ppt/slides/slide\d+\.xml$',n)),
+                                 key=lambda n:int(re.search(r'slide(\d+)',n).group(1)))
+                    for n in names[:2]:
+                        root=ET.fromstring(z.read(n))
+                        text=''.join((t.text or '') for t in root.iter('{%s}t' % _A))
+                        m=re.search(r'(UCEBNICE2:[^\s]+)', text)
+                        if m:
+                            return m.group(1)
+            except Exception:
+                pass
+            # Kompatibilita se starší verzí, která ukládala token do keywords.
             from pptx import Presentation
             return str(Presentation(path).core_properties.keywords or '').strip()
         if ext == '.py':
@@ -2014,6 +2048,15 @@ INFORMATICS_CHECK_LABELS = {
     'word_pages':'Počet stran', 'word_list_figures':'Seznam obrázků', 'word_bibliography':'Závěrečná bibliografie / seznam literatury',
 }
 WORD_CHECK_CODES = list(INFORMATICS_CHECK_LABELS)
+INFORMATICS_CHECK_LABELS.update({
+    'ppt_slides':'Počet snímků',
+    'ppt_titles':'Nadpisy – font a velikost písma',
+    'ppt_images':'Obrázky – počet a velikost',
+    'ppt_tables':'Tabulky', 'ppt_charts':'Grafy', 'ppt_shapes':'Tvary a textová pole',
+    'ppt_bullets':'Odrážky', 'ppt_animations':'Animace – počet a stejné typy',
+    'ppt_transition':'Přechody – stejné typy',
+    'ppt_background':'Pozadí snímků – musí nějaké být',
+})
 
 def evaluate_informatics_file(student_path, student_name, task):
     teacher = _safe_json(task.analysis_json, {})
@@ -2043,6 +2086,22 @@ def evaluate_informatics_file(student_path, student_name, task):
             if source.exists():
                 refreshed, _ = _inf2_analyze_file(source, task.source_original or source.name)
                 if str(refreshed.get('type','')).lower() == 'excel':
+                    teacher = refreshed
+        except Exception:
+            pass
+
+    # PowerPoint kontroly nyní vycházejí přímo z OOXML (font/velikost nadpisů,
+    # rozměry obrázků, typy animací a přechodů, pozadí). Staré analysis_json
+    # proto při první kontrole transparentně obnovíme z učitelského PPTX.
+    ppt_codes={'ppt_slides','ppt_titles','ppt_images','ppt_tables','ppt_charts','ppt_shapes','ppt_bullets','ppt_animations','ppt_transition','ppt_background'}
+    # Jednodušší a bezpečnější: u PowerPointu s aktivními kontrolami načti učitelský
+    # zdroj vždy znovu. Je malý a máme jistotu, že používáme nejnovější XML profil.
+    if bool(ppt_codes.intersection(check_codes)) and str(teacher.get('type','')).lower() == 'powerpoint':
+        try:
+            source = INFORMATICS_SOURCE_DIR / task.source_stored
+            if source.exists():
+                refreshed, _ = _inf2_analyze_file(source, task.source_original or source.name)
+                if str(refreshed.get('type','')).lower() == 'powerpoint':
                     teacher = refreshed
         except Exception:
             pass

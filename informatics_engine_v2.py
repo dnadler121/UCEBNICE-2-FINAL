@@ -109,8 +109,137 @@ def _excel_ooxml_profile(path):
     return prof
 
 
+def _ppt_rel_target(z, source_name, rel_type_suffix):
+    """Return OOXML relationship target resolved to a package path."""
+    import posixpath
+    rel_name = posixpath.join(posixpath.dirname(source_name), '_rels', posixpath.basename(source_name) + '.rels')
+    root = _xml(z, rel_name)
+    if root is None:
+        return ''
+    rel_ns = 'http://schemas.openxmlformats.org/package/2006/relationships'
+    for rel in root.findall('{%s}Relationship' % rel_ns):
+        if str(rel.attrib.get('Type','')).endswith(rel_type_suffix):
+            target = rel.attrib.get('Target','')
+            return posixpath.normpath(posixpath.join(posixpath.dirname(source_name), target))
+    return ''
+
+
+def _ppt_theme_fonts(z, master_name):
+    """Resolve theme major/minor latin fonts for a slide master."""
+    theme_name = _ppt_rel_target(z, master_name, '/theme')
+    root = _xml(z, theme_name) if theme_name else None
+    out = {'major':'', 'minor':''}
+    if root is None:
+        return out
+    fs = root.find('.//{%s}fontScheme' % NS_A)
+    if fs is None:
+        return out
+    for key, tag in [('major','majorFont'), ('minor','minorFont')]:
+        node = fs.find('{%s}%s' % (NS_A, tag))
+        latin = node.find('{%s}latin' % NS_A) if node is not None else None
+        if latin is not None:
+            out[key] = latin.attrib.get('typeface','')
+    return out
+
+
+def _ppt_style_spec(style_root, style_name, level, theme_fonts):
+    if style_root is None:
+        return {'font':'', 'size':None}
+    style = style_root.find('{%s}%s' % (NS_P, style_name))
+    if style is None:
+        return {'font':'', 'size':None}
+    lvl = style.find('{%s}lvl%dpPr' % (NS_A, max(1, min(9, int(level)+1))))
+    dr = lvl.find('{%s}defRPr' % NS_A) if lvl is not None else None
+    if dr is None:
+        return {'font':'', 'size':None}
+    size = None
+    try:
+        if dr.attrib.get('sz'): size = round(int(dr.attrib['sz'])/100.0, 2)
+    except Exception:
+        pass
+    font = ''
+    latin = dr.find('{%s}latin' % NS_A)
+    if latin is not None:
+        tf = latin.attrib.get('typeface','')
+        if tf == '+mj-lt': font = theme_fonts.get('major','')
+        elif tf == '+mn-lt': font = theme_fonts.get('minor','')
+        else: font = tf
+    return {'font':font, 'size':size}
+
+
+def _ppt_shape_text_format(sp, fallback, theme_fonts=None):
+    """Read effective first-level font/size from slide XML, then fall back to master style."""
+    result = dict(fallback or {})
+    theme_fonts = theme_fonts or {'major':'','minor':''}
+    p = sp.find('.//{%s}p' % NS_A)
+    level = 0
+    if p is not None:
+        ppr = p.find('{%s}pPr' % NS_A)
+        if ppr is not None:
+            try: level = int(ppr.attrib.get('lvl','0'))
+            except Exception: level = 0
+        local_style = sp.find('.//{%s}txBody/{%s}lstStyle/{%s}lvl%dpPr/{%s}defRPr' % (NS_P,NS_A,NS_A,max(1,min(9,level+1)),NS_A))
+        candidates = [
+            local_style,
+            p.find('{%s}pPr/{%s}defRPr' % (NS_A, NS_A)),
+            p.find('{%s}r/{%s}rPr' % (NS_A, NS_A)),
+            p.find('{%s}endParaRPr' % NS_A),
+        ]
+        for candidate in candidates:
+            if candidate is None: continue
+            if candidate.attrib.get('sz'):
+                try: result['size'] = round(int(candidate.attrib['sz'])/100.0, 2)
+                except Exception: pass
+            latin = candidate.find('{%s}latin' % NS_A)
+            if latin is not None and latin.attrib.get('typeface'):
+                tf=latin.attrib.get('typeface','')
+                if tf == '+mj-lt': result['font']=theme_fonts.get('major','')
+                elif tf == '+mn-lt': result['font']=theme_fonts.get('minor','')
+                else: result['font']=tf
+    result['level'] = level
+    return result
+
+
+def _ppt_transition_signature(trans):
+    if trans is None:
+        return ''
+    # Ignore timing/speed details. The teacher wants the transition TYPE.
+    child = next((c for c in list(trans) if c.tag.startswith('{%s}' % NS_P)), None)
+    if child is None:
+        return 'transition'
+    name = child.tag.split('}',1)[1]
+    attrs = tuple(sorted((k.split('}',1)[-1], str(v)) for k,v in child.attrib.items()))
+    return name + (':' + ','.join(f'{k}={v}' for k,v in attrs) if attrs else '')
+
+
+def _ppt_animation_types(root):
+    """Return one signature per user-visible animation effect, ignoring target position/id."""
+    out=[]
+    for ct in root.iter('{%s}cTn' % NS_P):
+        node_type = ct.attrib.get('nodeType','')
+        preset_class = ct.attrib.get('presetClass','')
+        preset_id = ct.attrib.get('presetID','')
+        preset_subtype = ct.attrib.get('presetSubtype','')
+        if preset_class or node_type.endswith('Effect'):
+            out.append((node_type, preset_class, preset_id, preset_subtype))
+    return sorted(out)
+
+
+def _ppt_has_background(z, slide_name, root):
+    """True when slide/layout/master defines a real OOXML background."""
+    def has_bg(r):
+        return r is not None and r.find('.//{%s}cSld/{%s}bg' % (NS_P, NS_P)) is not None
+    if has_bg(root): return True
+    layout_name = _ppt_rel_target(z, slide_name, '/slideLayout')
+    layout = _xml(z, layout_name) if layout_name else None
+    if has_bg(layout): return True
+    master_name = _ppt_rel_target(z, layout_name, '/slideMaster') if layout_name else ''
+    master = _xml(z, master_name) if master_name else None
+    return has_bg(master)
+
+
 def _ppt_ooxml_profile(path):
-    """Read per-slide PowerPoint structure directly from the OOXML package."""
+    """PowerPoint profile from OOXML. No object positions are used for grading."""
     slides=[]
     try:
         with zipfile.ZipFile(path) as z:
@@ -119,33 +248,58 @@ def _ppt_ooxml_profile(path):
             for n in slide_names:
                 root=_xml(z,n)
                 if root is None: continue
-                counts=Counter(); positions=[]; texts=[]
+                all_text=''.join((e.text or '') for e in root.iter('{%s}t' % NS_A))
+                is_identity = 'UCEBNICE2:' in all_text
+                hidden = str(root.attrib.get('show','1')).lower() in ('0','false','off')
+
+                layout_name = _ppt_rel_target(z, n, '/slideLayout')
+                master_name = _ppt_rel_target(z, layout_name, '/slideMaster') if layout_name else ''
+                master = _xml(z, master_name) if master_name else None
+                theme_fonts = _ppt_theme_fonts(z, master_name) if master_name else {'major':'','minor':''}
+                tx_styles = master.find('{%s}txStyles' % NS_P) if master is not None else None
+
+                counts=Counter(); texts=[]; title_formats=[]; text_formats=[]; image_sizes=[]
                 for sp in root.iter('{%s}sp' % NS_P):
                     counts['shapes'] += 1
                     tx=sp.find('.//{%s}txBody' % NS_P)
-                    if tx is not None:
-                        t=''.join((e.text or '') for e in tx.iter('{%s}t' % NS_A)).strip()
-                        if t: texts.append(t)
-                for _ in root.iter('{%s}pic' % NS_P): counts['pictures'] += 1
+                    text=''.join((e.text or '') for e in tx.iter('{%s}t' % NS_A)).strip() if tx is not None else ''
+                    if text:
+                        texts.append(text)
+                        generic_base=_ppt_style_spec(tx_styles,'bodyStyle',0,theme_fonts)
+                        gfmt=_ppt_shape_text_format(sp,generic_base,theme_fonts)
+                        text_formats.append({'font':gfmt.get('font',''),'size':gfmt.get('size')})
+                    ph=sp.find('.//{%s}ph' % NS_P)
+                    ph_type=(ph.attrib.get('type','') if ph is not None else '')
+                    if ph_type in ('title','ctrTitle'):
+                        base=_ppt_style_spec(tx_styles,'titleStyle',0,theme_fonts)
+                        fmt=_ppt_shape_text_format(sp,base,theme_fonts)
+                        title_formats.append({'font':fmt.get('font',''),'size':fmt.get('size')})
+                for pic in root.iter('{%s}pic' % NS_P):
+                    counts['pictures'] += 1
+                    xfrm=pic.find('.//{%s}xfrm' % NS_A)
+                    ext=xfrm.find('{%s}ext' % NS_A) if xfrm is not None else None
+                    if ext is not None:
+                        try: image_sizes.append((int(ext.attrib.get('cx','0')), int(ext.attrib.get('cy','0'))))
+                        except Exception: pass
                 for gf in root.iter('{%s}graphicFrame' % NS_P):
                     counts['graphic_frames'] += 1
                     xml=ET.tostring(gf,encoding='unicode')
                     if '/chart' in xml: counts['charts'] += 1
                     if '/table' in xml or '<a:tbl' in xml: counts['tables'] += 1
-                for xfrm in root.iter('{%s}xfrm' % NS_A):
-                    off=xfrm.find('{%s}off' % NS_A); ext=xfrm.find('{%s}ext' % NS_A)
-                    if off is not None and ext is not None:
-                        positions.append((off.attrib.get('x'),off.attrib.get('y'),ext.attrib.get('cx'),ext.attrib.get('cy')))
-                trans=root.find('{%s}transition' % NS_P)
-                transition = ET.tostring(trans,encoding='unicode') if trans is not None else ''
-                anim=0
-                tags={'anim','animClr','animEffect','animMotion','animRot','animScale','set','cmd'}
-                for e in root.iter():
-                    if e.tag.startswith('{%s}' % NS_P) and e.tag.split('}',1)[1] in tags: anim += 1
-                slides.append({'counts':dict(counts),'positions':positions,'texts':texts,'transition':bool(transition),'animations':anim})
+                trans=root.find('.//{%s}transition' % NS_P)
+                slides.append({
+                    'counts':dict(counts), 'texts':texts,
+                    'title_formats':title_formats, 'text_formats':text_formats,
+                    'image_sizes':sorted(image_sizes),
+                    'transition_type':_ppt_transition_signature(trans),
+                    'animations':_ppt_animation_types(root),
+                    'background':_ppt_has_background(z,n,root),
+                    'hidden':hidden, 'identity':is_identity,
+                })
     except Exception:
         pass
-    return {'slides':slides}
+    visible=[x for x in slides if not x.get('identity')]
+    return {'slides':visible, 'all_slides':slides, 'identity_slide_count':sum(1 for x in slides if x.get('identity'))}
 
 def analyze_excel(path, original_name):
     import openpyxl
@@ -524,36 +678,69 @@ def _ppt_shape_stats(prs):
 
 
 def analyze_powerpoint(path, original_name):
-    from pptx import Presentation
-    prs=Presentation(path)
-    stats,titles,font_names,font_sizes,alignments=_ppt_shape_stats(prs)
-    transition_slides=0; animation_count=0
-    with zipfile.ZipFile(path) as z:
-        for n in z.namelist():
-            if re.match(r'ppt/slides/slide\d+\.xml$',n):
+    # PowerPoint grading is intentionally OOXML-first. python-pptx is kept only
+    # for a few simple statistics that are not critical to the requested checks.
+    prof=_ppt_ooxml_profile(path)
+    slides=prof.get('slides',[])
+    slide_count=len(slides)
+    image_count=sum(int(x.get('counts',{}).get('pictures',0)) for x in slides)
+    table_count=sum(int(x.get('counts',{}).get('tables',0)) for x in slides)
+    chart_count=sum(int(x.get('counts',{}).get('charts',0)) for x in slides)
+    shape_count=sum(int(x.get('counts',{}).get('shapes',0)) for x in slides)
+    title_count=sum(len(x.get('title_formats',[])) for x in slides)
+    titles=[]
+    for x in slides:
+        # Ke zobrazení učiteli stačí texty; při hodnocení se jejich znění NEPOROVNÁVÁ.
+        titles.extend((x.get('texts') or [])[:1])
+    animation_count=sum(len(x.get('animations',[])) for x in slides)
+    transition_slides=sum(1 for x in slides if x.get('transition_type'))
+    background_slides=sum(1 for x in slides if x.get('background'))
+
+    # Odrážky z XML (p:sp -> a:pPr -> a:bu*) bez použití pozice objektů.
+    bullet_count=0
+    try:
+        with zipfile.ZipFile(path) as z:
+            for n in sorted((n for n in z.namelist() if re.match(r'ppt/slides/slide\d+\.xml$',n)),
+                            key=lambda n:int(re.search(r'(\d+)',Path(n).stem).group(1))):
                 root=_xml(z,n)
                 if root is None: continue
-                if root.find('{%s}transition' % NS_P) is not None: transition_slides += 1
-                # Count user-visible animation action elements, not timing container nodes.
-                tags={'anim','animClr','animEffect','animMotion','animRot','animScale','set','cmd'}
-                for e in root.iter():
-                    if e.tag.startswith('{%s}' % NS_P) and e.tag.split('}',1)[1] in tags:
-                        animation_count += 1
-    info={'extension':'.pptx','name':original_name,'type':'PowerPoint','slide_count':len(prs.slides),
-          'titles':titles[:50],'title_count':len(titles),'image_count':stats['images'],'table_count':stats['tables'],
-          'chart_count':stats['charts'],'shape_count':stats['autoshapes'],'textbox_count':stats['textboxes'],
-          'bullet_count':stats['bullets'],'font_names':dict(font_names),'font_sizes':dict(font_sizes),
-          'alignments':dict(alignments),'animation_count':animation_count,'transition_slide_count':transition_slides,
-          'has_transition':transition_slides>0,'ooxml':_ppt_ooxml_profile(path)}
-    checks=[('ppt_slides','Počet snímků'),('ppt_titles','Nadpisy snímků'),('ppt_images','Obrázky'),
-            ('ppt_tables','Tabulky'),('ppt_charts','Grafy'),('ppt_shapes','Tvary a textová pole'),('ppt_bullets','Odrážky'),
-            ('ppt_format','Formátování textu – písmo, velikost a zarovnání'),('ppt_animations','Počet animací'),
-            ('ppt_transition','Použitý přechod mezi snímky'),('ppt_transition_count','Počet snímků s přechodem')]
-    pred={'ppt_slides':True,'ppt_titles':info['title_count']>0,'ppt_images':info['image_count']>0,
-          'ppt_tables':info['table_count']>0,'ppt_charts':info['chart_count']>0,
-          'ppt_shapes':info['shape_count']+info['textbox_count']>0,'ppt_bullets':info['bullet_count']>0,
-          'ppt_format':bool(info['font_names'] or info['font_sizes'] or info['alignments']),
-          'ppt_animations':info['animation_count']>0,'ppt_transition':info['has_transition'],'ppt_transition_count':info['has_transition']}
+                all_text=''.join((e.text or '') for e in root.iter('{%s}t' % NS_A))
+                if 'UCEBNICE2:' in all_text: continue
+                for p in root.iter('{%s}p' % NS_A):
+                    ppr=p.find('{%s}pPr' % NS_A)
+                    if ppr is not None and any(ch.tag.split('}',1)[-1].startswith('bu') and ch.tag.split('}',1)[-1] not in ('buNone',) for ch in list(ppr)):
+                        bullet_count += 1
+    except Exception:
+        pass
+
+    info={'extension':'.pptx','name':original_name,'type':'PowerPoint','slide_count':slide_count,
+          'titles':titles[:50],'title_count':title_count,'image_count':image_count,'table_count':table_count,
+          'chart_count':chart_count,'shape_count':shape_count,'textbox_count':0,
+          'bullet_count':bullet_count,'animation_count':animation_count,
+          'transition_slide_count':transition_slides,'has_transition':transition_slides>0,
+          'background_slide_count':background_slides,'has_background':background_slides>0,
+          'identity_slide_count':prof.get('identity_slide_count',0),'ooxml':prof}
+    checks=[
+        ('ppt_slides','Počet snímků'),
+        ('ppt_titles','Nadpisy – font a velikost písma'),
+        ('ppt_images','Obrázky – počet a velikost'),
+        ('ppt_tables','Tabulky'),('ppt_charts','Grafy'),('ppt_shapes','Tvary a textová pole'),('ppt_bullets','Odrážky'),
+        ('ppt_animations','Animace – počet a stejné typy'),
+        ('ppt_transition','Přechody – stejné typy'),
+        ('ppt_background','Pozadí snímků – musí nějaké být'),
+    ]
+    pred={
+        'ppt_slides':True,
+        'ppt_titles':title_count>0,
+        'ppt_images':image_count>0,
+        'ppt_tables':table_count>0,
+        'ppt_charts':chart_count>0,
+        'ppt_shapes':shape_count>0,
+        'ppt_bullets':bullet_count>0,
+        'ppt_animations':animation_count>0,
+        'ppt_transition':transition_slides>0,
+        'ppt_background':background_slides>0,
+    }
     return info,[{'code':c,'label':l} for c,l in checks if pred.get(c,False)]
 
 
@@ -870,16 +1057,53 @@ def evaluate(student_path, student_name, teacher, raw_checks):
         elif code=='word_list_figures': ok=bool(student.get('has_list_of_figures')); label='Seznam obrázků'
         elif code=='word_bibliography': ok=bool(student.get('has_bibliography')); label='Bibliografie'
         elif code=='ppt_slides': ok=int(student.get('slide_count',0))==int(teacher.get('slide_count',0)); label='Počet snímků'
-        elif code=='ppt_titles': ok=(student.get('titles') or [])==(teacher.get('titles') or []); label='Nadpisy snímků'
-        elif code=='ppt_images': ok=int(student.get('image_count',0))==int(teacher.get('image_count',0)); label='Obrázky'
+        elif code=='ppt_titles':
+            # Text nadpisu smí být jiný. Kontroluje se pouze odpovídající font a velikost.
+            ws=teacher.get('ooxml',{}).get('slides',[]) or []; hs=student.get('ooxml',{}).get('slides',[]) or []
+            def _same_title_fmt(a,b):
+                af=str((a or {}).get('font','') or '').strip().casefold(); bf=str((b or {}).get('font','') or '').strip().casefold()
+                az=(a or {}).get('size'); bz=(b or {}).get('size')
+                font_ok=(not af) or af==bf
+                try: size_ok=(az is None) or abs(float(az)-float(bz)) <= 0.11
+                except Exception: size_ok=(az is None and bz is None)
+                return font_ok and size_ok
+            def _slide_titles_ok(w,h):
+                wanted=w.get('title_formats',[]) or []
+                # Student může použít zástupný nadpis i obyčejné textové pole.
+                # Pozice ani text se nekontrolují; hledáme jen odpovídající formát.
+                candidates=list(h.get('title_formats',[]) or []) or list(h.get('text_formats',[]) or [])
+                used=[False]*len(candidates)
+                for tf in wanted:
+                    found=False
+                    for j,hf in enumerate(candidates):
+                        if not used[j] and _same_title_fmt(tf,hf):
+                            used[j]=True; found=True; break
+                    if not found: return False
+                return True
+            ok=len(hs)>=len(ws) and all(_slide_titles_ok(w,hs[i]) for i,w in enumerate(ws)); label='Nadpisy – font a velikost písma'
+        elif code=='ppt_images':
+            # Pozice obrázků je záměrně ignorována; hlídá se počet a rozměry.
+            ws=teacher.get('ooxml',{}).get('slides',[]) or []; hs=student.get('ooxml',{}).get('slides',[]) or []
+            def _img_sizes_equal(want,have):
+                if len(want)!=len(have): return False
+                want=sorted([tuple(map(int,x)) for x in want]); have=sorted([tuple(map(int,x)) for x in have])
+                for (wc,wh),(hc,hh) in zip(want,have):
+                    if wc==0 or wh==0: continue
+                    if abs(hc-wc)/wc>0.01 or abs(hh-wh)/wh>0.01: return False
+                return True
+            ok=len(hs)>=len(ws) and all(_img_sizes_equal(w.get('image_sizes',[]) or [],hs[i].get('image_sizes',[]) or []) for i,w in enumerate(ws)); label='Obrázky – počet a velikost'
         elif code=='ppt_tables': ok=int(student.get('table_count',0))==int(teacher.get('table_count',0)); label='Tabulky'
         elif code=='ppt_charts': ok=int(student.get('chart_count',0))==int(teacher.get('chart_count',0)); label='Grafy'
         elif code=='ppt_shapes': ok=[x.get('counts',{}) for x in student.get('ooxml',{}).get('slides',[])]==[x.get('counts',{}) for x in teacher.get('ooxml',{}).get('slides',[])]; label='Tvary a textová pole'
         elif code=='ppt_bullets': ok=int(student.get('bullet_count',0))==int(teacher.get('bullet_count',0)); label='Odrážky'
         elif code=='ppt_format': ok=_subset_counts(teacher.get('font_names') or {},student.get('font_names') or {}) and _subset_counts(teacher.get('font_sizes') or {},student.get('font_sizes') or {}); label='Formátování textu'
-        elif code=='ppt_animations': ok=[x.get('animations',0) for x in student.get('ooxml',{}).get('slides',[])]==[x.get('animations',0) for x in teacher.get('ooxml',{}).get('slides',[])]; label='Počet animací'
-        elif code=='ppt_transition': ok=[x.get('transition',False) for x in student.get('ooxml',{}).get('slides',[])]==[x.get('transition',False) for x in teacher.get('ooxml',{}).get('slides',[])]; label='Přechod mezi snímky'
+        elif code=='ppt_animations':
+            ok=[sorted(x.get('animations',[]) or []) for x in student.get('ooxml',{}).get('slides',[])]==[sorted(x.get('animations',[]) or []) for x in teacher.get('ooxml',{}).get('slides',[])]; label='Animace – počet a stejné typy'
+        elif code=='ppt_transition': ok=[x.get('transition_type','') for x in student.get('ooxml',{}).get('slides',[])]==[x.get('transition_type','') for x in teacher.get('ooxml',{}).get('slides',[])]; label='Přechody – stejné typy'
         elif code=='ppt_transition_count': ok=int(student.get('transition_slide_count',0))==int(teacher.get('transition_slide_count',0)); label='Počet snímků s přechodem'
+        elif code=='ppt_background':
+            ws=teacher.get('ooxml',{}).get('slides',[]) or []; hs=student.get('ooxml',{}).get('slides',[]) or []
+            ok=len(hs)>=len(ws) and all((not w.get('background')) or bool(hs[i].get('background')) for i,w in enumerate(ws)); label='Pozadí snímků – musí nějaké být'
         elif code=='py_functionality':
             ok=True
             for tc in teacher.get('python_tests') or []:
@@ -921,7 +1145,7 @@ def preview(path, original_name, teacher=False):
         try:
             from pptx import Presentation
             prs=Presentation(path); lines=[]
-            for i,slide in enumerate(prs.slides[:25],1):
+            for i,slide in enumerate(list(prs.slides)[:25],1):
                 texts=[sh.text.strip() for sh in slide.shapes if hasattr(sh,'text') and sh.text.strip()]
                 lines.append(f'Snímek {i}: '+' | '.join(texts))
             return {'kind':'text','text':'\n'.join(lines)}
