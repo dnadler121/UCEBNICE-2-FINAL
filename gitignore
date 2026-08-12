@@ -1,0 +1,14 @@
+.env
+.env.*
+__pycache__/
+*.pyc
+instance/
+
+montessori.db
+*.db
+
+venv/
+.venv/
+
+uploads/
+informatics_submissions/

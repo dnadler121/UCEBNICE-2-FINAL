@@ -10,7 +10,7 @@
     </div>
   </div>
   <section class="test-study-grid">
-    <aside class="test-explain"><h2>Výklad k testu</h2>{% for sec in lesson.sections %}<article><h3>{{ sec.heading }}</h3><div class="docx-content">{{ sec.text|safe }}</div></article>{% endfor %}</aside>
+    <aside class="test-explain"><h2>Výklad k testu</h2>{% for sec in lesson.sections %}<article>{% if sec.heading and 'imported-html-content' not in (sec.text or '') %}<h3>{{ sec.heading }}</h3>{% endif %}<div class="docx-content">{{ sec.text|safe }}</div></article>{% endfor %}</aside>
     <form method="post" action="{{ url_for('finish', lesson_id=lesson._id) }}" class="final-form">
 {% for q in lesson.final_test %}<div class="q-card final final-one"><span class="num">{{ loop.index }}</span><h3>{{ q.question }}</h3>{% set qi=q.id %}
 {% if q.type=='choice' %}{% for op in q.options %}<label class="radio"><input type="radio" name="q{{qi}}" value="{{loop.index0}}" required> {{ op }}</label>{% endfor %}

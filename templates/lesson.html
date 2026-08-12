@@ -18,7 +18,7 @@
     <div class="bar"><i style="width:{{ ((step+1) / lesson.sections|length * 100)|round }}%"></i></div>
     {% set sec = lesson.sections[step] %}
     <section class="hero-grid lesson-docx-grid">
-      <div class="explain-card docx-content" id="vyklad"><h2>{{ sec.heading }}</h2>{{ sec.text|safe }}<div class="interest"><b>💡 Zajímavost</b><br>{{ sec.interest }}</div></div>
+      <div class="explain-card docx-content" id="vyklad">{% if sec.heading and 'imported-html-content' not in (sec.text or '') %}<h2>{{ sec.heading }}</h2>{% endif %}{{ sec.text|safe }}<div class="interest"><b>💡 Zajímavost</b><br>{{ sec.interest }}</div></div>
     </section>
 
     <nav class="tabs"><b>Otázky k výkladu</b><span>Najdi odpověď v textu vlevo/nahoře</span></nav>

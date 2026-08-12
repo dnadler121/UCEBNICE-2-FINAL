@@ -4677,7 +4677,10 @@ def new_lesson():
         db.session.add(les); db.session.flush()
         html_import = import_html_to_lesson_html(request.files.get('html_file'), request.files.getlist('html_assets'))
         sec_text = html_import if html_import is not None else process_inline_images(request.form.get('text',''))
-        sec = Section(lesson_id=les.id, heading=request.form.get('heading','Výklad'), text=sec_text, interest=request.form.get('interest',''), activity=request.form.get('activity',''), order=1)
+        # U hotového HTML je nadpis součástí samotného souboru, nepřidáváme proto
+        # starý výchozí nadpis aplikace nad něj.
+        sec_heading = '' if html_import is not None else request.form.get('heading','Výklad')
+        sec = Section(lesson_id=les.id, heading=sec_heading, text=sec_text, interest=request.form.get('interest',''), activity=request.form.get('activity',''), order=1)
         db.session.add(sec); db.session.flush()
         image_map = save_question_images()
         handle_images(les, sec, image_map)
@@ -4700,12 +4703,16 @@ def edit_lesson(lesson_id):
         les.block.title = request.form.get('block', les.block.title)
         les.title = request.form.get('title', les.title)
         les.tip = request.form.get('tip','')
-        sec.heading = request.form.get('heading','Výklad')
+        requested_heading = request.form.get('heading','Výklad')
         existing_text = sec.text
         html_import = import_html_to_lesson_html(request.files.get('html_file'), request.files.getlist('html_assets'))
         if html_import is not None:
+            sec.heading = ''
             sec.text = html_import
         else:
+            # Při běžné editaci zachováme vlastní nadpis. U již importovaného HTML
+            # ale starý demonstrační nadpis nezobrazujeme.
+            sec.heading = '' if 'imported-html-content' in (existing_text or '') else requested_heading
             sec.text = process_inline_images(request.form.get('text', existing_text) or existing_text)
         sec.interest = request.form.get('interest','')
         sec.activity = request.form.get('activity','')
@@ -4870,6 +4877,18 @@ def import_html_to_lesson_html(html_file, asset_files):
 
     html_text = re.sub(r'(src\s*=\s*["\'])([^"\']+)(["\'])', replace_src, html_text, flags=re.I)
     html_text = html_text.strip()
+
+    # Některé exporty HTML přidají na úplný začátek samostatné číslo stránky/oddílu
+    # (např. <p>1</p> nebo <h1>1</h1>). V lekci se pak zobrazovalo osamocené "1".
+    # Odstraníme ho jen tehdy, když jde opravdu o první samostatný blok s číslem.
+    html_text = re.sub(
+        r'^\s*<(?:p|div|h[1-6])(?:\s+[^>]*)?>\s*\d{1,3}\s*</(?:p|div|h[1-6])>\s*',
+        '',
+        html_text,
+        count=1,
+        flags=re.I | re.S,
+    )
+
     if not html_text:
         raise ValueError('HTML soubor neobsahuje žádný výklad.')
     info = '<div class="docx-import-note"><b>Importováno z HTML:</b> ' + html.escape(filename) + '</div>'

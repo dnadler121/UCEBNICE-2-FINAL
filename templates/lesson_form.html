@@ -45,7 +45,7 @@
           Připrav výklad mimo aplikaci, převeď ho na HTML a sem vlož hlavní soubor <b>.html</b>.
         </div>
       </div>
-      <label>Nadpis výkladu<input name="heading" value="{{ section.heading if section else 'Jak poznáme živé organismy?' }}"></label>
+      <label>Nadpis výkladu<input name="heading" value="{{ section.heading if section else '' }}"></label>
       <div class="form-grid">
         <label>Import HTML výkladu
           <input type="file" name="html_file" accept=".html,.htm,text/html">
