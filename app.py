@@ -4595,7 +4595,10 @@ def delete_lesson(lesson_id):
     if section_ids:
         InlineImage.query.filter(InlineImage.section_id.in_(section_ids)).delete(synchronize_session=False)
         Section.query.filter(Section.id.in_(section_ids)).delete(synchronize_session=False)
-    db.session.delete(les)
+    # Lekci smažeme bulk DELETE. Po předchozím bulk smazání sekcí by
+    # db.session.delete(les) mohl přes načtený vztah les.sections zkoušet
+    # nastavovat section.lesson_id = NULL, přestože je sloupec NOT NULL.
+    Lesson.query.filter_by(id=les.id).delete(synchronize_session=False)
     db.session.commit()
     flash(f'Lekce „{title}“ byla trvale smazána.')
     return redirect(url_for('teacher_home'))
