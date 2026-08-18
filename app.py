@@ -594,6 +594,28 @@ def course_from_lesson(lesson):
         return {'subject': sub.name, 'grade': lesson.block.grade.name, 'block': lesson.block.title, 'icon': sub.icon}
     return {'subject': 'Montessori', 'grade': '', 'block': '', 'icon': '🌱'}
 
+def cleanup_empty_curriculum():
+    """Odstraní prázdné bloky/ročníky/předměty po trvalém smazání lekcí.
+
+    Díky tomu v navigaci nezůstávají staré odkazy nebo prázdné nadpisy po
+    lekcích, které učitel už smazal.
+    """
+    # Mažeme od nejnižší úrovně nahoru. Flush zajistí, že následující dotaz
+    # už vidí aktuální stav i v rámci stejné transakce.
+    for block in Block.query.all():
+        if Lesson.query.filter_by(block_id=block.id).count() == 0:
+            db.session.delete(block)
+    db.session.flush()
+    for grade in Grade.query.all():
+        if Block.query.filter_by(grade_id=grade.id).count() == 0:
+            db.session.delete(grade)
+    db.session.flush()
+    for subject in Subject.query.all():
+        if Grade.query.filter_by(subject_id=subject.id).count() == 0:
+            db.session.delete(subject)
+    db.session.flush()
+
+
 def visible_lessons():
     return Lesson.query.filter_by(is_published=True).join(Block).join(Grade).join(Subject).order_by(Subject.name, Grade.name, Block.order, Lesson.order).all()
 
@@ -4965,8 +4987,10 @@ def delete_lesson(lesson_id):
     # db.session.delete(les) mohl přes načtený vztah les.sections zkoušet
     # nastavovat section.lesson_id = NULL, přestože je sloupec NOT NULL.
     Lesson.query.filter_by(id=les.id).delete(synchronize_session=False)
+    db.session.flush()
+    cleanup_empty_curriculum()
     db.session.commit()
-    flash(f'Lekce „{title}“ byla trvale smazána.')
+    flash(f'Lekce „{title}“ byla trvale smazána. Prázdné staré odkazy byly také odstraněny.')
     return redirect(url_for('teacher_home'))
 
 
@@ -5494,7 +5518,8 @@ def seed():
     # Ukázkový konkrétní student pro vyzkoušení přihlášení. Další studenty vytvoří učitel v editoru.
     if not User.query.filter_by(username='jan.novak').first():
         db.session.add(User(username='jan.novak', name='Jan Novák', role='student', password_hash=generate_password_hash('zive123')))
-    if Subject.query.count()==0:
+    if os.getenv('SEED_DEMO_LESSON', '0') == '1' and Subject.query.count()==0:
+        # Volitelná demo lekce. Ve skutečném provozu se sama neobnovuje po smazání.
         # zkopíruj ukázkové obrázky ze staré lekce do uploads
         old = BASE/'lessons'/'bio6_01_co_je_zive'/'images'
         for n in ['1.jpg','2.jpg','3.jpg']:
@@ -5510,6 +5535,8 @@ def seed():
 Co patří mezi znaky života? | přijímání živin | tvrdost kamene | barva lavice | 1
 Která věc je neživá? | strom | houba | sklenice | 3'''
         add_questions_from_text(les.id, sec.id, 'study', raw)
+    # Odstraní i prázdné odkazy, které mohly zůstat v databázi po starších verzích.
+    cleanup_empty_curriculum()
     db.session.commit()
 
 with app.app_context():

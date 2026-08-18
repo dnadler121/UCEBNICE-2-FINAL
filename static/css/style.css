@@ -361,3 +361,9 @@ body{margin:0;font-family:Inter,Segoe UI,Arial,sans-serif;color:var(--text);back
 .teacher-zone-stage{position:relative;max-width:760px;background:#e8ece9;border-radius:15px;overflow:hidden}.teacher-zone-stage img{display:block;width:100%;height:auto;user-select:none}.teacher-zone-box{position:absolute;border:3px solid #2f7144;background:rgba(47,113,68,.14);pointer-events:none}.ai-count-grid{display:grid;grid-template-columns:repeat(4,minmax(120px,1fr));gap:10px;margin:14px 0}.ai-count-grid label{display:flex;flex-direction:column;gap:4px}.ai-count-grid input{padding:9px;border:1px solid #cad5cc;border-radius:9px}
 @media(max-width:1180px){.montessori-layout{grid-template-columns:190px minmax(0,1fr)}.montessori-rightbar{display:none}.montessori-workspace{grid-template-columns:36% 64%}}
 @media(max-width:850px){.montessori-layout{display:block}.montessori-workspace{grid-template-columns:1fr}.study-pane{position:relative;top:auto}.study-scroll{max-height:48vh}.activity-type-grid,.ai-count-grid{grid-template-columns:1fr 1fr}.activity-builder-grid{grid-template-columns:1fr}.activity-builder-grid .wide{grid-column:auto}}
+/* V1.3 – jasné označení správné oblasti u videa + návrat k výuce */
+.video-zone-actions{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.teacher-zone-stage.zone-drawing-active{cursor:crosshair;outline:3px solid rgba(47,113,68,.22);outline-offset:3px}
+.teacher-zone-stage.zone-drawing-active::after{content:'Táhni myší přes správné místo';position:absolute;left:12px;bottom:12px;background:rgba(19,60,32,.88);color:#fff;padding:7px 11px;border-radius:9px;font-size:12px;font-weight:800;pointer-events:none}
+.review-learning-btn{display:inline-flex;margin-top:14px;text-decoration:none;align-items:center;justify-content:center}
+.done-actions{display:flex;gap:12px;justify-content:center;flex-wrap:wrap;margin-top:14px}

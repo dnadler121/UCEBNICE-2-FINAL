@@ -2,7 +2,7 @@
 {% block content %}
 <div class="layout montessori-layout">
   {% include 'sidebar.html' %}
-  <main class="main-card montessori-main" id="montessoriLesson" data-lesson-id="{{ lesson._id }}" data-step="{{ step }}" data-read-complete="{{ 1 if section_read_complete else 0 }}">
+  <main class="main-card montessori-main" id="montessoriLesson" data-lesson-id="{{ lesson._id }}" data-step="{{ step }}" data-read-complete="{{ 1 if section_read_complete else 0 }}" data-review="{{ 1 if request.args.get('review') == '1' else 0 }}">
     <div class="title-row">
       <div><h1>{{ lesson.title }}</h1><p>Objevuj, hledej ve studijním materiálu a postupuj krok za krokem.</p></div>
       <div class="lesson-actions">
@@ -66,7 +66,8 @@
         </div>
 
         <div class="sequence-done" id="sequenceDone" hidden>
-          <div class="done-star">⭐</div><h2>Tuto část jsi zvládl/a</h2><p>Výklad zůstává kdykoliv dostupný. Můžeš pokračovat dál.</p>
+          <div class="done-star">⭐</div><h2>Tuto část jsi zvládl/a</h2><p>Výklad i splněné otázky a aktivity zůstávají kdykoliv dostupné.</p>
+          <a class="secondary-action review-learning-btn" href="{{ url_for('lesson', lesson_id=lesson._id, step=step, review=1) }}">📖 Znovu projít výuku a aktivity</a>
         </div>
         <div class="bottom-nav montessori-nav">
           <a class="back" href="{{ url_for('lesson', lesson_id=lesson._id, step=step-1) if step>0 else url_for('dashboard') }}">← Zpět</a>

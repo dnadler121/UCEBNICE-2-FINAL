@@ -37,7 +37,7 @@
             {% set completed = false %}{% set context = 'final' %}{% include '_practical_activity.html' %}
           {% endfor %}
         </div>
-        <div id="finalDone" class="sequence-done" hidden><div class="done-star">🌟</div><h2>Výborně, všechno je zvládnuto</h2><p>Počet pokusů se nikde neodečítá. Důležité je, že ses k výsledku dopracoval/a.</p><a class="next" href="{{ url_for('dashboard') }}">Zpět na přehled</a></div>
+        <div id="finalDone" class="sequence-done" hidden><div class="done-star">🌟</div><h2>Výborně, všechno je zvládnuto</h2><p>Počet pokusů se nikde neodečítá. Důležité je, že ses k výsledku dopracoval/a.</p><div class="done-actions"><a class="secondary-action" href="{{ url_for('lesson', lesson_id=lesson._id, review=1) }}">📖 Zpět k výuce</a><a class="next" href="{{ url_for('dashboard') }}">Zpět na přehled</a></div></div>
       </section>
     </div>
   </main>
