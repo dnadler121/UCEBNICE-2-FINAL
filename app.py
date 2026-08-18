@@ -1522,15 +1522,13 @@ def check_practical_activity(activity, answer):
             expected = {str(i): str(item.get('category')) for i, item in enumerate(cfg.get('items', []))}
             got = {str(k): str(v) for k, v in (answer.get('assignments') or {}).items()}
             return bool(expected) and all(got.get(k) == v for k, v in expected.items())
-        placements = answer.get('placements') or {}
+        # Obrázkové kartičky: každý nahraný obrázek má svůj očíslovaný cíl.
+        # Student obrázky nevidí očíslované; přiřazuje je k názvům/cílům 1..N.
+        assignments = answer.get('assignments') or {}
         cards = cfg.get('cards', [])
         if not cards:
             return False
-        for i, card in enumerate(cards):
-            pos = placements.get(str(i)) or placements.get(i) or {}
-            if not _point_in_zone(pos.get('x'), pos.get('y'), card.get('zone', {})):
-                return False
-        return True
+        return all(str(assignments.get(str(i), assignments.get(i, ''))) == str(i) for i in range(len(cards)))
     if typ == 'real_world':
         answers = [strip_accents(x) for x in (answer.get('answers') or []) if str(x).strip()]
         min_items = max(1, int(cfg.get('min_items', 3) or 3))
@@ -5079,11 +5077,22 @@ def save_practical_activities_from_payload(lesson, section, payload):
     order = 1
     for item in data if isinstance(data, list) else []:
         typ = str(item.get('type') or '').strip()
-        if typ not in {'cards','video_find','video_observe','find_image','sort','real_world'}:
+        if typ not in {'cards','video_find','video_observe','find_image','real_world'}:
             continue
         title = str(item.get('title') or 'Praktická aktivita').strip()
         prompt = str(item.get('prompt') or '').strip()
         cfg = item.get('config') if isinstance(item.get('config'), dict) else {}
+        # Praktické aktivity mohou mít média i uvnitř configu (např. více obrázků
+        # u obrázkových kartiček). Projdeme config rekurzivně a upload reference uložíme.
+        def _save_cfg_media(value):
+            if isinstance(value, dict):
+                return {k: _save_cfg_media(v) for k, v in value.items()}
+            if isinstance(value, list):
+                return [_save_cfg_media(v) for v in value]
+            if isinstance(value, str) and value.startswith('__file__:'):
+                return _save_activity_file(value, 'pacfg_')
+            return value
+        cfg = _save_cfg_media(cfg)
         image = _save_activity_file(item.get('image'), 'paimg_')
         video = _save_activity_file(item.get('video'), 'pavideo_')
         db.session.add(PracticalActivity(

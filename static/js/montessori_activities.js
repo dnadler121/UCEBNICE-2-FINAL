@@ -34,14 +34,6 @@
     const box=card.querySelector('.observe-options'); if(!box) return;
     (cfg.options||[]).forEach((op,i)=>{const b=document.createElement('button');b.type='button';b.className='observe-option';b.textContent=op;b.onclick=()=>check(card,{selected:i});box.appendChild(b);});
   }
-  function initSort(card,cfg){
-    const bank=card.querySelector('.sort-bank'), zones=card.querySelector('.sort-zones'); if(!bank||!zones) return;
-    const assignments={};
-    (cfg.categories||[]).forEach((name,idx)=>{const z=document.createElement('div');z.className='sort-zone';z.dataset.category=idx;z.innerHTML=`<h3>${name}</h3><div class="sort-drop"></div>`;zones.appendChild(z);});
-    (cfg.items||[]).forEach((it,idx)=>{const b=document.createElement('button');b.type='button';b.className='sort-chip';b.textContent=it.label||it;b.draggable=true;b.dataset.item=idx;b.addEventListener('dragstart',e=>e.dataTransfer.setData('text/plain',String(idx)));bank.appendChild(b);});
-    card.querySelectorAll('.sort-zone').forEach(z=>{z.addEventListener('dragover',e=>e.preventDefault());z.addEventListener('drop',e=>{e.preventDefault();const idx=e.dataTransfer.getData('text/plain');const chip=card.querySelector(`.sort-chip[data-item="${idx}"]`);if(chip){z.querySelector('.sort-drop').appendChild(chip);assignments[idx]=Number(z.dataset.category);}});});
-    card.querySelector('.check-activity')?.addEventListener('click',()=>check(card,{assignments}));
-  }
   function initCards(card,cfg){
     const bank=card.querySelector('.cards-bank'); if(!bank)return;
     if(cfg.mode==='categories'){
@@ -51,11 +43,25 @@
       card.querySelectorAll('.sort-zone').forEach(z=>{z.addEventListener('dragover',e=>e.preventDefault());z.addEventListener('drop',e=>{e.preventDefault();const idx=e.dataTransfer.getData('text/plain'),chip=card.querySelector(`.drag-card[data-card="${idx}"]`);if(chip){z.querySelector('.sort-drop').appendChild(chip);assignments[idx]=Number(z.dataset.category);}});});
       card.querySelector('.check-activity')?.addEventListener('click',()=>check(card,{assignments})); return;
     }
-    const stage=card.querySelector('.cards-image-stage'),overlay=card.querySelector('.card-drop-overlay'); if(!stage||!overlay)return;
-    const placements={};
-    (cfg.cards||[]).forEach((it,idx)=>{const b=document.createElement('button');b.type='button';b.className='drag-card';b.textContent=it.label||`Kartička ${idx+1}`;b.draggable=true;b.dataset.card=idx;b.addEventListener('dragstart',e=>e.dataTransfer.setData('text/plain',String(idx)));bank.appendChild(b);});
-    stage.addEventListener('dragover',e=>e.preventDefault());stage.addEventListener('drop',e=>{e.preventDefault();const idx=e.dataTransfer.getData('text/plain');const p=pctPoint(e,stage);placements[idx]=p;const old=overlay.querySelector(`[data-placement="${idx}"]`);if(old)old.remove();const tag=document.createElement('span');tag.className='placed-card';tag.dataset.placement=idx;tag.textContent=(cfg.cards?.[Number(idx)]?.label)||'';tag.style.left=`${p.x*100}%`;tag.style.top=`${p.y*100}%`;overlay.appendChild(tag);});
-    card.querySelector('.check-activity')?.addEventListener('click',()=>check(card,{placements}));
+    const targets=card.querySelector('.image-card-targets'); if(!targets)return;
+    const assignments={};
+    const items=(cfg.cards||[]).map((it,idx)=>({it,idx}));
+    // Zamícháme pouze nabídku obrázků; cíle zůstávají očíslované 1..N.
+    items.sort(()=>Math.random()-.5).forEach(({it,idx})=>{
+      const tile=document.createElement('div');tile.className='image-drag-card';tile.draggable=true;tile.dataset.card=idx;
+      const img=document.createElement('img');img.alt='Obrázek k přiřazení';img.src=`/uploads/${encodeURIComponent(it.image||'')}`;tile.appendChild(img);
+      tile.addEventListener('dragstart',e=>e.dataTransfer.setData('text/plain',String(idx)));bank.appendChild(tile);
+    });
+    (cfg.cards||[]).forEach((it,idx)=>{
+      const z=document.createElement('div');z.className='image-card-target';z.dataset.target=idx;
+      z.innerHTML=`<div class="image-target-title"><span class="image-target-number">${idx+1}</span><b>${it.label||''}</b></div><div class="image-target-drop">Sem přetáhni obrázek</div>`;targets.appendChild(z);
+      z.addEventListener('dragover',e=>e.preventDefault());z.addEventListener('drop',e=>{
+        e.preventDefault();const cardIdx=Number(e.dataTransfer.getData('text/plain'));const tile=card.querySelector(`.image-drag-card[data-card="${cardIdx}"]`);if(!tile)return;
+        if(cardIdx!==idx){z.classList.add('wrong-drop');setTimeout(()=>z.classList.remove('wrong-drop'),650);return;}
+        z.querySelector('.image-target-drop').innerHTML='';z.querySelector('.image-target-drop').appendChild(tile);z.classList.add('correct-drop');assignments[String(cardIdx)]=idx;
+      });
+    });
+    card.querySelector('.check-activity')?.addEventListener('click',()=>check(card,{assignments}));
   }
   function initMission(card,cfg){
     const box=card.querySelector('.mission-answers'); if(!box)return; const n=Math.max(1,Number(cfg.min_items||3));
@@ -65,7 +71,7 @@
   function init(card){
     let cfg={};try{cfg=JSON.parse(card.dataset.config||'{}')}catch(e){}
     const typ=card.dataset.activityType;
-    if(typ==='find_image')initFindImage(card,cfg); else if(typ==='video_find')initVideoFind(card,cfg); else if(typ==='video_observe')initVideoObserve(card,cfg); else if(typ==='sort')initSort(card,cfg); else if(typ==='cards')initCards(card,cfg); else if(typ==='real_world')initMission(card,cfg);
+    if(typ==='find_image')initFindImage(card,cfg); else if(typ==='video_find')initVideoFind(card,cfg); else if(typ==='video_observe')initVideoObserve(card,cfg); else if(typ==='cards')initCards(card,cfg); else if(typ==='real_world')initMission(card,cfg);
   }
   document.addEventListener('DOMContentLoaded',()=>document.querySelectorAll('.practical-card').forEach(init));
 })();

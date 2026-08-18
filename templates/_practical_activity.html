@@ -4,7 +4,6 @@
     {% elif activity.type == 'video_find' %}🎥 ZASTAV A UKAŽ
     {% elif activity.type == 'video_observe' %}🎬 POZORUJ VIDEO
     {% elif activity.type == 'find_image' %}🔎 NAJDI NA OBRÁZKU
-    {% elif activity.type == 'sort' %}↔️ SEŘAĎ / ROZTŘIĎ
     {% elif activity.type == 'real_world' %}🌱 MISE VE SKUTEČNÉM SVĚTĚ
     {% endif %}
   </div>
@@ -31,22 +30,15 @@
     {% if activity.video %}<video class="activity-video observe-video" controls preload="metadata" src="{{ url_for('uploads', filename=activity.video) }}"></video>{% else %}<div class="missing-media">Učitel zatím nevložil video.</div>{% endif %}
     <div class="observe-options"></div>
 
-  {% elif activity.type == 'sort' %}
-    <div class="sort-bank"></div>
-    <div class="sort-zones"></div>
-    <button type="button" class="check-activity primary-action">Zkontrolovat rozdělení</button>
-
   {% elif activity.type == 'cards' %}
     {% if activity.config.get('mode') == 'categories' %}
       <div class="cards-bank"></div>
       <div class="cards-category-zones sort-zones"></div>
       <button type="button" class="check-activity primary-action">Zkontrolovat kartičky</button>
     {% else %}
-      <div class="cards-bank"></div>
-      <div class="cards-image-stage hotspot-stage">
-        {% if activity.image %}<img src="{{ url_for('uploads', filename=activity.image) }}" alt="Obrázek ke skládačce">{% else %}<div class="missing-media">Učitel zatím nevložil obrázek.</div>{% endif %}
-        <div class="card-drop-overlay"></div>
-      </div>
+      <div class="image-cards-instruction">Přetáhni každý obrázek do správného očíslovaného obdélníku.</div>
+      <div class="cards-bank image-cards-bank"></div>
+      <div class="image-card-targets"></div>
       <button type="button" class="check-activity primary-action">Zkontrolovat skládačku</button>
     {% endif %}
 
