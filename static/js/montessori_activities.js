@@ -43,7 +43,15 @@
     card.querySelector('.check-activity')?.addEventListener('click',()=>check(card,{assignments}));
   }
   function initCards(card,cfg){
-    const bank=card.querySelector('.cards-bank'),stage=card.querySelector('.cards-image-stage'),overlay=card.querySelector('.card-drop-overlay'); if(!bank||!stage||!overlay)return;
+    const bank=card.querySelector('.cards-bank'); if(!bank)return;
+    if(cfg.mode==='categories'){
+      const zones=card.querySelector('.cards-category-zones'),assignments={}; if(!zones)return;
+      (cfg.categories||[]).forEach((name,idx)=>{const z=document.createElement('div');z.className='sort-zone';z.dataset.category=idx;z.innerHTML=`<h3>${name}</h3><div class="sort-drop"></div>`;zones.appendChild(z);});
+      (cfg.items||[]).forEach((it,idx)=>{const b=document.createElement('button');b.type='button';b.className='drag-card';b.textContent=it.label||it;b.draggable=true;b.dataset.card=idx;b.addEventListener('dragstart',e=>e.dataTransfer.setData('text/plain',String(idx)));bank.appendChild(b);});
+      card.querySelectorAll('.sort-zone').forEach(z=>{z.addEventListener('dragover',e=>e.preventDefault());z.addEventListener('drop',e=>{e.preventDefault();const idx=e.dataTransfer.getData('text/plain'),chip=card.querySelector(`.drag-card[data-card="${idx}"]`);if(chip){z.querySelector('.sort-drop').appendChild(chip);assignments[idx]=Number(z.dataset.category);}});});
+      card.querySelector('.check-activity')?.addEventListener('click',()=>check(card,{assignments})); return;
+    }
+    const stage=card.querySelector('.cards-image-stage'),overlay=card.querySelector('.card-drop-overlay'); if(!stage||!overlay)return;
     const placements={};
     (cfg.cards||[]).forEach((it,idx)=>{const b=document.createElement('button');b.type='button';b.className='drag-card';b.textContent=it.label||`Kartička ${idx+1}`;b.draggable=true;b.dataset.card=idx;b.addEventListener('dragstart',e=>e.dataTransfer.setData('text/plain',String(idx)));bank.appendChild(b);});
     stage.addEventListener('dragover',e=>e.preventDefault());stage.addEventListener('drop',e=>{e.preventDefault();const idx=e.dataTransfer.getData('text/plain');const p=pctPoint(e,stage);placements[idx]=p;const old=overlay.querySelector(`[data-placement="${idx}"]`);if(old)old.remove();const tag=document.createElement('span');tag.className='placed-card';tag.dataset.placement=idx;tag.textContent=(cfg.cards?.[Number(idx)]?.label)||'';tag.style.left=`${p.x*100}%`;tag.style.top=`${p.y*100}%`;overlay.appendChild(tag);});

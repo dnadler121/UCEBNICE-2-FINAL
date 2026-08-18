@@ -37,12 +37,18 @@
     <button type="button" class="check-activity primary-action">Zkontrolovat rozdělení</button>
 
   {% elif activity.type == 'cards' %}
-    <div class="cards-bank"></div>
-    <div class="cards-image-stage hotspot-stage">
-      {% if activity.image %}<img src="{{ url_for('uploads', filename=activity.image) }}" alt="Obrázek ke skládačce">{% else %}<div class="missing-media">Učitel zatím nevložil obrázek.</div>{% endif %}
-      <div class="card-drop-overlay"></div>
-    </div>
-    <button type="button" class="check-activity primary-action">Zkontrolovat skládačku</button>
+    {% if activity.config.get('mode') == 'categories' %}
+      <div class="cards-bank"></div>
+      <div class="cards-category-zones sort-zones"></div>
+      <button type="button" class="check-activity primary-action">Zkontrolovat kartičky</button>
+    {% else %}
+      <div class="cards-bank"></div>
+      <div class="cards-image-stage hotspot-stage">
+        {% if activity.image %}<img src="{{ url_for('uploads', filename=activity.image) }}" alt="Obrázek ke skládačce">{% else %}<div class="missing-media">Učitel zatím nevložil obrázek.</div>{% endif %}
+        <div class="card-drop-overlay"></div>
+      </div>
+      <button type="button" class="check-activity primary-action">Zkontrolovat skládačku</button>
+    {% endif %}
 
   {% elif activity.type == 'real_world' %}
     <div class="mission-note">👣 Odejdi na chvíli od počítače, úkol opravdu proveď a potom se vrať k odpovědi.</div>

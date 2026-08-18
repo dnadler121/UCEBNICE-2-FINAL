@@ -1496,6 +1496,10 @@ def check_practical_activity(activity, answer):
         got = {str(k): str(v) for k, v in (answer.get('assignments') or {}).items()}
         return bool(expected) and all(got.get(k) == v for k, v in expected.items())
     if typ == 'cards':
+        if cfg.get('mode') == 'categories':
+            expected = {str(i): str(item.get('category')) for i, item in enumerate(cfg.get('items', []))}
+            got = {str(k): str(v) for k, v in (answer.get('assignments') or {}).items()}
+            return bool(expected) and all(got.get(k) == v for k, v in expected.items())
         placements = answer.get('placements') or {}
         cards = cfg.get('cards', [])
         if not cards:
