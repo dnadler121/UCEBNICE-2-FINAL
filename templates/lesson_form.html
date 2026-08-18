@@ -12,6 +12,7 @@
 
   <form method="post" enctype="multipart/form-data" id="lessonEditorForm">
     <input type="hidden" name="questions_json" id="questions_json">
+    <input type="hidden" name="activities_json" id="activities_json">
 
     <section class="course-card editor-section-card">
       <h2>1. Základ lekce</h2>
@@ -82,6 +83,36 @@
       <div class="question-list"></div>
     </section>
 
+    <section class="course-card editor-section-card activity-factory" id="activityFactory">
+      <div class="factory-head"><div><h2>4. Praktické aktivity</h2><p>Aktivity jsou volitelné. Přidej jen ty, které se pro téma hodí. Student je bude řešit jako velké kroky uprostřed obrazovky.</p></div><span class="factory-badge">Montessori + klasická škola</span></div>
+      <div class="activity-type-grid">
+        <button type="button" data-activity-type="cards">🧩 Kartičky</button>
+        <button type="button" data-activity-type="video_find">🎥 Zastav a ukaž</button>
+        <button type="button" data-activity-type="video_observe">🎬 Pozoruj video</button>
+        <button type="button" data-activity-type="find_image">🔎 Najdi na obrázku</button>
+        <button type="button" data-activity-type="sort">↔️ Roztřiď</button>
+        <button type="button" data-activity-type="real_world">🌱 Skutečná mise</button>
+      </div>
+      <div id="activityBuilder" class="activity-builder"><p class="muted">Vyber typ praktické aktivity.</p></div>
+      <div id="activityFileBucket" class="hidden-file-bucket"></div>
+      <div id="activityList" class="activity-editor-list"></div>
+    </section>
+
+    <section class="course-card editor-section-card ai-brief-card">
+      <h2>5. Zadání pro přípravu lekce přes AI</h2>
+      <p>Vyplň základ lekce nahoře, nastav kolik chceš otázek a praktických aktivit a stáhni CSV. Ten soubor mi potom pošleš a já podle něj připravím text výkladu, JSON otázek, návrhy obrázků a zadání aktivit.</p>
+      <div class="ai-count-grid">
+        <label>Běžné otázky <input type="number" id="briefQuestions" min="0" value="6"></label>
+        <label>🧩 Kartičky <input type="number" data-brief="cards" min="0" value="1"></label>
+        <label>🎥 Zastav a ukaž <input type="number" data-brief="video_find" min="0" value="1"></label>
+        <label>🎬 Pozoruj video <input type="number" data-brief="video_observe" min="0" value="1"></label>
+        <label>🔎 Najdi na obrázku <input type="number" data-brief="find_image" min="0" value="1"></label>
+        <label>↔️ Roztřiď <input type="number" data-brief="sort" min="0" value="1"></label>
+        <label>🌱 Skutečná mise <input type="number" data-brief="real_world" min="0" value="1"></label>
+      </div>
+      <button type="button" id="downloadAiBrief" class="savebtn">⬇️ Stáhnout CSV zadání pro AI</button>
+    </section>
+
     <button class="testbtn submit">Uložit lekci</button>
   </form>
 </main>
@@ -93,11 +124,13 @@
 window.initialQuestions = {
   questions: {{ (questions_json or '[]')|safe }}
 };
+window.initialActivities = {{ (activities_json or '[]')|safe }};
 window.initialGallery = [
   {% for img in gallery_images or [] %}{name: {{ img|tojson }}, url: {{ url_for('uploads', filename=img)|tojson }} }{{ ',' if not loop.last }}{% endfor %}
 ];
 </script>
 <script src="{{ url_for('static', filename='js/editor_questions.js') }}"></script>
+<script src="{{ url_for('static', filename='js/editor_activities.js') }}"></script>
 
 
 {% endblock %}

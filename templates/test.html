@@ -1,22 +1,48 @@
 {% extends 'base.html' %}
 {% block content %}
-<div class="layout">
-{% include 'sidebar.html' %}
-<main class="main-card test-wide" id="finalTestCard" data-lesson-id="{{ lesson._id }}">
-  <div class="title-row">
-    <div><h1>Závěrečný test</h1><p>Test slouží jako práce s textem. Výklad je pořád vedle, aby žák hledal odpovědi.</p></div>
-    <div class="lesson-actions">
-      <a id="testSaveExitBtn" class="switch" href="{{ url_for('dashboard') }}">💾 Ukončit a uložit</a>
+<div class="layout montessori-layout">
+  {% include 'sidebar.html' %}
+  <main class="main-card montessori-main" id="montessoriFinal" data-lesson-id="{{ lesson._id }}">
+    <div class="title-row">
+      <div><h1>🧠 Teď to zkus sám</h1><p>Chyba nic nebere. Zkoušej znovu a kdykoliv hledej ve studijním materiálu vedle.</p></div>
+      <div class="lesson-actions"><a class="switch" href="{{ url_for('dashboard') }}">💾 Ukončit a uložit</a><a class="switch" href="{{ url_for('lesson', lesson_id=lesson._id) }}">📖 Zpět k lekci</a></div>
     </div>
-  </div>
-  <section class="test-study-grid">
-    <aside class="test-explain"><h2>Výklad k testu</h2>{% for sec in lesson.sections %}<article>{% if sec.heading and 'imported-html-content' not in (sec.text or '') %}<h3>{{ sec.heading }}</h3>{% endif %}<div class="docx-content">{{ sec.text|safe }}</div></article>{% endfor %}</aside>
-    <form method="post" action="{{ url_for('finish', lesson_id=lesson._id) }}" class="final-form">
-{% for q in lesson.final_test %}<div class="q-card final final-one"><span class="num">{{ loop.index }}</span><h3>{{ q.question }}</h3>{% set qi=q.id %}
-{% if q.type=='choice' %}{% for op in q.options %}<label class="radio"><input type="radio" name="q{{qi}}" value="{{loop.index0}}" required> {{ op }}</label>{% endfor %}
-{% elif q.type=='image_choice' %}<div class="img-options form">{% for im in q.images %}<label><input type="radio" name="q{{qi}}" value="{{loop.index0}}" required><img src="{{ url_for('uploads', filename=im) }}"><small>{{ q.labels[loop.index0] }}</small></label>{% endfor %}</div>
-{% else %}{% if q.image %}<div class="question-image"><img src="{{ url_for('uploads', filename=q.image) }}"></div>{% endif %}<input name="q{{qi}}" class="text-answer" required placeholder="Napiš odpověď">{% endif %}</div>{% endfor %}<button class="testbtn submit">Odevzdat test</button></form>
-  </section>
-</main>
-<aside class="rightbar"><div class="panel graphic"><div class="big-plant">🔎</div><h2>Hledej v textu</h2><p>Správná odpověď má být dohledatelná ve výkladu.</p></div></aside>
-</div>{% endblock %}
+
+    <div class="montessori-workspace final-workspace">
+      <aside class="study-pane">
+        <div class="study-pane-head"><span>📖</span><div><b>Studijní materiál</b><small>Můžeš ho používat po celou dobu.</small></div></div>
+        <div class="study-scroll final-study-scroll">
+          {% for sec in lesson.sections %}<article class="docx-content">{% if sec.heading and 'imported-html-content' not in (sec.text or '') %}<h2>{{ sec.heading }}</h2>{% endif %}{{ sec.text|safe }}{% if sec.interest %}<div class="interest"><b>💡 Zajímavost</b><br>{{ sec.interest }}</div>{% endif %}</article>{% endfor %}
+        </div>
+      </aside>
+
+      <section class="learning-pane">
+        <div class="final-status-card">
+          <div><span class="eyebrow">AKTUÁLNÍ STAV</span><h2 id="finalLabel">Načítám…</h2><p>Splněno <b id="finalCount">0 / 0</b></p></div>
+          <div class="final-percent"><strong id="finalPercent">0 %</strong><small id="finalGrade">známka 5</small></div>
+        </div>
+        <div class="bar final-bar"><i id="finalBar" style="width:0%"></i></div>
+
+        <div class="learning-sequence" id="finalSequence">
+          {% for q in lesson.final_test %}
+          <div class="q-card learning-item final-learning-item" data-kind="question" data-item-key="q:{{ q.id }}" data-question-id="{{ q.id }}" data-completed="0">
+            <div class="activity-kicker">❓ OVĚŘOVACÍ OTÁZKA</div><h2>{{ q.question }}</h2>
+            {% if q.type == 'image_choice' %}<div class="img-options">{% for im in q.images %}<button type="button" data-answer="{{ loop.index0 }}"><img src="{{ url_for('uploads', filename=im) }}"></button>{% endfor %}</div>
+            {% elif q.type == 'choice' %}<div class="choice-options">{% for op in q.options %}<button type="button" data-answer="{{ loop.index0 }}">{{ op }}</button>{% endfor %}</div>
+            {% else %}{% if q.image %}<div class="question-image"><img src="{{ url_for('uploads', filename=q.image) }}"></div>{% endif %}<div class="answer-row"><input class="text-answer" placeholder="Napiš odpověď"><button type="button" class="check-final-question primary-action">Zkontrolovat</button></div>{% endif %}
+            <div class="feedback"></div><div class="study-reminder">📖 Nevíš? Klidně si odpověď znovu najdi ve výkladu vlevo.</div>
+          </div>
+          {% endfor %}
+          {% for activity in lesson.final_activities %}
+            {% set completed = false %}{% set context = 'final' %}{% include '_practical_activity.html' %}
+          {% endfor %}
+        </div>
+        <div id="finalDone" class="sequence-done" hidden><div class="done-star">🌟</div><h2>Výborně, všechno je zvládnuto</h2><p>Počet pokusů se nikde neodečítá. Důležité je, že ses k výsledku dopracoval/a.</p><a class="next" href="{{ url_for('dashboard') }}">Zpět na přehled</a></div>
+      </section>
+    </div>
+  </main>
+  <aside class="rightbar montessori-rightbar"><div class="panel"><h2>Bez trestu za chybu</h2><p>Nesprávná odpověď nesnižuje výsledek. Procenta ukazují pouze, kolik částí už máš skutečně zvládnutých.</p></div></aside>
+</div>
+<script src="{{ url_for('static', filename='js/montessori_activities.js') }}"></script>
+<script src="{{ url_for('static', filename='js/montessori_final.js') }}"></script>
+{% endblock %}

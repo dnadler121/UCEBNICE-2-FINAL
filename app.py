@@ -103,6 +103,66 @@ class Question(db.Model):
     lesson = db.relationship('Lesson', backref='questions')
     section = db.relationship('Section', backref='questions')
 
+class PracticalActivity(db.Model):
+    """Univerzální praktická aktivita pro Biologii / Občanskou výchovu."""
+    id = db.Column(db.Integer, primary_key=True)
+    lesson_id = db.Column(db.Integer, db.ForeignKey('lesson.id'), nullable=False)
+    section_id = db.Column(db.Integer, db.ForeignKey('section.id'), nullable=True)
+    order = db.Column(db.Integer, default=1)
+    activity_type = db.Column(db.String(40), nullable=False, default='find_image')
+    title = db.Column(db.String(220), default='Praktická aktivita')
+    prompt = db.Column(db.Text, default='')
+    config_json = db.Column(db.Text, default='{}')
+    image_file = db.Column(db.String(255), default='')
+    video_file = db.Column(db.String(255), default='')
+    include_final = db.Column(db.Boolean, default=True)
+    lesson = db.relationship('Lesson', backref='practical_activities')
+    section = db.relationship('Section', backref='practical_activities')
+
+
+class StudentSectionProgress(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    lesson_id = db.Column(db.Integer, db.ForeignKey('lesson.id'), nullable=False)
+    section_id = db.Column(db.Integer, db.ForeignKey('section.id'), nullable=False)
+    read_complete = db.Column(db.Boolean, default=False)
+    completed = db.Column(db.Boolean, default=False)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+
+class StudentActivityProgress(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    activity_id = db.Column(db.Integer, db.ForeignKey('practical_activity.id'), nullable=False)
+    context = db.Column(db.String(20), default='study')
+    completed = db.Column(db.Boolean, default=False)
+    attempts = db.Column(db.Integer, default=0)
+    answer_json = db.Column(db.Text, default='{}')
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+
+class StudyQuestionProgress(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    lesson_id = db.Column(db.Integer, db.ForeignKey('lesson.id'), nullable=False)
+    question_id = db.Column(db.Integer, db.ForeignKey('question.id'), nullable=False)
+    completed = db.Column(db.Boolean, default=False)
+    attempts = db.Column(db.Integer, default=0)
+    answer_json = db.Column(db.Text, default='{}')
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+
+class FinalItemProgress(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    lesson_id = db.Column(db.Integer, db.ForeignKey('lesson.id'), nullable=False)
+    item_key = db.Column(db.String(80), nullable=False)
+    completed = db.Column(db.Boolean, default=False)
+    attempts = db.Column(db.Integer, default=0)
+    answer_json = db.Column(db.Text, default='{}')
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+
 class Result(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
@@ -402,10 +462,31 @@ def role_home():
     return redirect(url_for('dashboard'))
 
 def completed_steps_for(lesson_id):
+    user = current_user()
+    lesson = db.session.get(Lesson, lesson_id)
+    if user and user.role == 'student' and lesson:
+        section_ids = [s.id for s in sorted(lesson.sections, key=lambda x: x.order)]
+        completed_ids = {r.section_id for r in StudentSectionProgress.query.filter_by(user_id=user.id, lesson_id=lesson_id, completed=True).all()}
+        return {idx for idx, sid in enumerate(section_ids) if sid in completed_ids}
     done = session.get('completed_steps', {})
     return set(done.get(str(lesson_id), []))
 
 def mark_step_complete(lesson_id, step):
+    lesson = db.session.get(Lesson, lesson_id)
+    user = current_user()
+    if user and user.role == 'student' and lesson:
+        sections = sorted(lesson.sections, key=lambda x: x.order)
+        if 0 <= int(step) < len(sections):
+            sec = sections[int(step)]
+            row = StudentSectionProgress.query.filter_by(user_id=user.id, lesson_id=lesson_id, section_id=sec.id).first()
+            if not row:
+                row = StudentSectionProgress(user_id=user.id, lesson_id=lesson_id, section_id=sec.id)
+                db.session.add(row)
+            row.read_complete = True
+            row.completed = True
+            row.updated_at = datetime.utcnow()
+            db.session.commit()
+            return
     done = session.setdefault('completed_steps', {})
     key = str(lesson_id)
     arr = set(done.get(key, []))
@@ -417,6 +498,32 @@ def lesson_ready_for_test(lesson):
     data = lesson_to_dict(lesson)
     needed = set(range(len(data['sections'])))
     return needed.issubset(completed_steps_for(lesson.id))
+
+def activity_to_dict(a):
+    try:
+        config = json.loads(a.config_json or '{}')
+    except Exception:
+        config = {}
+    return {
+        'id': a.id, 'type': a.activity_type, 'title': a.title, 'prompt': a.prompt,
+        'config': config, 'image': a.image_file or '', 'video': a.video_file or '',
+        'include_final': bool(a.include_final), 'order': a.order,
+    }
+
+def activity_completed(activity_id, context='study'):
+    user = current_user()
+    if not user or user.role != 'student':
+        return False
+    row = StudentActivityProgress.query.filter_by(user_id=user.id, activity_id=activity_id, context=context).first()
+    return bool(row and row.completed)
+
+def slovni_hodnoceni(percent):
+    percent = int(percent or 0)
+    if percent >= 90: return 'Výborně zvládnuto'
+    if percent >= 75: return 'Zvládnuto'
+    if percent >= 60: return 'Většinu už zvládám'
+    if percent >= 40: return 'Ještě objevuji'
+    return 'Začínám se orientovat'
 
 def q_to_dict(q):
     try:
@@ -437,20 +544,26 @@ def q_to_dict(q):
 
 def lesson_to_dict(lesson):
     sections = []
+    all_activities = sorted(lesson.practical_activities, key=lambda x: x.order)
     for s in sorted(lesson.sections, key=lambda x:x.order):
+        sec_acts = [activity_to_dict(a) for a in all_activities if a.section_id == s.id]
         sections.append({
             'id': s.id, 'heading': s.heading, 'text': s.text, 'interest': s.interest, 'image': s.image,
             'activity': s.activity,
-            'questions': [q_to_dict(q) for q in sorted(s.questions, key=lambda x:x.order) if q.area=='study']
+            'questions': [q_to_dict(q) for q in sorted(s.questions, key=lambda x:x.order) if q.area=='study'],
+            'activities': sec_acts,
         })
     subject = lesson.block.grade.subject
     grade = lesson.block.grade
+    final_questions = [q for sec in sections for q in sec['questions']]
+    final_activities = [activity_to_dict(a) for a in all_activities if a.include_final]
     return {
         '_id': lesson.id, '_slug': lesson.id, 'subject': subject.name, 'icon': subject.icon, 'grade': grade.name,
         'block': lesson.block.title, 'title': lesson.title, 'tip': lesson.tip, 'hero_image': lesson.hero_image,
         'sections': sections,
-        # Test používá ty samé otázky jako procvičení pod výkladem. Nevytváříš je dvakrát.
-        'final_test': [q for sec in sections for q in sec['questions']]
+        # Závěrečné „Teď to zkus sám“ používá stejné otázky a vybrané praktické aktivity.
+        'final_test': final_questions,
+        'final_activities': final_activities,
     }
 
 def lesson_gallery(lesson):
@@ -1255,8 +1368,18 @@ def lesson(lesson_id):
     step = max(0, min(step, len(data['sections'])-1))
     related = Lesson.query.filter_by(block_id=lesson.block_id, is_published=True).order_by(Lesson.order).all()
     completed_steps = completed_steps_for(lesson.id)
+    study_completed_questions = set()
+    study_completed_activities = set()
+    section_read_complete = False
+    user = current_user()
+    if user and user.role == 'student' and data.get('sections'):
+        sec_id = data['sections'][step]['id']
+        study_completed_questions = {r.question_id for r in StudyQuestionProgress.query.filter_by(user_id=user.id, lesson_id=lesson.id, completed=True).all()}
+        study_completed_activities = {r.activity_id for r in StudentActivityProgress.query.filter_by(user_id=user.id, context='study', completed=True).all()}
+        spr = StudentSectionProgress.query.filter_by(user_id=user.id, lesson_id=lesson.id, section_id=sec_id).first()
+        section_read_complete = bool(spr and spr.read_complete)
     touch_progress(lesson.id, step, 'rozpracováno')
-    return render_template('lesson.html', lesson=data, lessons=[lesson_to_dict(l) for l in related], course=course_from_lesson(lesson), step=step, completed_steps=completed_steps, ready_for_test=lesson_ready_for_test(lesson))
+    return render_template('lesson.html', lesson=data, lessons=[lesson_to_dict(l) for l in related], course=course_from_lesson(lesson), step=step, completed_steps=completed_steps, ready_for_test=lesson_ready_for_test(lesson), study_completed_questions=study_completed_questions, study_completed_activities=study_completed_activities, section_read_complete=section_read_complete)
 
 @app.route('/test/<int:lesson_id>')
 def final_test(lesson_id):
@@ -1306,6 +1429,220 @@ def check_question(q, ans):
 def api_check():
     d = request.get_json(force=True)
     return jsonify({'ok': check_question(d.get('question',{}), d.get('answer',''))})
+
+@app.route('/api/study-question-check', methods=['POST'])
+def api_study_question_check():
+    r = require_login()
+    if r: return jsonify({'ok': False, 'error': 'login'}), 401
+    d = request.get_json(silent=True) or {}
+    q = db.session.get(Question, int(d.get('question_id', 0) or 0))
+    if not q: return jsonify({'ok': False, 'error': 'question'}), 404
+    answer = d.get('answer', '')
+    ok = check_question(q_to_dict(q), answer)
+    user = current_user()
+    if user.role == 'student':
+        row = StudyQuestionProgress.query.filter_by(user_id=user.id, lesson_id=q.lesson_id, question_id=q.id).first()
+        if not row:
+            row = StudyQuestionProgress(user_id=user.id, lesson_id=q.lesson_id, question_id=q.id)
+            db.session.add(row)
+        row.attempts = int(row.attempts or 0) + 1
+        row.answer_json = json.dumps(answer, ensure_ascii=False)
+        row.completed = bool(row.completed or ok)
+        row.updated_at = datetime.utcnow()
+        db.session.commit()
+    return jsonify({'ok': ok, 'message': 'Správně, můžeš pokračovat.' if ok else 'Ještě ne. Zkus to znovu – vše potřebné najdeš ve studijním materiálu.'})
+
+
+
+
+def _point_in_zone(x, y, zone):
+    try:
+        x, y = float(x), float(y)
+    except Exception:
+        return False
+    if not isinstance(zone, dict):
+        return False
+    shape = str(zone.get('shape', 'rect'))
+    zx, zy = float(zone.get('x', 0)), float(zone.get('y', 0))
+    zw, zh = float(zone.get('w', 0)), float(zone.get('h', 0))
+    if shape in ('circle', 'oval'):
+        if zw <= 0 or zh <= 0:
+            return False
+        cx, cy = zx + zw / 2, zy + zh / 2
+        return ((x-cx)/(zw/2))**2 + ((y-cy)/(zh/2))**2 <= 1
+    return zx <= x <= zx + zw and zy <= y <= zy + zh
+
+
+def check_practical_activity(activity, answer):
+    try:
+        cfg = json.loads(activity.config_json or '{}')
+    except Exception:
+        cfg = {}
+    answer = answer or {}
+    typ = activity.activity_type
+    if typ == 'find_image':
+        return _point_in_zone(answer.get('x'), answer.get('y'), cfg.get('zone', {}))
+    if typ == 'video_find':
+        try:
+            target = float(cfg.get('time', 0)); tol = max(.15, float(cfg.get('tolerance', .8)))
+            actual = float(answer.get('time', -999))
+        except Exception:
+            return False
+        return abs(actual-target) <= tol and _point_in_zone(answer.get('x'), answer.get('y'), cfg.get('zone', {}))
+    if typ == 'video_observe':
+        return str(answer.get('selected')) == str(cfg.get('correct', 0))
+    if typ == 'sort':
+        expected = {str(i): str(item.get('category')) for i, item in enumerate(cfg.get('items', []))}
+        got = {str(k): str(v) for k, v in (answer.get('assignments') or {}).items()}
+        return bool(expected) and all(got.get(k) == v for k, v in expected.items())
+    if typ == 'cards':
+        placements = answer.get('placements') or {}
+        cards = cfg.get('cards', [])
+        if not cards:
+            return False
+        for i, card in enumerate(cards):
+            pos = placements.get(str(i)) or placements.get(i) or {}
+            if not _point_in_zone(pos.get('x'), pos.get('y'), card.get('zone', {})):
+                return False
+        return True
+    if typ == 'real_world':
+        answers = [strip_accents(x) for x in (answer.get('answers') or []) if str(x).strip()]
+        min_items = max(1, int(cfg.get('min_items', 3) or 3))
+        concepts = cfg.get('concepts') or []
+        matched = set()
+        for text_answer in answers:
+            for idx, concept in enumerate(concepts):
+                roots = concept if isinstance(concept, list) else [x.strip() for x in str(concept).split('|') if x.strip()]
+                if any(strip_accents(root) in text_answer for root in roots if str(root).strip()):
+                    matched.add(idx)
+        return len(matched) >= min_items
+    return False
+
+
+def _upsert_activity_progress(activity, context, answer, ok):
+    user = current_user()
+    if not user or user.role != 'student':
+        return
+    row = StudentActivityProgress.query.filter_by(user_id=user.id, activity_id=activity.id, context=context).first()
+    if not row:
+        row = StudentActivityProgress(user_id=user.id, activity_id=activity.id, context=context)
+        db.session.add(row)
+    row.attempts = int(row.attempts or 0) + 1
+    row.answer_json = json.dumps(answer or {}, ensure_ascii=False)
+    row.completed = bool(row.completed or ok)
+    row.updated_at = datetime.utcnow()
+    db.session.commit()
+
+
+def update_final_result(lesson):
+    user = current_user()
+    if not user or user.role != 'student':
+        return {'percent': 0, 'grade': 5, 'completed': 0, 'total': 0, 'label': slovni_hodnoceni(0)}
+    data = lesson_to_dict(lesson)
+    keys = [f'q:{q["id"]}' for q in data.get('final_test', [])] + [f'a:{a["id"]}' for a in data.get('final_activities', [])]
+    completed_keys = {r.item_key for r in FinalItemProgress.query.filter_by(user_id=user.id, lesson_id=lesson.id, completed=True).all()}
+    completed = sum(1 for k in keys if k in completed_keys)
+    total = len(keys)
+    percent = round(completed / max(total, 1) * 100)
+    grade = grade_from_percent(percent)
+    row = Result.query.filter_by(user_id=user.id, lesson_id=lesson.id).order_by(Result.created_at.desc()).first()
+    if not row:
+        row = Result(user_id=user.id, lesson_id=lesson.id, created_at=datetime.utcnow())
+        db.session.add(row)
+    row.percent = percent
+    row.grade = grade
+    row.score = completed
+    row.total = total
+    row.focus_lost = get_focus_count('html', lesson.id)
+    row.status = 'dokončeno' if total and completed >= total else 'závěrečný test – rozpracováno'
+    row.created_at = datetime.utcnow()
+    db.session.commit()
+    touch_progress(lesson.id, 1000 if row.status == 'dokončeno' else 999, row.status)
+    return {'percent': percent, 'grade': grade, 'completed': completed, 'total': total, 'label': slovni_hodnoceni(percent), 'done': bool(total and completed >= total)}
+
+
+def mark_final_item(lesson_id, item_key, answer, ok):
+    user = current_user()
+    if not user or user.role != 'student':
+        return
+    row = FinalItemProgress.query.filter_by(user_id=user.id, lesson_id=lesson_id, item_key=item_key).first()
+    if not row:
+        row = FinalItemProgress(user_id=user.id, lesson_id=lesson_id, item_key=item_key)
+        db.session.add(row)
+    row.attempts = int(row.attempts or 0) + 1
+    row.answer_json = json.dumps(answer, ensure_ascii=False)
+    row.completed = bool(row.completed or ok)
+    row.updated_at = datetime.utcnow()
+    db.session.commit()
+
+
+@app.route('/api/activity-check', methods=['POST'])
+def api_activity_check():
+    r = require_login()
+    if r: return jsonify({'ok': False, 'error': 'login'}), 401
+    d = request.get_json(silent=True) or {}
+    activity = db.session.get(PracticalActivity, int(d.get('activity_id', 0) or 0))
+    if not activity:
+        return jsonify({'ok': False, 'error': 'activity'}), 404
+    context = 'final' if d.get('context') == 'final' else 'study'
+    answer = d.get('answer') or {}
+    ok = check_practical_activity(activity, answer)
+    _upsert_activity_progress(activity, context, answer, ok)
+    progress = None
+    if context == 'final':
+        mark_final_item(activity.lesson_id, f'a:{activity.id}', answer, ok)
+        progress = update_final_result(activity.lesson)
+    return jsonify({'ok': ok, 'message': 'Správně, můžeš pokračovat.' if ok else 'Ještě ne. Zkus to znovu – vše potřebné najdeš ve studijním materiálu.', 'progress': progress})
+
+@app.route('/api/final-question-check', methods=['POST'])
+def api_final_question_check():
+    r = require_login()
+    if r: return jsonify({'ok': False, 'error': 'login'}), 401
+    d = request.get_json(silent=True) or {}
+    q = db.session.get(Question, int(d.get('question_id', 0) or 0))
+    if not q:
+        return jsonify({'ok': False, 'error': 'question'}), 404
+    lesson = q.lesson
+    answer = d.get('answer', '')
+    ok = check_question(q_to_dict(q), answer)
+    mark_final_item(lesson.id, f'q:{q.id}', answer, ok)
+    progress = update_final_result(lesson)
+    return jsonify({'ok': ok, 'message': 'Správně. Úkol je splněný.' if ok else 'Ještě ne. Můžeš to zkusit znovu nebo se podívat do studijního materiálu.', 'progress': progress})
+
+
+@app.route('/api/final-status/<int:lesson_id>')
+def api_final_status(lesson_id):
+    r = require_login()
+    if r: return jsonify({'ok': False, 'error': 'login'}), 401
+    lesson = db.session.get(Lesson, lesson_id)
+    if not lesson: return jsonify({'ok': False, 'error': 'lesson'}), 404
+    progress = update_final_result(lesson)
+    completed = {r.item_key for r in FinalItemProgress.query.filter_by(user_id=current_user().id, lesson_id=lesson.id, completed=True).all()} if current_user().role == 'student' else set()
+    return jsonify({'ok': True, 'progress': progress, 'completed': sorted(completed)})
+
+
+@app.route('/api/section-read', methods=['POST'])
+def api_section_read():
+    r = require_login()
+    if r: return jsonify({'ok': False, 'error': 'login'}), 401
+    d = request.get_json(silent=True) or {}
+    lesson = db.session.get(Lesson, int(d.get('lesson_id', 0) or 0))
+    step = int(d.get('step', 0) or 0)
+    if not lesson: return jsonify({'ok': False, 'error': 'lesson'}), 404
+    sections = sorted(lesson.sections, key=lambda x: x.order)
+    if step < 0 or step >= len(sections): return jsonify({'ok': False, 'error': 'step'}), 400
+    user = current_user()
+    if user.role == 'student':
+        sec = sections[step]
+        row = StudentSectionProgress.query.filter_by(user_id=user.id, lesson_id=lesson.id, section_id=sec.id).first()
+        if not row:
+            row = StudentSectionProgress(user_id=user.id, lesson_id=lesson.id, section_id=sec.id)
+            db.session.add(row)
+        row.read_complete = True
+        row.updated_at = datetime.utcnow()
+        db.session.commit()
+    return jsonify({'ok': True})
+
 
 def save_html_partial_result(lesson, status='rozpracováno'):
     user = current_user()
@@ -1407,6 +1744,20 @@ def api_section_complete():
     data = lesson_to_dict(lesson)
     if step < 0 or step >= len(data['sections']):
         return jsonify({'ok': False, 'error': 'step'}), 400
+    user = current_user()
+    sec = sorted(lesson.sections, key=lambda x: x.order)[step]
+    if user and user.role == 'student':
+        read_row = StudentSectionProgress.query.filter_by(user_id=user.id, lesson_id=lesson.id, section_id=sec.id).first()
+        if not read_row or not read_row.read_complete:
+            return jsonify({'ok': False, 'error': 'read', 'message': 'Nejdřív projdi celý studijní materiál.'}), 400
+        q_ids = {q.id for q in sec.questions if q.area == 'study'}
+        done_q = {r.question_id for r in StudyQuestionProgress.query.filter_by(user_id=user.id, lesson_id=lesson.id, completed=True).all()}
+        if not q_ids.issubset(done_q):
+            return jsonify({'ok': False, 'error': 'questions', 'message': 'Ještě nejsou splněné všechny otázky.'}), 400
+        act_ids = {a.id for a in sec.practical_activities}
+        done_a = {r.activity_id for r in StudentActivityProgress.query.filter_by(user_id=user.id, context='study', completed=True).all()}
+        if not act_ids.issubset(done_a):
+            return jsonify({'ok': False, 'error': 'activities', 'message': 'Ještě nejsou splněné všechny praktické aktivity.'}), 400
     mark_step_complete(lesson_id, step)
     touch_progress(lesson_id, step, 'splněná část lekce')
     return jsonify({'ok': True, 'ready_for_test': lesson_ready_for_test(lesson)})
@@ -4543,6 +4894,10 @@ def delete_student(user_id):
     if stu and stu.role == 'student':
         Result.query.filter_by(user_id=stu.id).delete()
         StudentProgress.query.filter_by(user_id=stu.id).delete()
+        StudentSectionProgress.query.filter_by(user_id=stu.id).delete()
+        StudyQuestionProgress.query.filter_by(user_id=stu.id).delete()
+        StudentActivityProgress.query.filter_by(user_id=stu.id).delete()
+        FinalItemProgress.query.filter_by(user_id=stu.id).delete()
         InteractiveResult.query.filter_by(user_id=stu.id).delete()
         InteractiveProgress.query.filter_by(user_id=stu.id).delete()
         InformaticsSubmission.query.filter_by(user_id=stu.id).delete()
@@ -4590,6 +4945,13 @@ def delete_lesson(lesson_id):
     # Trvalé mazání: odstraníme výsledky, otázky, obrázky ve výkladu a sekce navázané na lekci.
     Result.query.filter_by(lesson_id=les.id).delete()
     StudentProgress.query.filter_by(lesson_id=les.id).delete()
+    StudentSectionProgress.query.filter_by(lesson_id=les.id).delete()
+    StudyQuestionProgress.query.filter_by(lesson_id=les.id).delete()
+    FinalItemProgress.query.filter_by(lesson_id=les.id).delete()
+    activity_ids = [a.id for a in les.practical_activities]
+    if activity_ids:
+        StudentActivityProgress.query.filter(StudentActivityProgress.activity_id.in_(activity_ids)).delete(synchronize_session=False)
+    PracticalActivity.query.filter_by(lesson_id=les.id).delete(synchronize_session=False)
     Question.query.filter_by(lesson_id=les.id).delete()
     section_ids = [sec.id for sec in les.sections]
     if section_ids:
@@ -4653,6 +5015,58 @@ def import_docx_to_html(file_storage):
         info += f'<details class="docx-import-warnings"><summary>Upozornění z převodu</summary><ul>{messages}</ul></details>'
     return info + '<div class="imported-docx-content">' + html_value + '</div>', original_name
 
+
+def practical_activities_editor_json(lesson):
+    arr = []
+    for a in sorted(lesson.practical_activities, key=lambda x: x.order) if lesson else []:
+        try:
+            cfg = json.loads(a.config_json or '{}')
+        except Exception:
+            cfg = {}
+        arr.append({
+            'id': a.id, 'type': a.activity_type, 'title': a.title, 'prompt': a.prompt,
+            'config': cfg, 'image': a.image_file or '', 'video': a.video_file or '',
+            'include_final': bool(a.include_final)
+        })
+    return json.dumps(arr, ensure_ascii=False)
+
+
+def _save_activity_file(ref, prefix):
+    ref = str(ref or '').strip()
+    if ref.startswith('__file__:'):
+        field = ref.split(':', 1)[1]
+        f = request.files.get(field)
+        if f and f.filename:
+            return save_upload(f)
+        return ''
+    return ref
+
+
+def save_practical_activities_from_payload(lesson, section, payload):
+    try:
+        data = json.loads(payload or '[]')
+    except Exception:
+        data = []
+    PracticalActivity.query.filter_by(lesson_id=lesson.id).delete(synchronize_session=False)
+    order = 1
+    for item in data if isinstance(data, list) else []:
+        typ = str(item.get('type') or '').strip()
+        if typ not in {'cards','video_find','video_observe','find_image','sort','real_world'}:
+            continue
+        title = str(item.get('title') or 'Praktická aktivita').strip()
+        prompt = str(item.get('prompt') or '').strip()
+        cfg = item.get('config') if isinstance(item.get('config'), dict) else {}
+        image = _save_activity_file(item.get('image'), 'paimg_')
+        video = _save_activity_file(item.get('video'), 'pavideo_')
+        db.session.add(PracticalActivity(
+            lesson_id=lesson.id, section_id=section.id, order=order,
+            activity_type=typ, title=title, prompt=prompt,
+            config_json=json.dumps(cfg, ensure_ascii=False), image_file=image, video_file=video,
+            include_final=bool(item.get('include_final', True))
+        ))
+        order += 1
+
+
 @app.route('/teacher/lesson/new', methods=['GET','POST'])
 def new_lesson():
     r=require_teacher();
@@ -4665,7 +5079,7 @@ def new_lesson():
         title = request.form.get('title','').strip()
         if not subject_name or not grade_name or not block_title or not title:
             flash('Vyplň předmět, školu a ročník, téma i název lekce. Podle těchto údajů se lekce automaticky zařadí.')
-            return render_template('lesson_form.html', course=course_from_lesson(None), lesson=None, section=None, subjects=Subject.query.all(), questions_json=request.form.get('questions_json','[]'), gallery_images=[])
+            return render_template('lesson_form.html', course=course_from_lesson(None), lesson=None, section=None, subjects=Subject.query.all(), questions_json=request.form.get('questions_json','[]'), activities_json=request.form.get('activities_json','[]'), gallery_images=[])
         sub = Subject.query.filter_by(name=subject_name).first() or Subject(name=subject_name, icon=icon)
         sub.icon = icon
         db.session.add(sub); db.session.flush()
@@ -4685,9 +5099,10 @@ def new_lesson():
         image_map = save_question_images()
         handle_images(les, sec, image_map)
         add_questions_from_payload(les.id, sec.id, 'study', request.form.get('questions_json',''), request.form.get('study_questions',''), image_map)
+        save_practical_activities_from_payload(les, sec, request.form.get('activities_json','[]'))
         db.session.commit()
         return redirect(url_for('lesson', lesson_id=les.id))
-    return render_template('lesson_form.html', course=course_from_lesson(None), lesson=None, section=None, subjects=Subject.query.all(), questions_json='[]', gallery_images=[])
+    return render_template('lesson_form.html', course=course_from_lesson(None), lesson=None, section=None, subjects=Subject.query.all(), questions_json='[]', activities_json='[]', gallery_images=[])
 
 @app.route('/teacher/lesson/<int:lesson_id>/edit', methods=['GET','POST'])
 def edit_lesson(lesson_id):
@@ -4720,9 +5135,10 @@ def edit_lesson(lesson_id):
         image_map = save_question_images()
         handle_images(les, sec, image_map)
         add_questions_from_payload(les.id, sec.id, 'study', request.form.get('questions_json',''), request.form.get('study_questions',''), image_map)
+        save_practical_activities_from_payload(les, sec, request.form.get('activities_json','[]'))
         db.session.commit()
         return redirect(url_for('lesson', lesson_id=les.id))
-    return render_template('lesson_form.html', course=course_from_lesson(les), lesson=les, section=sec, subjects=Subject.query.all(), questions_json=questions_editor_json(les, 'study'), gallery_images=lesson_gallery(les))
+    return render_template('lesson_form.html', course=course_from_lesson(les), lesson=les, section=sec, subjects=Subject.query.all(), questions_json=questions_editor_json(les, 'study'), activities_json=practical_activities_editor_json(les), gallery_images=lesson_gallery(les))
 
 def questions_editor_json(lesson, area):
     arr=[]
