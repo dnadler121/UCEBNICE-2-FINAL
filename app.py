@@ -365,6 +365,19 @@ class StudentProgress(db.Model):
     user = db.relationship('User')
     lesson = db.relationship('Lesson')
 
+
+class StudentLessonReset(db.Model):
+    """Jednorázový příznak, že učitel resetoval studentovi konkrétní HTML lekci.
+
+    Slouží hlavně k vyčištění starého průběhu uloženého v session v prohlížeči
+    studenta při jeho příštím otevření lekce.
+    """
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    lesson_id = db.Column(db.Integer, db.ForeignKey('lesson.id'), nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+
 def ensure_informatics_columns():
     """Doplní nové sloupce do starší lokální/Render databáze bez mazání dat."""
     try:
@@ -408,6 +421,62 @@ def touch_progress(lesson_id, step=0, status='rozpracováno'):
     pr.status = status
     pr.updated_at = datetime.utcnow()
     db.session.commit()
+
+def consume_pending_lesson_reset(lesson_id):
+    """Vyčistí starý session průběh po učitelském resetu lekce.
+
+    Trvalý databázový průběh je smazán už při stisku Reset/Smazat v administraci.
+    Tohle odstraní ještě lokální session data v prohlížeči studenta, aby se z nich
+    výsledek po přihlášení nemohl znovu vytvořit.
+    """
+    u = current_user()
+    if not u or u.role != 'student':
+        return False
+    marker = StudentLessonReset.query.filter_by(user_id=u.id, lesson_id=lesson_id).first()
+    if not marker:
+        return False
+
+    partial = session.get('html_partial_progress', {})
+    if str(lesson_id) in partial:
+        partial.pop(str(lesson_id), None)
+        session['html_partial_progress'] = partial
+
+    completed = session.get('completed_steps', {})
+    if str(lesson_id) in completed:
+        completed.pop(str(lesson_id), None)
+        session['completed_steps'] = completed
+
+    session.modified = True
+    db.session.delete(marker)
+    db.session.commit()
+    return True
+
+
+def reset_student_lesson_progress(user_id, lesson_id):
+    """Kompletní reset jedné HTML lekce pro jednoho studenta."""
+    Result.query.filter_by(user_id=user_id, lesson_id=lesson_id).delete(synchronize_session=False)
+    StudentProgress.query.filter_by(user_id=user_id, lesson_id=lesson_id).delete(synchronize_session=False)
+    StudentSectionProgress.query.filter_by(user_id=user_id, lesson_id=lesson_id).delete(synchronize_session=False)
+    StudyQuestionProgress.query.filter_by(user_id=user_id, lesson_id=lesson_id).delete(synchronize_session=False)
+    FinalItemProgress.query.filter_by(user_id=user_id, lesson_id=lesson_id).delete(synchronize_session=False)
+
+    activity_ids = [a.id for a in PracticalActivity.query.filter_by(lesson_id=lesson_id).all()]
+    if activity_ids:
+        StudentActivityProgress.query.filter(
+            StudentActivityProgress.user_id == user_id,
+            StudentActivityProgress.activity_id.in_(activity_ids)
+        ).delete(synchronize_session=False)
+
+    LessonFocusSession.query.filter_by(
+        user_id=user_id, lesson_kind='html', lesson_key=str(lesson_id)
+    ).delete(synchronize_session=False)
+
+    # Při příštím otevření lekce studentem smažeme také stará session data
+    # uložená v jeho vlastním prohlížeči.
+    StudentLessonReset.query.filter_by(user_id=user_id, lesson_id=lesson_id).delete(synchronize_session=False)
+    db.session.add(StudentLessonReset(user_id=user_id, lesson_id=lesson_id))
+    db.session.commit()
+
 
 def last_result_for_student(user_id):
     return Result.query.filter_by(user_id=user_id).order_by(Result.created_at.desc()).first()
@@ -1384,6 +1453,7 @@ def lesson(lesson_id):
     lesson = db.session.get(Lesson, lesson_id)
     if not lesson: return 'Lekce nenalezena', 404
     if current_user().role == 'student':
+        consume_pending_lesson_reset(lesson.id)
         begin_focus_attempt('html', lesson.id)
     step = int(request.args.get('step',0))
     data = lesson_to_dict(lesson)
@@ -1410,6 +1480,7 @@ def final_test(lesson_id):
     lesson = db.session.get(Lesson, lesson_id)
     if not lesson: return 'Lekce nenalezena', 404
     if current_user().role == 'student':
+        consume_pending_lesson_reset(lesson.id)
         begin_focus_attempt('html', lesson.id)
     if not lesson_ready_for_test(lesson):
         flash('Nejdřív dokonči otázky k výkladu a aktivitu. Test se odemkne až potom.')
@@ -1560,6 +1631,9 @@ def _upsert_activity_progress(activity, context, answer, ok):
 
 def update_final_result(lesson):
     user = current_user()
+    if user and user.role == 'student':
+        consume_pending_lesson_reset(lesson.id)
+        user = current_user()
     if not user or user.role != 'student':
         return {'percent': 0, 'grade': 5, 'completed': 0, 'total': 0, 'label': slovni_hodnoceni(0)}
     data = lesson_to_dict(lesson)
@@ -1670,6 +1744,9 @@ def api_section_read():
 
 def save_html_partial_result(lesson, status='rozpracováno'):
     user = current_user()
+    if user and user.role == 'student':
+        consume_pending_lesson_reset(lesson.id)
+        user = current_user()
     if not user or user.role != 'student':
         return None
     data = lesson_to_dict(lesson)
@@ -4866,9 +4943,10 @@ def delete_result(result_id):
     if r: return r
     result = db.session.get(Result, result_id)
     if result:
-        db.session.delete(result)
-        db.session.commit()
-        flash('Výsledek byl smazán. Účet studenta ani jeho průběžný pokrok zůstaly zachované.')
+        user_id = result.user_id
+        lesson_id = result.lesson_id
+        reset_student_lesson_progress(user_id, lesson_id)
+        flash('Postup studenta v této lekci byl kompletně resetován. Při příštím otevření začne od začátku.')
     return redirect(url_for('teacher_database'))
 
 
@@ -4922,6 +5000,7 @@ def delete_student(user_id):
         StudyQuestionProgress.query.filter_by(user_id=stu.id).delete()
         StudentActivityProgress.query.filter_by(user_id=stu.id).delete()
         FinalItemProgress.query.filter_by(user_id=stu.id).delete()
+        StudentLessonReset.query.filter_by(user_id=stu.id).delete()
         InteractiveResult.query.filter_by(user_id=stu.id).delete()
         InteractiveProgress.query.filter_by(user_id=stu.id).delete()
         InformaticsSubmission.query.filter_by(user_id=stu.id).delete()
@@ -4972,6 +5051,7 @@ def delete_lesson(lesson_id):
     StudentSectionProgress.query.filter_by(lesson_id=les.id).delete()
     StudyQuestionProgress.query.filter_by(lesson_id=les.id).delete()
     FinalItemProgress.query.filter_by(lesson_id=les.id).delete()
+    StudentLessonReset.query.filter_by(lesson_id=les.id).delete()
     activity_ids = [a.id for a in les.practical_activities]
     if activity_ids:
         StudentActivityProgress.query.filter(StudentActivityProgress.activity_id.in_(activity_ids)).delete(synchronize_session=False)

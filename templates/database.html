@@ -42,7 +42,7 @@
                 <td><b>{{ r.grade }}</b></td>
                 <td><b>{{ r.focus_lost or 0 }}×</b></td>
                 <td>{{ r.created_at.strftime('%d.%m.%Y %H:%M') }}</td>
-                <td><form method="post" action="{{ url_for('delete_result', result_id=r.id) }}"><button class="link-button danger">Smazat</button></form></td>
+                <td><form method="post" action="{{ url_for('delete_result', result_id=r.id) }}" onsubmit="return confirm('Resetovat celý postup tohoto studenta v této lekci? Student začne znovu od začátku.');"><button class="link-button danger">Resetovat postup</button></form></td>
               </tr>
             {% endfor %}
             {% for r in interactive_results %}
