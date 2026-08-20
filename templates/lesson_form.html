@@ -13,6 +13,8 @@
   <form method="post" enctype="multipart/form-data" id="lessonEditorForm">
     <input type="hidden" name="questions_json" id="questions_json">
     <input type="hidden" name="activities_json" id="activities_json">
+    <input type="hidden" name="questions_json_en" id="questions_json_en">
+    <input type="hidden" name="activities_json_en" id="activities_json_en">
 
     <section class="course-card editor-section-card">
       <h2>1. Základ lekce</h2>
@@ -30,8 +32,14 @@
           <input name="block" required placeholder="např. Občanství, Početní operace, Python" value="{{ lesson.block.title if lesson else '' }}">
         </label>
       </div>
-      <label>Název lekce<input name="title" required placeholder="např. Co znamená být občan" value="{{ lesson.title if lesson else '' }}"></label>
-      <label>Tip pro tebe<textarea name="tip">{{ lesson.tip if lesson else 'Čti výklad jako detektiv. Každá odpověď je někde v textu.' }}</textarea></label>
+      <div class="language-pair-grid">
+        <label>🇨🇿 Název lekce<input name="title" required placeholder="např. Co znamená být občan" value="{{ lesson.title if lesson else '' }}"></label>
+        <label>🇬🇧 Lesson title<input name="title_en" placeholder="e.g. What does it mean to be a citizen?" value="{{ lesson.title_en if lesson else '' }}"></label>
+      </div>
+      <div class="language-pair-grid">
+        <label>🇨🇿 Tip pro tebe<textarea name="tip">{{ lesson.tip if lesson else 'Čti výklad jako detektiv. Každá odpověď je někde v textu.' }}</textarea></label>
+        <label>🇬🇧 Tip<textarea name="tip_en">{{ lesson.tip_en if lesson else '' }}</textarea></label>
+      </div>
     </section>
 
     <section class="course-card editor-section-card">
@@ -97,6 +105,69 @@
       <div id="activityList" class="activity-editor-list"></div>
     </section>
 
+    <section class="course-card editor-section-card en-version-card">
+      <div class="factory-head"><div><h2>🇬🇧 English version of the lesson</h2><p>This section is completely independent from Czech. If you leave it empty, the English lesson will contain no content.</p></div><span class="factory-badge">EN</span></div>
+      <div class="form-grid">
+        <label>English hero image
+          <input type="file" name="hero_image_en" accept="image/*" class="preview-input" data-preview="heroPreviewEn">
+          <div id="heroPreviewEn" class="image-preview">{% if lesson and lesson.hero_image_en %}<img src="{{ url_for('uploads', filename=lesson.hero_image_en) }}"><span>Current English image</span>{% else %}<span>No English image</span>{% endif %}</div>
+        </label>
+        <div class="docx-current-preview muted"><b>English HTML lesson</b><br>Upload the complete English HTML separately from the Czech version.</div>
+      </div>
+      <label>English lesson heading<input name="heading_en" value="{{ section.heading_en if section else '' }}"></label>
+      <div class="form-grid">
+        <label>Import English HTML
+          <input type="file" name="html_file_en" accept=".html,.htm,text/html">
+          <small>Select the main English .html/.htm file.</small>
+        </label>
+        <label>Images/files used by English HTML
+          <input type="file" name="html_assets_en" multiple accept="image/*">
+          <small>Optional images referenced by the English HTML.</small>
+        </label>
+        <label>Import English questions from JSON
+          <input type="file" id="questionsJsonFileEn" accept=".json,application/json">
+          <small>English questions are saved independently.</small><span id="questionsJsonStatusEn" class="helpText"></span>
+        </label>
+      </div>
+      <div class="docx-current-preview">
+        <b>Current English lesson preview:</b>
+        <div class="docx-content lesson-html-preview">{{ section.text_en|safe if section and section.text_en else '<p>No English HTML has been uploaded.</p>'|safe }}</div>
+      </div>
+      <input type="hidden" name="text_en" value="{{ section.text_en|e if section else '' }}">
+      <label>Interesting fact (EN)<textarea name="interest_en">{{ section.interest_en if section else '' }}</textarea></label>
+      <label>Activity text (EN)<textarea name="activity_en">{{ section.activity_en if section else '' }}</textarea></label>
+    </section>
+
+    <section class="course-card editor-section-card question-factory-en" data-target="questions_en">
+      <div class="factory-head"><div><h2>🇬🇧 English questions</h2><p>Create or import the complete English question set. It uses the same checking logic as the Czech set.</p></div><span class="factory-badge">EN questions</span></div>
+      <div class="tabs factory-tabs">
+        <button type="button" data-type="choice" class="sel">Multiple choice</button>
+        <button type="button" data-type="image_choice">4 images</button>
+        <button type="button" data-type="text">Short answer</button>
+      </div>
+      <div class="factory-add">
+        <label>Question<input class="factory-question" placeholder="Which example is a living organism?"></label>
+        <div class="factory-dynamic"></div>
+        <button type="button" class="savebtn add-question">+ Add question</button>
+      </div>
+      <div id="questionFileBucketEn" class="hidden-file-bucket"></div>
+      <div class="question-list"></div>
+    </section>
+
+    <section class="course-card editor-section-card activity-factory-en" id="activityFactoryEn">
+      <div class="factory-head"><div><h2>🇬🇧 English practical activities</h2><p>Cards, video activities, image tasks and missions can have a completely separate English version.</p></div><span class="factory-badge">EN activities</span></div>
+      <div class="activity-type-grid">
+        <button type="button" data-activity-type-en="cards">🧩 Cards</button>
+        <button type="button" data-activity-type-en="video_find">🎥 Stop and point</button>
+        <button type="button" data-activity-type-en="video_observe">🎬 Watch video</button>
+        <button type="button" data-activity-type-en="find_image">🔎 Find in image</button>
+        <button type="button" data-activity-type-en="real_world">🌱 Real-world mission</button>
+      </div>
+      <div id="activityBuilderEn" class="activity-builder"><p class="muted">Choose an English activity type.</p></div>
+      <div id="activityFileBucketEn" class="hidden-file-bucket"></div>
+      <div id="activityListEn" class="activity-editor-list"></div>
+    </section>
+
     <section class="course-card editor-section-card ai-brief-card">
       <h2>5. Zadání pro přípravu lekce přes AI</h2>
       <p>Vyplň základ lekce nahoře, nastav kolik chceš otázek a praktických aktivit a stáhni CSV. Ten soubor mi potom pošleš a já podle něj připravím text výkladu, JSON otázek, návrhy obrázků a zadání aktivit.</p>
@@ -123,12 +194,16 @@ window.initialQuestions = {
   questions: {{ (questions_json or '[]')|safe }}
 };
 window.initialActivities = {{ (activities_json or '[]')|safe }};
+window.initialQuestionsEn = { questions_en: {{ (questions_json_en or '[]')|safe }} };
+window.initialActivitiesEn = {{ (activities_json_en or '[]')|safe }};
 window.initialGallery = [
   {% for img in gallery_images or [] %}{name: {{ img|tojson }}, url: {{ url_for('uploads', filename=img)|tojson }} }{{ ',' if not loop.last }}{% endfor %}
 ];
 </script>
 <script src="{{ url_for('static', filename='js/editor_questions.js') }}"></script>
 <script src="{{ url_for('static', filename='js/editor_activities.js') }}"></script>
+<script src="{{ url_for('static', filename='js/editor_questions_en.js') }}"></script>
+<script src="{{ url_for('static', filename='js/editor_activities_en.js') }}"></script>
 
 
 {% endblock %}

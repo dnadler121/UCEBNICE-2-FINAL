@@ -34,6 +34,67 @@ app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///" + str(DB_PATH)
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 db = SQLAlchemy(app)
 
+# --- CZ/EN interface -------------------------------------------------------
+I18N = {
+    'cs': {},
+    'en': {
+        'Přihlášení':'Log in','Odhlásit':'Log out','Nepřihlášeno':'Not logged in',
+        'Učitel':'Teacher','Student':'Student','Editor':'Editor','Studenti':'Students','Databáze':'Database',
+        'Vyber předmět, školu a ročník, téma a lekci':'Choose a subject, school and grade, topic and lesson',
+        'DIGITÁLNÍ UČEBNICE':'DIGITAL TEXTBOOK','Vyber si předmět a začni pracovat':'Choose a subject and start learning',
+        'Jedno přihlášení, všechny lekce na jednom místě. Každá lekce se automaticky zařadí podle předmětu, školy, ročníku a tématu.':'One login, all lessons in one place. Each lesson is organised by subject, school, grade and topic.',
+        'PŘEDMĚTY':'SUBJECTS','Biologie a občanská výchova':'Biology and Civics',
+        'Výklady z HTML, otázky, aktivity a závěrečné testy.':'HTML lessons, questions, activities and final tests.',
+        'INTERAKTIVNÍ LEKCE':'INTERACTIVE LESSONS','Matematika':'Mathematics','Informatika':'Computer Science',
+        'Školy a ročníky, témata a samostatné matematické podaplikace.':'Schools and grades, topics and interactive mathematics activities.',
+        'Algoritmy, programování, data a další praktická témata.':'Algorithms, programming, data and other practical topics.',
+        'lekcí':'lessons','Otevřít →':'Open →','Učitelská správa':'Teacher administration',
+        'Vytváření lekcí, studenti a výsledky':'Create lessons, manage students and results','HTML lekce':'HTML lesson',
+        'Import matematika / informatika':'Import Mathematics / Computer Science','Výsledky':'Results',
+        'Uživatelské jméno':'Username','Heslo':'Password','Vstoupit do aplikace':'Enter application',
+        'Po přihlášení se teprve zobrazí předměty, bloky a lekce. Učitel navíc uvidí editor.':'After logging in, subjects, topics and lessons will appear. Teachers will also see the editor.',
+        'Učitelský účet se načítá z':'The teacher account is loaded from','Studenty vytváří učitel v editoru.':'Students are created by the teacher in the editor.',
+        'Zpět':'Back','Další':'Next','Pokračovat':'Continue','Dokončit':'Finish','Odevzdat':'Submit','Zkusit znovu':'Try again',
+        'Správně':'Correct','Špatně':'Incorrect','Otázka':'Question','Otázky':'Questions','Výklad':'Lesson','Aktivita':'Activity',
+        'Zajímavost':'Did you know?','Závěrečný test':'Final test','Hotovo':'Done','Uložit':'Save','Zrušit':'Cancel','Smazat':'Delete','Upravit':'Edit',
+        'Přidat':'Add','Název':'Title','Téma':'Topic','Ročník':'Grade','Škola':'School','Předmět':'Subject','Popis':'Description',
+        'Nová lekce':'New lesson','Vytvořit':'Create','Zveřejněno':'Published','Ano':'Yes','Ne':'No','Hledat':'Search',
+        'Jazyk':'Language','Čeština':'Czech','Angličtina':'English','Jazyk je během rozpracované práce uzamčen.':'The language is locked while work is in progress.'
+    }
+}
+
+def current_lang():
+    lang = session.get('lang', 'cs')
+    return lang if lang in ('cs','en') else 'cs'
+
+def tr(value):
+    if value is None: return ''
+    return I18N.get(current_lang(), {}).get(str(value), str(value))
+
+@app.route('/language/<lang>')
+def set_language(lang):
+    if lang not in ('cs','en'):
+        return redirect(request.referrer or url_for('index'))
+    # Student cannot change language while a protected attempt is active.
+    if session.get('language_locked') and current_user() and current_user().role == 'student':
+        flash(tr('Jazyk je během rozpracované práce uzamčen.'))
+        return redirect(request.referrer or url_for('portal'))
+    session['lang'] = lang
+    session.modified = True
+    return redirect(request.referrer or url_for('index'))
+
+def lock_language():
+    u = current_user()
+    if u and u.role == 'student':
+        session['language_locked'] = True
+        session['work_lang'] = current_lang()
+        session.modified = True
+
+def unlock_language():
+    session.pop('language_locked', None)
+    session.pop('work_lang', None)
+    session.modified = True
+
 class User(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     username = db.Column(db.String(80), unique=True, nullable=False)
@@ -63,8 +124,11 @@ class Lesson(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     block_id = db.Column(db.Integer, db.ForeignKey('block.id'), nullable=False)
     title = db.Column(db.String(200), nullable=False)
+    title_en = db.Column(db.String(200), default='')
     tip = db.Column(db.Text, default='')
+    tip_en = db.Column(db.Text, default='')
     hero_image = db.Column(db.String(255), default='')
+    hero_image_en = db.Column(db.String(255), default='')
     order = db.Column(db.Integer, default=1)
     is_published = db.Column(db.Boolean, default=True)
     block = db.relationship('Block', backref='lessons')
@@ -73,10 +137,15 @@ class Section(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     lesson_id = db.Column(db.Integer, db.ForeignKey('lesson.id'), nullable=False)
     heading = db.Column(db.String(200), nullable=False)
+    heading_en = db.Column(db.String(200), default='')
     text = db.Column(db.Text, default='')
+    text_en = db.Column(db.Text, default='')
     interest = db.Column(db.Text, default='')
+    interest_en = db.Column(db.Text, default='')
     image = db.Column(db.String(255), default='')
+    image_en = db.Column(db.String(255), default='')
     activity = db.Column(db.Text, default='')
+    activity_en = db.Column(db.Text, default='')
     order = db.Column(db.Integer, default=1)
     lesson = db.relationship('Lesson', backref='sections')
 
@@ -100,6 +169,7 @@ class Question(db.Model):
     roots_json = db.Column(db.Text, default='[]')
     hint = db.Column(db.Text, default='')
     order = db.Column(db.Integer, default=1)
+    lang = db.Column(db.String(2), default='cs')
     lesson = db.relationship('Lesson', backref='questions')
     section = db.relationship('Section', backref='questions')
 
@@ -109,6 +179,7 @@ class PracticalActivity(db.Model):
     lesson_id = db.Column(db.Integer, db.ForeignKey('lesson.id'), nullable=False)
     section_id = db.Column(db.Integer, db.ForeignKey('section.id'), nullable=True)
     order = db.Column(db.Integer, default=1)
+    lang = db.Column(db.String(2), default='cs')
     activity_type = db.Column(db.String(40), nullable=False, default='find_image')
     title = db.Column(db.String(220), default='Praktická aktivita')
     prompt = db.Column(db.Text, default='')
@@ -612,14 +683,21 @@ def q_to_dict(q):
     return d
 
 def lesson_to_dict(lesson):
+    lang = current_lang()
+    is_en = lang == 'en'
     sections = []
-    all_activities = sorted(lesson.practical_activities, key=lambda x: x.order)
-    for s in sorted(lesson.sections, key=lambda x:x.order):
-        sec_acts = [activity_to_dict(a) for a in all_activities if a.section_id == s.id]
+    all_activities = sorted([a for a in lesson.practical_activities if (a.lang or 'cs') == lang], key=lambda x: x.order)
+    for sec in sorted(lesson.sections, key=lambda x:x.order):
+        sec_acts = [activity_to_dict(a) for a in all_activities if a.section_id == sec.id]
+        qs = [q for q in sorted(sec.questions, key=lambda x:x.order) if q.area=='study' and (q.lang or 'cs') == lang]
         sections.append({
-            'id': s.id, 'heading': s.heading, 'text': s.text, 'interest': s.interest, 'image': s.image,
-            'activity': s.activity,
-            'questions': [q_to_dict(q) for q in sorted(s.questions, key=lambda x:x.order) if q.area=='study'],
+            'id': sec.id,
+            'heading': (sec.heading_en or '') if is_en else sec.heading,
+            'text': (sec.text_en or '') if is_en else sec.text,
+            'interest': (sec.interest_en or '') if is_en else sec.interest,
+            'image': (sec.image_en or '') if is_en else sec.image,
+            'activity': (sec.activity_en or '') if is_en else sec.activity,
+            'questions': [q_to_dict(q) for q in qs],
             'activities': sec_acts,
         })
     subject = lesson.block.grade.subject
@@ -627,12 +705,16 @@ def lesson_to_dict(lesson):
     final_questions = [q for sec in sections for q in sec['questions']]
     final_activities = [activity_to_dict(a) for a in all_activities if a.include_final]
     return {
-        '_id': lesson.id, '_slug': lesson.id, 'subject': subject.name, 'icon': subject.icon, 'grade': grade.name,
-        'block': lesson.block.title, 'title': lesson.title, 'tip': lesson.tip, 'hero_image': lesson.hero_image,
+        '_id': lesson.id, '_slug': lesson.id, 'subject': tr(subject.name) if is_en else subject.name, 'icon': subject.icon, 'grade': grade.name,
+        'block': lesson.block.title,
+        'title': (lesson.title_en or '') if is_en else lesson.title,
+        'tip': (lesson.tip_en or '') if is_en else lesson.tip,
+        'hero_image': (lesson.hero_image_en or '') if is_en else lesson.hero_image,
         'sections': sections,
-        # Závěrečné „Teď to zkus sám“ používá stejné otázky a vybrané praktické aktivity.
         'final_test': final_questions,
         'final_activities': final_activities,
+        'content_language': lang,
+        'has_content': bool(((lesson.title_en or '').strip() or any((x.get('text') or '').strip() or x.get('questions') or x.get('activities') for x in sections)) if is_en else True),
     }
 
 def lesson_gallery(lesson):
@@ -695,7 +777,7 @@ def inject():
     if u:
         res = Result.query.filter_by(user_id=u.id).order_by(Result.created_at.desc()).first()
         if res: last = {'lesson': res.lesson.title, 'percent': res.percent, 'grade': res.grade, 'score': res.score, 'total': res.total}
-    return {'user': u, 'last_result': last}
+    return {'user': u, 'last_result': last, 'lang': current_lang(), 't': tr, 'language_locked': bool(session.get('language_locked'))}
 
 
 def normalize_subject(value):
@@ -1454,6 +1536,7 @@ def lesson(lesson_id):
     lesson = db.session.get(Lesson, lesson_id)
     if not lesson: return 'Lekce nenalezena', 404
     if current_user().role == 'student':
+        lock_language()
         consume_pending_lesson_reset(lesson.id)
         begin_focus_attempt('html', lesson.id)
     step = int(request.args.get('step',0))
@@ -1536,6 +1619,7 @@ def finish(lesson_id):
     session.modified = True
     db.session.add(Result(user_id=current_user().id, lesson_id=lesson.id, percent=percent, grade=grade, score=score, total=total, focus_lost=focus_lost, status='dokončeno')); db.session.commit()
     touch_progress(lesson.id, 1000, 'dokončeno')
+    unlock_language()
     return render_template('finish.html', lesson=data, course=course_from_lesson(lesson), score=score, total=total, percent=percent, grade=grade, detail=detail)
 
 def check_question(q, ans):
@@ -5248,9 +5332,9 @@ def import_docx_to_html(file_storage):
     return info + '<div class="imported-docx-content">' + html_value + '</div>', original_name
 
 
-def practical_activities_editor_json(lesson):
+def practical_activities_editor_json(lesson, lang='cs'):
     arr = []
-    for a in sorted(lesson.practical_activities, key=lambda x: x.order) if lesson else []:
+    for a in sorted([x for x in lesson.practical_activities if (x.lang or 'cs') == lang], key=lambda x: x.order) if lesson else []:
         try:
             cfg = json.loads(a.config_json or '{}')
         except Exception:
@@ -5274,12 +5358,12 @@ def _save_activity_file(ref, prefix):
     return ref
 
 
-def save_practical_activities_from_payload(lesson, section, payload):
+def save_practical_activities_from_payload(lesson, section, payload, lang='cs'):
     try:
         data = json.loads(payload or '[]')
     except Exception:
         data = []
-    PracticalActivity.query.filter_by(lesson_id=lesson.id).delete(synchronize_session=False)
+    PracticalActivity.query.filter_by(lesson_id=lesson.id, lang=lang).delete(synchronize_session=False)
     order = 1
     for item in data if isinstance(data, list) else []:
         typ = str(item.get('type') or '').strip()
@@ -5302,7 +5386,7 @@ def save_practical_activities_from_payload(lesson, section, payload):
         image = _save_activity_file(item.get('image'), 'paimg_')
         video = _save_activity_file(item.get('video'), 'pavideo_')
         db.session.add(PracticalActivity(
-            lesson_id=lesson.id, section_id=section.id, order=order,
+            lesson_id=lesson.id, section_id=section.id, order=order, lang=lang,
             activity_type=typ, title=title, prompt=prompt,
             config_json=json.dumps(cfg, ensure_ascii=False), image_file=image, video_file=video,
             include_final=bool(item.get('include_final', True))
@@ -5322,7 +5406,7 @@ def new_lesson():
         title = request.form.get('title','').strip()
         if not subject_name or not grade_name or not block_title or not title:
             flash('Vyplň předmět, školu a ročník, téma i název lekce. Podle těchto údajů se lekce automaticky zařadí.')
-            return render_template('lesson_form.html', course=course_from_lesson(None), lesson=None, section=None, subjects=Subject.query.all(), questions_json=request.form.get('questions_json','[]'), activities_json=request.form.get('activities_json','[]'), gallery_images=[])
+            return render_template('lesson_form.html', course=course_from_lesson(None), lesson=None, section=None, subjects=Subject.query.all(), questions_json=request.form.get('questions_json','[]'), activities_json=request.form.get('activities_json','[]'), questions_json_en=request.form.get('questions_json_en','[]'), activities_json_en=request.form.get('activities_json_en','[]'), gallery_images=[])
         sub = Subject.query.filter_by(name=subject_name).first() or Subject(name=subject_name, icon=icon)
         sub.icon = icon
         db.session.add(sub); db.session.flush()
@@ -5330,22 +5414,29 @@ def new_lesson():
         db.session.add(gr); db.session.flush()
         bl = Block.query.filter_by(grade_id=gr.id, title=block_title).first() or Block(grade_id=gr.id, title=block_title, order=Block.query.filter_by(grade_id=gr.id).count()+1)
         db.session.add(bl); db.session.flush()
-        les = Lesson(block_id=bl.id, title=title, tip=request.form.get('tip',''), order=Lesson.query.filter_by(block_id=bl.id).count()+1)
+        les = Lesson(block_id=bl.id, title=title, title_en=request.form.get('title_en','').strip(), tip=request.form.get('tip',''), tip_en=request.form.get('tip_en',''), order=Lesson.query.filter_by(block_id=bl.id).count()+1)
         db.session.add(les); db.session.flush()
         html_import = import_html_to_lesson_html(request.files.get('html_file'), request.files.getlist('html_assets'))
         sec_text = html_import if html_import is not None else process_inline_images(request.form.get('text',''))
         # U hotového HTML je nadpis součástí samotného souboru, nepřidáváme proto
         # starý výchozí nadpis aplikace nad něj.
         sec_heading = '' if html_import is not None else request.form.get('heading','Výklad')
-        sec = Section(lesson_id=les.id, heading=sec_heading, text=sec_text, interest=request.form.get('interest',''), activity=request.form.get('activity',''), order=1)
+        html_import_en = import_html_to_lesson_html(request.files.get('html_file_en'), request.files.getlist('html_assets_en'))
+        sec_text_en = html_import_en if html_import_en is not None else process_inline_images(request.form.get('text_en',''))
+        sec_heading_en = '' if html_import_en is not None else request.form.get('heading_en','')
+        sec = Section(lesson_id=les.id, heading=sec_heading, text=sec_text, interest=request.form.get('interest',''), activity=request.form.get('activity',''),
+                      heading_en=sec_heading_en, text_en=sec_text_en, interest_en=request.form.get('interest_en',''), activity_en=request.form.get('activity_en',''), order=1)
         db.session.add(sec); db.session.flush()
         image_map = save_question_images()
-        handle_images(les, sec, image_map)
-        add_questions_from_payload(les.id, sec.id, 'study', request.form.get('questions_json',''), request.form.get('study_questions',''), image_map)
-        save_practical_activities_from_payload(les, sec, request.form.get('activities_json','[]'))
+        handle_images(les, sec, image_map, 'cs')
+        handle_images(les, sec, image_map, 'en')
+        add_questions_from_payload(les.id, sec.id, 'study', request.form.get('questions_json',''), request.form.get('study_questions',''), image_map, lang='cs')
+        add_questions_from_payload(les.id, sec.id, 'study', request.form.get('questions_json_en',''), '', image_map, lang='en')
+        save_practical_activities_from_payload(les, sec, request.form.get('activities_json','[]'), 'cs')
+        save_practical_activities_from_payload(les, sec, request.form.get('activities_json_en','[]'), 'en')
         db.session.commit()
         return redirect(url_for('lesson', lesson_id=les.id))
-    return render_template('lesson_form.html', course=course_from_lesson(None), lesson=None, section=None, subjects=Subject.query.all(), questions_json='[]', activities_json='[]', gallery_images=[])
+    return render_template('lesson_form.html', course=course_from_lesson(None), lesson=None, section=None, subjects=Subject.query.all(), questions_json='[]', activities_json='[]', questions_json_en='[]', activities_json_en='[]', gallery_images=[])
 
 @app.route('/teacher/lesson/<int:lesson_id>/edit', methods=['GET','POST'])
 def edit_lesson(lesson_id):
@@ -5360,7 +5451,9 @@ def edit_lesson(lesson_id):
         les.block.grade.name = request.form.get('grade', les.block.grade.name)
         les.block.title = request.form.get('block', les.block.title)
         les.title = request.form.get('title', les.title)
+        les.title_en = request.form.get('title_en','').strip()
         les.tip = request.form.get('tip','')
+        les.tip_en = request.form.get('tip_en','')
         requested_heading = request.form.get('heading','Výklad')
         existing_text = sec.text
         html_import = import_html_to_lesson_html(request.files.get('html_file'), request.files.getlist('html_assets'))
@@ -5374,18 +5467,31 @@ def edit_lesson(lesson_id):
             sec.text = process_inline_images(request.form.get('text', existing_text) or existing_text)
         sec.interest = request.form.get('interest','')
         sec.activity = request.form.get('activity','')
+        existing_text_en = sec.text_en or ''
+        html_import_en = import_html_to_lesson_html(request.files.get('html_file_en'), request.files.getlist('html_assets_en'))
+        if html_import_en is not None:
+            sec.heading_en = ''
+            sec.text_en = html_import_en
+        else:
+            sec.heading_en = request.form.get('heading_en','')
+            sec.text_en = process_inline_images(request.form.get('text_en', existing_text_en) or existing_text_en)
+        sec.interest_en = request.form.get('interest_en','')
+        sec.activity_en = request.form.get('activity_en','')
         Question.query.filter_by(lesson_id=les.id).delete()
         image_map = save_question_images()
-        handle_images(les, sec, image_map)
-        add_questions_from_payload(les.id, sec.id, 'study', request.form.get('questions_json',''), request.form.get('study_questions',''), image_map)
-        save_practical_activities_from_payload(les, sec, request.form.get('activities_json','[]'))
+        handle_images(les, sec, image_map, 'cs')
+        handle_images(les, sec, image_map, 'en')
+        add_questions_from_payload(les.id, sec.id, 'study', request.form.get('questions_json',''), request.form.get('study_questions',''), image_map, lang='cs')
+        add_questions_from_payload(les.id, sec.id, 'study', request.form.get('questions_json_en',''), '', image_map, lang='en')
+        save_practical_activities_from_payload(les, sec, request.form.get('activities_json','[]'), 'cs')
+        save_practical_activities_from_payload(les, sec, request.form.get('activities_json_en','[]'), 'en')
         db.session.commit()
         return redirect(url_for('lesson', lesson_id=les.id))
-    return render_template('lesson_form.html', course=course_from_lesson(les), lesson=les, section=sec, subjects=Subject.query.all(), questions_json=questions_editor_json(les, 'study'), activities_json=practical_activities_editor_json(les), gallery_images=lesson_gallery(les))
+    return render_template('lesson_form.html', course=course_from_lesson(les), lesson=les, section=sec, subjects=Subject.query.all(), questions_json=questions_editor_json(les, 'study', 'cs'), activities_json=practical_activities_editor_json(les, 'cs'), questions_json_en=questions_editor_json(les, 'study', 'en'), activities_json_en=practical_activities_editor_json(les, 'en'), gallery_images=lesson_gallery(les))
 
-def questions_editor_json(lesson, area):
+def questions_editor_json(lesson, area, lang='cs'):
     arr=[]
-    for q in sorted([q for q in lesson.questions if q.area==area], key=lambda x:x.order):
+    for q in sorted([q for q in lesson.questions if q.area==area and (q.lang or 'cs') == lang], key=lambda x:x.order):
         if q.qtype == 'choice':
             arr.append({'type':'choice','question':q.question,'options':json.loads(q.options_json or '[]'),'correct':json.loads(q.correct_json or '0')})
         elif q.qtype == 'image_choice':
@@ -5398,7 +5504,7 @@ def questions_editor_json(lesson, area):
             arr.append({'type':'text','question':q.question,'roots':json.loads(q.roots_json or '[]'),'image': opts.get('image','') if isinstance(opts, dict) else ''})
     return json.dumps(arr, ensure_ascii=False)
 
-def add_questions_from_payload(lesson_id, section_id, area, payload, fallback_raw='', image_map=None):
+def add_questions_from_payload(lesson_id, section_id, area, payload, fallback_raw='', image_map=None, lang='cs'):
     try:
         data = json.loads(payload or '[]')
     except Exception:
@@ -5414,7 +5520,7 @@ def add_questions_from_payload(lesson_id, section_id, area, payload, fallback_ra
                 roots = [r.strip() for r in item.get('roots',[]) if str(r).strip()]
                 img = str(item.get('image','') or '').strip()
                 img = image_map.get(img, img)
-                db.session.add(Question(lesson_id=lesson_id, section_id=section_id, area=area, qtype='text', question=question, options_json=json.dumps({'image': img}, ensure_ascii=False), roots_json=json.dumps(roots, ensure_ascii=False), hint='Odpověď najdeš ve výkladu.', order=order))
+                db.session.add(Question(lesson_id=lesson_id, section_id=section_id, area=area, lang=lang, qtype='text', question=question, options_json=json.dumps({'image': img}, ensure_ascii=False), roots_json=json.dumps(roots, ensure_ascii=False), hint='Odpověď najdeš ve výkladu.', order=order))
             elif typ == 'image_choice':
                 imgs = [image_map.get(str(o).strip(), str(o).strip()) for o in item.get('images',[]) if str(o).strip()]
                 if len(imgs) < 2:
@@ -5422,17 +5528,17 @@ def add_questions_from_payload(lesson_id, section_id, area, payload, fallback_ra
                 while len(imgs) < 4:
                     imgs.append(imgs[-1])
                 correct = int(item.get('correct',0) or 0)
-                db.session.add(Question(lesson_id=lesson_id, section_id=section_id, area=area, qtype='image_choice', question=question, options_json=json.dumps(imgs[:4], ensure_ascii=False), correct_json=json.dumps(correct), hint='Odpověď najdeš ve výkladu.', order=order))
+                db.session.add(Question(lesson_id=lesson_id, section_id=section_id, area=area, lang=lang, qtype='image_choice', question=question, options_json=json.dumps(imgs[:4], ensure_ascii=False), correct_json=json.dumps(correct), hint='Odpověď najdeš ve výkladu.', order=order))
             else:
                 opts = [str(o).strip() for o in item.get('options',[]) if str(o).strip()]
                 while len(opts) < 2: opts.append('')
                 correct = int(item.get('correct',0) or 0)
-                db.session.add(Question(lesson_id=lesson_id, section_id=section_id, area=area, qtype='choice', question=question, options_json=json.dumps(opts, ensure_ascii=False), correct_json=json.dumps(correct), hint='Odpověď najdeš ve výkladu.', order=order))
+                db.session.add(Question(lesson_id=lesson_id, section_id=section_id, area=area, lang=lang, qtype='choice', question=question, options_json=json.dumps(opts, ensure_ascii=False), correct_json=json.dumps(correct), hint='Odpověď najdeš ve výkladu.', order=order))
             order += 1
         return
-    add_questions_from_text(lesson_id, section_id, area, fallback_raw or '')
+    add_questions_from_text(lesson_id, section_id, area, fallback_raw or '', lang=lang)
 
-def add_questions_from_text(lesson_id, section_id, area, raw):
+def add_questions_from_text(lesson_id, section_id, area, raw, lang='cs'):
     # formát: otázka | odpověď A | odpověď B | odpověď C | číslo správné odpovědi 1-3
     order = 1
     for line in raw.splitlines():
@@ -5441,7 +5547,7 @@ def add_questions_from_text(lesson_id, section_id, area, raw):
         parts=[p.strip() for p in line.split('|')]
         if len(parts)>=5:
             correct = max(0, int(parts[4])-1) if parts[4].isdigit() else 0
-            db.session.add(Question(lesson_id=lesson_id, section_id=section_id, area=area, qtype='choice', question=parts[0], options_json=json.dumps(parts[1:4], ensure_ascii=False), correct_json=json.dumps(correct), hint='Odpověď najdeš ve výkladu.', order=order))
+            db.session.add(Question(lesson_id=lesson_id, section_id=section_id, area=area, lang=lang, qtype='choice', question=parts[0], options_json=json.dumps(parts[1:4], ensure_ascii=False), correct_json=json.dumps(correct), hint='Odpověď najdeš ve výkladu.', order=order))
             order += 1
 
 
@@ -5624,10 +5730,13 @@ def save_question_images():
 def save_gallery_images():
     return save_question_images()
 
-def handle_images(les, sec, image_map=None):
+def handle_images(les, sec, image_map=None, lang='cs'):
     image_map = image_map or {}
-    h = save_upload(request.files.get('hero_image'))
-    if h: les.hero_image = h
+    field = 'hero_image_en' if lang == 'en' else 'hero_image'
+    h = save_upload(request.files.get(field))
+    if h:
+        if lang == 'en': les.hero_image_en = h
+        else: les.hero_image = h
     # Obrázky výkladu se vkládají přímo přes CKEditor a ukládají se v endpointu /teacher/upload-image.
 
 @app.route('/uploads/<filename>')
@@ -5660,6 +5769,15 @@ def img(filename):
 def ensure_schema_updates():
     inspector = inspect(db.engine)
     required = {
+        'lesson': {
+            'title_en': "VARCHAR(200) DEFAULT ''", 'tip_en': "TEXT DEFAULT ''", 'hero_image_en': "VARCHAR(255) DEFAULT ''"
+        },
+        'section': {
+            'heading_en': "VARCHAR(200) DEFAULT ''", 'text_en': "TEXT DEFAULT ''", 'interest_en': "TEXT DEFAULT ''",
+            'image_en': "VARCHAR(255) DEFAULT ''", 'activity_en': "TEXT DEFAULT ''"
+        },
+        'question': {'lang': "VARCHAR(2) DEFAULT 'cs'"},
+        'practical_activity': {'lang': "VARCHAR(2) DEFAULT 'cs'"},
         'result': {
             'focus_lost': 'INTEGER DEFAULT 0',
             'status': "VARCHAR(60) DEFAULT 'dokončeno'"
