@@ -895,12 +895,13 @@ def api_focus_lost():
         if kind == 'html':
             lesson_item = db.session.get(Lesson, int(key)) if key.isdigit() else None
             if lesson_item:
-                db.session.add(Result(
-                    user_id=user.id, lesson_id=lesson_item.id,
-                    percent=0, grade=5, score=0, total=0,
-                    focus_lost=3, status='ukončeno po 3 opuštěních'
-                ))
-                touch_progress(lesson_item.id, 0, 'ukončeno po 3 opuštěních')
+                if final_attempt_is_active(lesson_item.id):
+                    # Třetí opuštění ukončí právě běžící závěrečný pokus.
+                    # Učitel dostane procenta dosažená v tomto posledním pokusu.
+                    persist_final_result(lesson_item, status='ukončeno po 3 opuštěních', focus_lost=3)
+                    final_attempt_mark_finished(lesson_item.id)
+                else:
+                    touch_progress(lesson_item.id, 0, 'ukončeno po 3 opuštěních')
         elif kind == 'interactive':
             lesson_item = InteractiveLesson.query.filter_by(slug=key).first()
             if lesson_item:
@@ -1481,13 +1482,38 @@ def final_test(lesson_id):
     if not lesson: return 'Lekce nenalezena', 404
     if current_user().role == 'student':
         consume_pending_lesson_reset(lesson.id)
-        begin_focus_attempt('html', lesson.id)
     if not lesson_ready_for_test(lesson):
         flash('Nejdřív dokonči otázky k výkladu a aktivitu. Test se odemkne až potom.')
         return redirect(url_for('lesson', lesson_id=lesson.id))
+    if current_user().role == 'student':
+        # Každé nové otevření závěrečného úkolu je nový pokus od 0 %.
+        # Pokud student obnoví stránku nebo se vrátí do testu, předchozí
+        # rozpracovaný pokus se nejprve uloží učiteli jako poslední pokus.
+        if final_attempt_is_active(lesson.id):
+            persist_final_result(lesson, status='pokus přerušen – zahájen nový', focus_lost=get_focus_count('html', lesson.id))
+            final_attempt_mark_finished(lesson.id)
+        consume_focus_count('html', lesson.id)
+        reset_final_attempt(current_user().id, lesson.id)
+        final_attempt_mark_active(lesson.id)
+        begin_focus_attempt('html', lesson.id)
     related = Lesson.query.filter_by(block_id=lesson.block_id, is_published=True).order_by(Lesson.order).all()
-    touch_progress(lesson.id, 999, 'závěrečný test')
+    touch_progress(lesson.id, 999, 'závěrečný test – nový pokus')
     return render_template('test.html', lesson=lesson_to_dict(lesson), lessons=[lesson_to_dict(l) for l in related], course=course_from_lesson(lesson))
+
+@app.route('/final-abort/<int:lesson_id>')
+def final_abort(lesson_id):
+    r = require_login()
+    if r: return r
+    lesson = db.session.get(Lesson, lesson_id)
+    if not lesson: return 'Lekce nenalezena', 404
+    if current_user().role == 'student' and final_attempt_is_active(lesson.id):
+        persist_final_result(lesson, status='pokus ukončen studentem', focus_lost=get_focus_count('html', lesson.id))
+        final_attempt_mark_finished(lesson.id)
+        consume_focus_count('html', lesson.id)
+    if request.args.get('to') == 'lesson':
+        return redirect(url_for('lesson', lesson_id=lesson.id, review=1))
+    return redirect(url_for('dashboard'))
+
 
 @app.route('/finish/<int:lesson_id>', methods=['POST'])
 def finish(lesson_id):
@@ -1629,35 +1655,125 @@ def _upsert_activity_progress(activity, context, answer, ok):
     db.session.commit()
 
 
-def update_final_result(lesson):
-    user = current_user()
-    if user and user.role == 'student':
-        consume_pending_lesson_reset(lesson.id)
-        user = current_user()
-    if not user or user.role != 'student':
-        return {'percent': 0, 'grade': 5, 'completed': 0, 'total': 0, 'label': slovni_hodnoceni(0)}
+def final_item_keys(lesson):
     data = lesson_to_dict(lesson)
-    keys = [f'q:{q["id"]}' for q in data.get('final_test', [])] + [f'a:{a["id"]}' for a in data.get('final_activities', [])]
-    completed_keys = {r.item_key for r in FinalItemProgress.query.filter_by(user_id=user.id, lesson_id=lesson.id, completed=True).all()}
+    return [f'q:{q["id"]}' for q in data.get('final_test', [])] + [f'a:{a["id"]}' for a in data.get('final_activities', [])]
+
+
+def final_attempt_mark_active(lesson_id):
+    active = set(str(x) for x in session.get('final_active_attempts', []))
+    active.add(str(lesson_id))
+    session['final_active_attempts'] = sorted(active)
+    session.modified = True
+
+
+def final_attempt_mark_finished(lesson_id):
+    active = set(str(x) for x in session.get('final_active_attempts', []))
+    active.discard(str(lesson_id))
+    session['final_active_attempts'] = sorted(active)
+    session.modified = True
+
+
+def final_attempt_is_active(lesson_id):
+    return str(lesson_id) in {str(x) for x in session.get('final_active_attempts', [])}
+
+
+def reset_final_attempt(user_id, lesson_id):
+    """Nový závěrečný pokus vždy začíná od nuly.
+
+    Maže se pouze pracovní stav závěrečného pokusu; studijní část lekce
+    a poslední učitelův výsledek zůstávají zachované.
+    """
+    FinalItemProgress.query.filter_by(user_id=user_id, lesson_id=lesson_id).delete(synchronize_session=False)
+    activity_ids = [a.id for a in PracticalActivity.query.filter_by(lesson_id=lesson_id).all()]
+    if activity_ids:
+        StudentActivityProgress.query.filter(
+            StudentActivityProgress.user_id == user_id,
+            StudentActivityProgress.context == 'final',
+            StudentActivityProgress.activity_id.in_(activity_ids)
+        ).delete(synchronize_session=False)
+    db.session.commit()
+
+
+def final_progress_snapshot(lesson, user=None):
+    user = user or current_user()
+    if not user or user.role != 'student':
+        return {'percent': 0, 'grade': 5, 'completed': 0, 'total': 0, 'label': slovni_hodnoceni(0), 'done': False}
+    keys = final_item_keys(lesson)
+    completed_keys = {r.item_key for r in FinalItemProgress.query.filter_by(
+        user_id=user.id, lesson_id=lesson.id, completed=True
+    ).all()}
     completed = sum(1 for k in keys if k in completed_keys)
     total = len(keys)
     percent = round(completed / max(total, 1) * 100)
     grade = grade_from_percent(percent)
-    row = Result.query.filter_by(user_id=user.id, lesson_id=lesson.id).order_by(Result.created_at.desc()).first()
-    if not row:
-        row = Result(user_id=user.id, lesson_id=lesson.id, created_at=datetime.utcnow())
-        db.session.add(row)
-    row.percent = percent
-    row.grade = grade
-    row.score = completed
-    row.total = total
-    row.focus_lost = get_focus_count('html', lesson.id)
-    row.status = 'dokončeno' if total and completed >= total else 'závěrečný test – rozpracováno'
-    row.created_at = datetime.utcnow()
-    db.session.commit()
-    touch_progress(lesson.id, 1000 if row.status == 'dokončeno' else 999, row.status)
-    return {'percent': percent, 'grade': grade, 'completed': completed, 'total': total, 'label': slovni_hodnoceni(percent), 'done': bool(total and completed >= total)}
+    return {
+        'percent': percent, 'grade': grade, 'completed': completed, 'total': total,
+        'label': slovni_hodnoceni(percent), 'done': bool(total and completed >= total)
+    }
 
+
+def final_next_item_key(lesson, user=None):
+    user = user or current_user()
+    if not user or user.role != 'student':
+        return None
+    completed = {r.item_key for r in FinalItemProgress.query.filter_by(
+        user_id=user.id, lesson_id=lesson.id, completed=True
+    ).all()}
+    for key in final_item_keys(lesson):
+        if key not in completed:
+            return key
+    return None
+
+
+def persist_final_result(lesson, status='dokončeno', focus_lost=None):
+    """Učitelovi se uchovává nejlepší dosažený výsledek závěrečného úkolu.
+
+    Student může závěrečný úkol opakovat libovolně. Každý nový pokus začíná
+    od nuly, ale horší pozdější pokus nikdy nepřepíše lepší dřívější výsledek.
+    """
+    user = current_user()
+    if not user or user.role != 'student':
+        return final_progress_snapshot(lesson, user)
+    progress = final_progress_snapshot(lesson, user)
+    if focus_lost is None:
+        focus_lost = get_focus_count('html', lesson.id)
+
+    rows = Result.query.filter_by(user_id=user.id, lesson_id=lesson.id).order_by(Result.created_at.desc()).all()
+    row = rows[0] if rows else None
+    for old in rows[1:]:
+        db.session.delete(old)
+
+    # První ukončený pokus vždy uložíme. Další pokus přepíše učitelův
+    # výsledek pouze tehdy, pokud je lepší než dosavadní maximum.
+    should_store = row is None or int(progress['percent'] or 0) > int(row.percent or 0)
+    if row is None:
+        row = Result(user_id=user.id, lesson_id=lesson.id)
+        db.session.add(row)
+
+    if should_store:
+        row.percent = progress['percent']
+        row.grade = progress['grade']
+        row.score = progress['completed']
+        row.total = progress['total']
+        row.focus_lost = int(focus_lost or 0)
+        row.status = status
+        row.created_at = datetime.utcnow()
+
+    db.session.commit()
+    touch_progress(lesson.id, 1000 if status == 'dokončeno' else 999, status)
+    return progress
+
+
+def update_final_result(lesson):
+    # Průběžný stav závěrečného pokusu je pracovní stav.
+    # Do učitelovy databáze se zapíše až ukončený pokus.
+    progress = final_progress_snapshot(lesson)
+    if progress.get('done'):
+        persist_final_result(lesson, status='dokončeno', focus_lost=get_focus_count('html', lesson.id))
+        final_attempt_mark_finished(lesson.id)
+        end_focus_attempt('html', lesson.id)
+    return progress
 
 def mark_final_item(lesson_id, item_key, answer, ok):
     user = current_user()
@@ -1684,6 +1800,11 @@ def api_activity_check():
         return jsonify({'ok': False, 'error': 'activity'}), 404
     context = 'final' if d.get('context') == 'final' else 'study'
     answer = d.get('answer') or {}
+    if context == 'final' and current_user().role == 'student':
+        expected = final_next_item_key(activity.lesson)
+        current_key = f'a:{activity.id}'
+        if expected != current_key:
+            return jsonify({'ok': False, 'blocked': True, 'message': 'Nejdřív správně dokonči předchozí otázku nebo úkol.'}), 409
     ok = check_practical_activity(activity, answer)
     _upsert_activity_progress(activity, context, answer, ok)
     progress = None
@@ -1701,6 +1822,11 @@ def api_final_question_check():
     if not q:
         return jsonify({'ok': False, 'error': 'question'}), 404
     lesson = q.lesson
+    if current_user().role == 'student':
+        expected = final_next_item_key(lesson)
+        current_key = f'q:{q.id}'
+        if expected != current_key:
+            return jsonify({'ok': False, 'blocked': True, 'message': 'Nejdřív správně dokonči předchozí otázku nebo úkol.'}), 409
     answer = d.get('answer', '')
     ok = check_question(q_to_dict(q), answer)
     mark_final_item(lesson.id, f'q:{q.id}', answer, ok)

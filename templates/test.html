@@ -4,13 +4,13 @@
   {% include 'sidebar.html' %}
   <main class="main-card montessori-main" id="montessoriFinal" data-lesson-id="{{ lesson._id }}">
     <div class="title-row">
-      <div><h1>🧠 Teď to zkus sám</h1><p>Chyba nic nebere. Zkoušej znovu a kdykoliv hledej ve studijním materiálu vedle.</p></div>
-      <div class="lesson-actions"><a class="switch" href="{{ url_for('dashboard') }}">💾 Ukončit a uložit</a><a class="switch" href="{{ url_for('lesson', lesson_id=lesson._id) }}">📖 Zpět k lekci</a></div>
+      <div><h1>🧠 Teď to zkus sám</h1><p>Každý závěrečný pokus začíná od začátku. Další otázka se odemkne teprve po správném splnění předchozí. Chybu můžeš opravovat bez omezení.</p></div>
+      <div class="lesson-actions"><a class="switch" href="{{ url_for('final_abort', lesson_id=lesson._id) }}">⏹️ Ukončit pokus</a><a class="switch" href="{{ url_for('final_abort', lesson_id=lesson._id, to='lesson') }}">📖 Zpět k lekci</a></div>
     </div>
 
     <div class="montessori-workspace final-workspace">
       <aside class="study-pane">
-        <div class="study-pane-head"><span>📖</span><div><b>Studijní materiál</b><small>Můžeš ho používat po celou dobu.</small></div></div>
+        <div class="study-pane-head"><span>📖</span><div><b>Studijní materiál</b><small>Můžeš ho používat po celou dobu tohoto pokusu.</small></div></div>
         <div class="study-scroll final-study-scroll">
           {% for sec in lesson.sections %}<article class="docx-content">{% if sec.heading and 'imported-html-content' not in (sec.text or '') %}<h2>{{ sec.heading }}</h2>{% endif %}{{ sec.text|safe }}{% if sec.interest %}<div class="interest"><b>💡 Zajímavost</b><br>{{ sec.interest }}</div>{% endif %}</article>{% endfor %}
         </div>
@@ -37,7 +37,7 @@
             {% set completed = false %}{% set context = 'final' %}{% include '_practical_activity.html' %}
           {% endfor %}
         </div>
-        <div id="finalDone" class="sequence-done" hidden><div class="done-star">🌟</div><h2>Výborně, všechno je zvládnuto</h2><p>Počet pokusů se nikde neodečítá. Důležité je, že ses k výsledku dopracoval/a.</p><div class="done-actions"><a class="secondary-action" href="{{ url_for('lesson', lesson_id=lesson._id, review=1) }}">📖 Zpět k výuce</a><a class="next" href="{{ url_for('dashboard') }}">Zpět na přehled</a></div></div>
+        <div id="finalDone" class="sequence-done" hidden><div class="done-star">🌟</div><h2>Výborně, všechno je zvládnuto</h2><p>Tento pokus je dokončen. Závěrečný úkol můžeš kdykoliv spustit znovu; nový pokus začne od první otázky.</p><div class="done-actions"><a class="secondary-action" href="{{ url_for('lesson', lesson_id=lesson._id, review=1) }}">📖 Zpět k výuce</a><a class="next" href="{{ url_for('dashboard') }}">Zpět na přehled</a></div></div>
       </section>
     </div>
   </main>
