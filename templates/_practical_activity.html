@@ -1,10 +1,10 @@
 <div class="practical-card learning-item{% if completed %} completed-item{% endif %}" data-kind="activity" data-activity-id="{{ activity.id }}" data-activity-type="{{ activity.type }}" data-completed="{{ 1 if completed else 0 }}" data-context="{{ context }}" {% if context == 'final' %}data-item-key="a:{{ activity.id }}"{% endif %} data-config='{{ activity.config|tojson }}'>
   <div class="activity-kicker">
-    {% if activity.type == 'cards' %}🧩 SKLÁDAČKA / KARTIČKY
-    {% elif activity.type == 'video_find' %}🎥 ZASTAV A UKAŽ
-    {% elif activity.type == 'video_observe' %}🎬 POZORUJ VIDEO
-    {% elif activity.type == 'find_image' %}🔎 NAJDI NA OBRÁZKU
-    {% elif activity.type == 'real_world' %}🌱 MISE VE SKUTEČNÉM SVĚTĚ
+    {% if activity.type == 'cards' %}🧩 {{ t('SKLÁDAČKA / KARTIČKY') }}
+    {% elif activity.type == 'video_find' %}🎥 {{ t('ZASTAV A UKAŽ') }}
+    {% elif activity.type == 'video_observe' %}🎬 {{ t('POZORUJ VIDEO') }}
+    {% elif activity.type == 'find_image' %}🔎 {{ t('NAJDI NA OBRÁZKU') }}
+    {% elif activity.type == 'real_world' %}🌱 {{ t('MISE VE SKUTEČNÉM SVĚTĚ') }}
     {% endif %}
   </div>
   <h2>{{ activity.title }}</h2>
@@ -34,20 +34,20 @@
     {% if activity.config.get('mode') == 'categories' %}
       <div class="cards-bank"></div>
       <div class="cards-category-zones sort-zones"></div>
-      <button type="button" class="check-activity primary-action">Zkontrolovat kartičky</button>
+      <button type="button" class="check-activity primary-action">{{ t('Zkontrolovat kartičky') }}</button>
     {% else %}
       <div class="image-cards-instruction">Přetáhni každý obrázek do správného očíslovaného obdélníku.</div>
       <div class="cards-bank image-cards-bank"></div>
       <div class="image-card-targets"></div>
-      <button type="button" class="check-activity primary-action">Zkontrolovat skládačku</button>
+      <button type="button" class="check-activity primary-action">{{ t('Zkontrolovat skládačku') }}</button>
     {% endif %}
 
   {% elif activity.type == 'real_world' %}
     <div class="mission-note">👣 Odejdi na chvíli od počítače, úkol opravdu proveď a potom se vrať k odpovědi.</div>
     <div class="mission-answers"></div>
-    <button type="button" class="check-activity primary-action">Zkontrolovat a pokračovat</button>
+    <button type="button" class="check-activity primary-action">{{ t('Zkontrolovat a pokračovat') }}</button>
   {% endif %}
 
   <div class="feedback activity-feedback"></div>
-  <div class="study-reminder">📖 Když si nejsi jistý/á, vše potřebné můžeš najít ve studijním materiálu vedle.</div>
+  <div class="study-reminder">📖 {{ t('Když si nejsi jistý/á, vše potřebné můžeš najít ve studijním materiálu vedle.') }}</div>
 </div>

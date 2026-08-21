@@ -59,7 +59,15 @@ I18N = {
         'Zajímavost':'Did you know?','Závěrečný test':'Final test','Hotovo':'Done','Uložit':'Save','Zrušit':'Cancel','Smazat':'Delete','Upravit':'Edit',
         'Přidat':'Add','Název':'Title','Téma':'Topic','Ročník':'Grade','Škola':'School','Předmět':'Subject','Popis':'Description',
         'Nová lekce':'New lesson','Vytvořit':'Create','Zveřejněno':'Published','Ano':'Yes','Ne':'No','Hledat':'Search',
-        'Jazyk':'Language','Čeština':'Czech','Angličtina':'English','Jazyk je během rozpracované práce uzamčen.':'The language is locked while work is in progress.'
+        'Jazyk':'Language','Čeština':'Czech','Angličtina':'English','Jazyk je během rozpracované práce uzamčen.':'The language is locked while work is in progress.',
+        'Objevuj, hledej ve studijním materiálu a postupuj krok za krokem.':'Explore, use the study material and progress step by step.',
+        'Ukončit a uložit':'Finish and save','Teď to zkus sám':'Now try it yourself','Ověření se odemkne po lekci':'The assessment unlocks after the lesson',
+        'Studijní materiál':'Study material','Vše potřebné najdeš tady.':'Everything you need is here.','MOJE CESTA':'MY JOURNEY','Aktuální úkol':'Current task',
+        'OTÁZKA K VÝKLADU':'QUESTION ABOUT THE LESSON','Napiš odpověď':'Type your answer','Zkontrolovat':'Check','Další část':'Next section',
+        'Jak pracovat':'How to work','Tip':'Tip','Když si nejsi jistý/á, hledej ve studijním materiálu vedle.':'If you are unsure, look in the study material next to the task.',
+        'POZORUJ VIDEO':'WATCH THE VIDEO','ZASTAV A UKAŽ':'PAUSE AND POINT','NAJDI NA OBRÁZKU':'FIND IN THE PICTURE','SKLÁDAČKA / KARTIČKY':'PUZZLE / CARDS',
+        'MISE VE SKUTEČNÉM SVĚTĚ':'REAL-WORLD MISSION','Zkontrolovat kartičky':'Check cards','Zkontrolovat skládačku':'Check puzzle','Zkontrolovat a pokračovat':'Check and continue',
+        'Když si nejsi jistý/á, vše potřebné můžeš najít ve studijním materiálu vedle.':'If you are unsure, you can find everything you need in the study material next to the task.'
     }
 }
 
@@ -698,7 +706,15 @@ def lesson_to_dict(lesson):
     all_activities = sorted([a for a in lesson.practical_activities if (a.lang or 'cs') != 'en'], key=lambda x: x.order)
     for sec in sorted(lesson.sections, key=lambda x:x.order):
         sec_acts = [activity_to_dict(a) for a in all_activities if a.section_id == sec.id]
-        qs = [q for q in sorted(sec.questions, key=lambda x:x.order) if q.area=='study' and (q.lang or 'cs') == lang]
+        # Česká sada určuje STRUKTURU lekce. Angličtina pouze lokalizuje stejné
+        # kroky podle pořadí. Tím přepnutí CZ/EN nikdy nepřidá/neztratí video,
+        # aktivitu ani jiný typ kroku jen proto, že je v EN JSONu jiný počet otázek.
+        cs_qs = [q for q in sorted(sec.questions, key=lambda x:(x.order, x.id)) if q.area=='study' and (q.lang or 'cs') == 'cs']
+        en_qs = [q for q in sorted(sec.questions, key=lambda x:(x.order, x.id)) if q.area=='study' and (q.lang or 'cs') == 'en']
+        if is_en:
+            qs = [en_qs[i] if i < len(en_qs) else q for i, q in enumerate(cs_qs)]
+        else:
+            qs = cs_qs
         sections.append({
             'id': sec.id,
             'heading': (sec.heading_en or '') if is_en else sec.heading,

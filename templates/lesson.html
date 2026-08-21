@@ -4,11 +4,11 @@
   {% include 'sidebar.html' %}
   <main class="main-card montessori-main" id="montessoriLesson" data-lesson-id="{{ lesson._id }}" data-step="{{ step }}" data-read-complete="{{ 1 if section_read_complete else 0 }}" data-review="{{ 1 if request.args.get('review') == '1' else 0 }}">
     <div class="title-row">
-      <div><h1>{{ lesson.title }}</h1><p>Objevuj, hledej ve studijním materiálu a postupuj krok za krokem.</p></div>
+      <div><h1>{{ lesson.title }}</h1><p>{{ t('Objevuj, hledej ve studijním materiálu a postupuj krok za krokem.') }}</p></div>
       <div class="lesson-actions">
-        <a class="switch" href="{{ url_for('dashboard') }}">💾 Ukončit a uložit</a>
+        <a class="switch" href="{{ url_for('dashboard') }}">💾 {{ t('Ukončit a uložit') }}</a>
         {% if user and user.role == 'teacher' %}<a class="switch" href="{{ url_for('edit_lesson', lesson_id=lesson._id) }}">✏️ Upravit</a>{% endif %}
-        {% if ready_for_test %}<a class="switch" href="{{ url_for('final_test', lesson_id=lesson._id) }}">🧠 Teď to zkus sám</a>{% else %}<span class="switch locked-test">🔒 Ověření se odemkne po lekci</span>{% endif %}
+        {% if ready_for_test %}<a class="switch" href="{{ url_for('final_test', lesson_id=lesson._id) }}">🧠 {{ t('Teď to zkus sám') }}</a>{% else %}<span class="switch locked-test">🔒 {{ t('Ověření se odemkne po lekci') }}</span>{% endif %}
       </div>
     </div>
     {% with messages = get_flashed_messages() %}{% if messages %}<div class="flash-msg">{{ messages[0] }}</div>{% endif %}{% endwith %}
@@ -16,7 +16,7 @@
 
     <div class="montessori-workspace">
       <aside class="study-pane">
-        <div class="study-pane-head"><span>📖</span><div><b>Studijní materiál</b><small>Vše potřebné najdeš tady.</small></div></div>
+        <div class="study-pane-head"><span>📖</span><div><b>{{ t('Studijní materiál') }}</b><small>{{ t('Vše potřebné najdeš tady.') }}</small></div></div>
         <div class="study-scroll" id="studyScroll">
           <div class="docx-content" id="vyklad">
             {% if sec.heading and 'imported-html-content' not in (sec.text or '') %}<h2>{{ sec.heading }}</h2>{% endif %}
@@ -29,13 +29,13 @@
 
       <section class="learning-pane">
         <div class="learning-header">
-          <div><span class="eyebrow">MOJE CESTA</span><h2>Aktuální úkol</h2></div>
+          <div><span class="eyebrow">{{ t('MOJE CESTA') }}</span><h2>{{ t('Aktuální úkol') }}</h2></div>
           <div class="journey-progress"><b id="journeyCounter">1 / 1</b><div class="bar small"><i id="journeyBar" style="width:0%"></i></div></div>
         </div>
         <div class="learning-sequence" id="learningSequence">
           {% for q in sec.questions %}
           <div class="q-card learning-item{% if q.id in study_completed_questions %} completed-item{% endif %}" data-kind="question" data-question-id="{{ q.id }}" data-completed="{{ 1 if q.id in study_completed_questions else 0 }}">
-            <div class="activity-kicker">❓ OTÁZKA K VÝKLADU</div>
+            <div class="activity-kicker">❓ {{ t('OTÁZKA K VÝKLADU') }}</div>
             <h2>{{ q.question }}</h2>
             {% if q.type == 'image_choice' %}
               <div class="img-options">
@@ -45,10 +45,10 @@
               <div class="choice-options">{% for op in q.options %}<button type="button" data-answer="{{ loop.index0 }}">{{ op }}</button>{% endfor %}</div>
             {% else %}
               {% if q.image %}<div class="question-image"><img src="{{ url_for('uploads', filename=q.image) }}"></div>{% endif %}
-              <div class="answer-row"><input class="text-answer" placeholder="Napiš odpověď"><button type="button" class="check-study-question primary-action">Zkontrolovat</button></div>
+              <div class="answer-row"><input class="text-answer" placeholder="{{ t('Napiš odpověď') }}"><button type="button" class="check-study-question primary-action">{{ t('Zkontrolovat') }}</button></div>
             {% endif %}
             <div class="feedback"></div>
-            <div class="study-reminder">📖 Když si nejsi jistý/á, hledej ve studijním materiálu vedle.</div>
+            <div class="study-reminder">📖 {{ t('Když si nejsi jistý/á, hledej ve studijním materiálu vedle.') }}</div>
           </div>
           {% endfor %}
 
@@ -70,16 +70,16 @@
           <a class="secondary-action review-learning-btn" href="{{ url_for('lesson', lesson_id=lesson._id, step=step, review=1) }}">📖 Znovu projít výuku a aktivity</a>
         </div>
         <div class="bottom-nav montessori-nav">
-          <a class="back" href="{{ url_for('lesson', lesson_id=lesson._id, step=step-1) if step>0 else url_for('dashboard') }}">← Zpět</a>
-          {% if step+1 < lesson.sections|length %}<a id="nextBtn" class="next locked-next" href="{{ url_for('lesson', lesson_id=lesson._id, step=step+1) }}">Další část →</a>{% else %}<a id="nextBtn" class="next locked-next" href="{{ url_for('final_test', lesson_id=lesson._id) }}">🧠 Teď to zkus sám →</a>{% endif %}
+          <a class="back" href="{{ url_for('lesson', lesson_id=lesson._id, step=step-1) if step>0 else url_for('dashboard') }}">← {{ t('Zpět') }}</a>
+          {% if step+1 < lesson.sections|length %}<a id="nextBtn" class="next locked-next" href="{{ url_for('lesson', lesson_id=lesson._id, step=step+1) }}">{{ t('Další část') }} →</a>{% else %}<a id="nextBtn" class="next locked-next" href="{{ url_for('final_test', lesson_id=lesson._id) }}">🧠 {{ t('Teď to zkus sám') }} →</a>{% endif %}
         </div>
         <div id="lockMsg" class="lock-msg">Nejdřív jednou projdi celý výklad a dokonči všechny kroky.</div>
       </section>
     </div>
   </main>
   <aside class="rightbar montessori-rightbar">
-    <div class="panel"><h2>Jak pracovat</h2><p>Čti, pozoruj, zkoušej a opravuj. Za chyby se nic neodečítá a počet pokusů nemá vliv na hodnocení.</p></div>
-    <div class="panel tip"><h2>Tip</h2><p>{{ lesson.tip }}</p><span>{{ course.icon }}</span></div>
+    <div class="panel"><h2>{{ t('Jak pracovat') }}</h2><p>Čti, pozoruj, zkoušej a opravuj. Za chyby se nic neodečítá a počet pokusů nemá vliv na hodnocení.</p></div>
+    <div class="panel tip"><h2>{{ t('Tip') }}</h2><p>{{ lesson.tip }}</p><span>{{ course.icon }}</span></div>
   </aside>
 </div>
 <script src="{{ url_for('static', filename='js/montessori_activities.js') }}"></script>
