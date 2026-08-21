@@ -1,4 +1,4 @@
-import os, json, unicodedata, random, html, re, base64, uuid, urllib.parse, urllib.request, urllib.error, zipfile, shutil, importlib.util, tempfile, threading, hmac, hashlib, ast, math
+import os, json, unicodedata, random, html, re, base64, uuid, urllib.parse, urllib.request, urllib.error, zipfile, shutil, importlib.util, tempfile, threading, hmac, hashlib, ast, math, io
 from pathlib import Path
 from datetime import datetime
 from flask import Flask, render_template, render_template_string, request, jsonify, session, redirect, url_for, send_from_directory, send_file, flash
@@ -5133,6 +5133,130 @@ def teacher_students():
     students = User.query.filter_by(role='student').order_by(User.name).all()
     return render_template('students.html', course=course_from_lesson(None), students=students, student_rows=student_overview_rows())
 
+
+
+def _answer_text(q):
+    """Čitelná správná odpověď pro učitelský klíč."""
+    try:
+        opts = json.loads(q.options_json or '[]')
+    except Exception:
+        opts = []
+    if q.qtype in ('choice', 'image_choice'):
+        try:
+            idx = int(json.loads(q.correct_json or '0'))
+        except Exception:
+            idx = 0
+        if isinstance(opts, list) and 0 <= idx < len(opts):
+            val = opts[idx]
+            return str(val) if val else f'možnost {idx + 1}'
+        return f'možnost {idx + 1}'
+    try:
+        roots = json.loads(q.roots_json or '[]')
+    except Exception:
+        roots = []
+    if roots:
+        return ' / '.join(str(x) for x in roots)
+    return '—'
+
+
+def _activity_solution(a, english=False):
+    raw = (a.config_en_json or '') if english else (a.config_json or '')
+    if english and not raw.strip():
+        raw = a.config_json or '{}'
+    try:
+        cfg = json.loads(raw or '{}')
+    except Exception:
+        cfg = {}
+    typ = a.activity_type or ''
+    if typ == 'video_observe':
+        ops = cfg.get('options') or []
+        idx = int(cfg.get('correct', 0) or 0)
+        return str(ops[idx]) if 0 <= idx < len(ops) else f"{'option' if english else 'možnost'} {idx+1}"
+    if typ in ('find_image', 'video_find'):
+        return 'Correct marked area in the image/video' if english else 'Správně označená oblast v obrázku/videu'
+    if typ == 'real_world':
+        concepts = cfg.get('concepts') or []
+        vals = []
+        for group in concepts:
+            if isinstance(group, list) and group:
+                vals.append(str(group[0]))
+            elif group:
+                vals.append(str(group))
+        minimum = cfg.get('min_items', '')
+        prefix = f"At least {minimum}: " if english and minimum else (f"Alespoň {minimum}: " if minimum else '')
+        return prefix + ', '.join(vals)
+    if typ == 'cards':
+        # Kartičky se vyhodnocují podle uloženého pořadí/přiřazení.
+        return 'Correct card matching/order as defined by the teacher' if english else 'Správné přiřazení/pořadí kartiček podle zadání učitele'
+    if typ == 'sort':
+        cats = cfg.get('categories') or []
+        items = cfg.get('items') or []
+        out=[]
+        for item in items:
+            if not isinstance(item, dict):
+                continue
+            ci = int(item.get('category', 0) or 0)
+            cat = cats[ci] if 0 <= ci < len(cats) else str(ci+1)
+            out.append(f"{item.get('label','')} → {cat}")
+        return '; '.join(out) or '—'
+    return 'Correct completion of the activity' if english else 'Správné splnění aktivity'
+
+
+def _lesson_solution_text(lesson, bilingual=False):
+    lines = []
+    subject = lesson.block.grade.subject.name
+    lines += ['UČITELSKÉ ŘEŠENÍ / TEACHER ANSWER KEY' if bilingual else 'UČITELSKÉ ŘEŠENÍ',
+              '=' * 58,
+              f"Předmět: {subject}", f"Ročník: {lesson.block.grade.name}", f"Téma: {lesson.block.title}",
+              f"Lekce: {lesson.title}" + (f" / {lesson.title_en}" if bilingual and lesson.title_en else ''), '']
+    cs = sorted([q for q in lesson.questions if (q.lang or 'cs') == 'cs'], key=lambda q:(q.area, q.order, q.id))
+    en = sorted([q for q in lesson.questions if (q.lang or 'cs') == 'en'], key=lambda q:(q.area, q.order, q.id))
+    en_map = {(q.area, q.order): q for q in en}
+    lines.append('OTÁZKY / QUESTIONS' if bilingual else 'OTÁZKY')
+    lines.append('-' * 58)
+    for i,q in enumerate(cs,1):
+        lines.append(f"{i}. {q.question}")
+        lines.append(f"   Správná odpověď: {_answer_text(q)}")
+        if bilingual:
+            qe = en_map.get((q.area, q.order))
+            if qe:
+                lines.append(f"   EN: {qe.question}")
+                lines.append(f"   Correct answer: {_answer_text(qe)}")
+        lines.append('')
+    acts = sorted([a for a in lesson.practical_activities if (a.lang or 'cs') != 'en'], key=lambda a:(a.order,a.id))
+    if acts:
+        lines += ['PRAKTICKÉ AKTIVITY / PRACTICAL ACTIVITIES' if bilingual else 'PRAKTICKÉ AKTIVITY', '-' * 58]
+        for i,a in enumerate(acts,1):
+            lines.append(f"{i}. {a.title or 'Praktická aktivita'}")
+            if a.prompt: lines.append(f"   Zadání: {a.prompt}")
+            lines.append(f"   Řešení: {_activity_solution(a, False)}")
+            if bilingual:
+                lines.append(f"   EN: {a.title_en or a.title or 'Practical activity'}")
+                if a.prompt_en: lines.append(f"   Task: {a.prompt_en}")
+                lines.append(f"   Solution: {_activity_solution(a, True)}")
+            lines.append('')
+    lines += ['=' * 58, 'Soubor byl automaticky vytvořen Digitální učebnicí.']
+    return '\n'.join(lines)
+
+
+@app.route('/teacher/lesson/<int:lesson_id>/solutions/<mode>')
+def download_lesson_solutions(lesson_id, mode):
+    r = require_teacher()
+    if r: return r
+    lesson = db.session.get(Lesson, lesson_id)
+    if not lesson:
+        return 'Lekce nebyla nalezena.', 404
+    bilingual = mode == 'bilingual'
+    if mode not in ('cs', 'bilingual'):
+        return 'Neplatný režim.', 400
+    text_data = _lesson_solution_text(lesson, bilingual=bilingual)
+    slug = re.sub(r'[^a-zA-Z0-9_-]+', '_', strip_accents(lesson.title or 'lekce')).strip('_') or 'lekce'
+    suffix = 'CZ_EN' if bilingual else 'CZ'
+    # UTF-8 BOM zajistí správnou češtinu i při otevření v běžných editorech ve Windows.
+    data = io.BytesIO(('\ufeff' + text_data).encode('utf-8'))
+    data.seek(0)
+    return send_file(data, mimetype='text/plain; charset=utf-8', as_attachment=True,
+                     download_name=f'RESENI_{slug}_{suffix}.txt')
 
 @app.route('/teacher/database')
 def teacher_database():

@@ -61,6 +61,8 @@
                 </a>
                 <div class="row-actions">
                   <a class="toplink" href="{{ url_for('edit_lesson', lesson_id=l.id) }}">✏️ Upravit</a>
+                  <a class="toplink" href="{{ url_for('download_lesson_solutions', lesson_id=l.id, mode='cs') }}">⬇️ Řešení CZ</a>
+                  <a class="toplink" href="{{ url_for('download_lesson_solutions', lesson_id=l.id, mode='bilingual') }}">⬇️ Řešení CZ+EN</a>
                   {% if l.is_published %}
                     <form method="post" action="{{ url_for('archive_lesson', lesson_id=l.id) }}">
                       <button class="link-button" type="submit">📦 Archivovat</button>
