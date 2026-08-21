@@ -14,7 +14,6 @@
     <input type="hidden" name="questions_json" id="questions_json">
     <input type="hidden" name="activities_json" id="activities_json">
     <input type="hidden" name="questions_json_en" id="questions_json_en">
-    <input type="hidden" name="activities_json_en" id="activities_json_en">
 
     <section class="course-card editor-section-card">
       <h2>1. Základ lekce</h2>
@@ -92,7 +91,7 @@
     </section>
 
     <section class="course-card editor-section-card activity-factory" id="activityFactory">
-      <div class="factory-head"><div><h2>4. Praktické aktivity</h2><p>Aktivity jsou volitelné. Přidej jen ty, které se pro téma hodí. Student je bude řešit jako velké kroky uprostřed obrazovky.</p></div><span class="factory-badge">Montessori + klasická škola</span></div>
+      <div class="factory-head"><div><h2>4. Praktické aktivity</h2><p>Aktivitu vlož jen jednou. U stejného obrázku nebo videa vyplň český i anglický název, zadání a odpovědi. Student uvidí automaticky správný jazyk.</p></div><span class="factory-badge">Montessori + klasická škola</span></div>
       <div class="activity-type-grid">
         <button type="button" data-activity-type="cards">🧩 Kartičky</button>
         <button type="button" data-activity-type="video_find">🎥 Zastav a ukaž</button>
@@ -154,19 +153,7 @@
       <div class="question-list"></div>
     </section>
 
-    <section class="course-card editor-section-card activity-factory-en" id="activityFactoryEn">
-      <div class="factory-head"><div><h2>🇬🇧 English practical activities</h2><p>Cards, video activities, image tasks and missions can have a completely separate English version.</p></div><span class="factory-badge">EN activities</span></div>
-      <div class="activity-type-grid">
-        <button type="button" data-activity-type-en="cards">🧩 Cards</button>
-        <button type="button" data-activity-type-en="video_find">🎥 Stop and point</button>
-        <button type="button" data-activity-type-en="video_observe">🎬 Watch video</button>
-        <button type="button" data-activity-type-en="find_image">🔎 Find in image</button>
-        <button type="button" data-activity-type-en="real_world">🌱 Real-world mission</button>
-      </div>
-      <div id="activityBuilderEn" class="activity-builder"><p class="muted">Choose an English activity type.</p></div>
-      <div id="activityFileBucketEn" class="hidden-file-bucket"></div>
-      <div id="activityListEn" class="activity-editor-list"></div>
-    </section>
+
 
     <section class="course-card editor-section-card ai-brief-card">
       <h2>5. Zadání pro přípravu lekce přes AI</h2>
@@ -195,7 +182,6 @@ window.initialQuestions = {
 };
 window.initialActivities = {{ (activities_json or '[]')|safe }};
 window.initialQuestionsEn = { questions_en: {{ (questions_json_en or '[]')|safe }} };
-window.initialActivitiesEn = {{ (activities_json_en or '[]')|safe }};
 window.initialGallery = [
   {% for img in gallery_images or [] %}{name: {{ img|tojson }}, url: {{ url_for('uploads', filename=img)|tojson }} }{{ ',' if not loop.last }}{% endfor %}
 ];
@@ -203,7 +189,6 @@ window.initialGallery = [
 <script src="{{ url_for('static', filename='js/editor_questions.js') }}"></script>
 <script src="{{ url_for('static', filename='js/editor_activities.js') }}"></script>
 <script src="{{ url_for('static', filename='js/editor_questions_en.js') }}"></script>
-<script src="{{ url_for('static', filename='js/editor_activities_en.js') }}"></script>
 
 
 {% endblock %}

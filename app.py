@@ -182,8 +182,11 @@ class PracticalActivity(db.Model):
     lang = db.Column(db.String(2), default='cs')
     activity_type = db.Column(db.String(40), nullable=False, default='find_image')
     title = db.Column(db.String(220), default='Praktická aktivita')
+    title_en = db.Column(db.String(220), default='')
     prompt = db.Column(db.Text, default='')
+    prompt_en = db.Column(db.Text, default='')
     config_json = db.Column(db.Text, default='{}')
+    config_en_json = db.Column(db.Text, default='{}')
     image_file = db.Column(db.String(255), default='')
     video_file = db.Column(db.String(255), default='')
     include_final = db.Column(db.Boolean, default=True)
@@ -640,12 +643,18 @@ def lesson_ready_for_test(lesson):
     return needed.issubset(completed_steps_for(lesson.id))
 
 def activity_to_dict(a):
+    is_en = current_lang() == 'en'
+    raw_cfg = (a.config_en_json or '') if is_en else (a.config_json or '')
+    if is_en and not str(raw_cfg).strip():
+        raw_cfg = a.config_json or '{}'
     try:
-        config = json.loads(a.config_json or '{}')
+        config = json.loads(raw_cfg or '{}')
     except Exception:
         config = {}
     return {
-        'id': a.id, 'type': a.activity_type, 'title': a.title, 'prompt': a.prompt,
+        'id': a.id, 'type': a.activity_type,
+        'title': (a.title_en or a.title) if is_en else a.title,
+        'prompt': (a.prompt_en or a.prompt) if is_en else a.prompt,
         'config': config, 'image': a.image_file or '', 'video': a.video_file or '',
         'include_final': bool(a.include_final), 'order': a.order,
     }
@@ -686,7 +695,7 @@ def lesson_to_dict(lesson):
     lang = current_lang()
     is_en = lang == 'en'
     sections = []
-    all_activities = sorted([a for a in lesson.practical_activities if (a.lang or 'cs') == lang], key=lambda x: x.order)
+    all_activities = sorted([a for a in lesson.practical_activities if (a.lang or 'cs') != 'en'], key=lambda x: x.order)
     for sec in sorted(lesson.sections, key=lambda x:x.order):
         sec_acts = [activity_to_dict(a) for a in all_activities if a.section_id == sec.id]
         qs = [q for q in sorted(sec.questions, key=lambda x:x.order) if q.area=='study' and (q.lang or 'cs') == lang]
@@ -1678,7 +1687,8 @@ def _point_in_zone(x, y, zone):
 
 def check_practical_activity(activity, answer):
     try:
-        cfg = json.loads(activity.config_json or '{}')
+        raw_cfg = activity.config_en_json if current_lang() == 'en' and (activity.config_en_json or '').strip() else activity.config_json
+        cfg = json.loads(raw_cfg or '{}')
     except Exception:
         cfg = {}
     answer = answer or {}
@@ -5334,15 +5344,15 @@ def import_docx_to_html(file_storage):
 
 def practical_activities_editor_json(lesson, lang='cs'):
     arr = []
-    for a in sorted([x for x in lesson.practical_activities if (x.lang or 'cs') == lang], key=lambda x: x.order) if lesson else []:
-        try:
-            cfg = json.loads(a.config_json or '{}')
-        except Exception:
-            cfg = {}
+    for a in sorted([x for x in lesson.practical_activities if (x.lang or 'cs') != 'en'], key=lambda x: x.order) if lesson else []:
+        try: cfg = json.loads(a.config_json or '{}')
+        except Exception: cfg = {}
+        try: cfg_en = json.loads(a.config_en_json or '{}')
+        except Exception: cfg_en = {}
         arr.append({
-            'id': a.id, 'type': a.activity_type, 'title': a.title, 'prompt': a.prompt,
-            'config': cfg, 'image': a.image_file or '', 'video': a.video_file or '',
-            'include_final': bool(a.include_final)
+            'id': a.id, 'type': a.activity_type, 'title': a.title, 'title_en': a.title_en or '',
+            'prompt': a.prompt, 'prompt_en': a.prompt_en or '', 'config': cfg, 'config_en': cfg_en,
+            'image': a.image_file or '', 'video': a.video_file or '', 'include_final': bool(a.include_final)
         })
     return json.dumps(arr, ensure_ascii=False)
 
@@ -5363,7 +5373,7 @@ def save_practical_activities_from_payload(lesson, section, payload, lang='cs'):
         data = json.loads(payload or '[]')
     except Exception:
         data = []
-    PracticalActivity.query.filter_by(lesson_id=lesson.id, lang=lang).delete(synchronize_session=False)
+    PracticalActivity.query.filter_by(lesson_id=lesson.id).delete(synchronize_session=False)
     order = 1
     for item in data if isinstance(data, list) else []:
         typ = str(item.get('type') or '').strip()
@@ -5371,7 +5381,10 @@ def save_practical_activities_from_payload(lesson, section, payload, lang='cs'):
             continue
         title = str(item.get('title') or 'Praktická aktivita').strip()
         prompt = str(item.get('prompt') or '').strip()
+        title_en = str(item.get('title_en') or '').strip()
+        prompt_en = str(item.get('prompt_en') or '').strip()
         cfg = item.get('config') if isinstance(item.get('config'), dict) else {}
+        cfg_en = item.get('config_en') if isinstance(item.get('config_en'), dict) else {}
         # Praktické aktivity mohou mít média i uvnitř configu (např. více obrázků
         # u obrázkových kartiček). Projdeme config rekurzivně a upload reference uložíme.
         def _save_cfg_media(value):
@@ -5383,12 +5396,13 @@ def save_practical_activities_from_payload(lesson, section, payload, lang='cs'):
                 return _save_activity_file(value, 'pacfg_')
             return value
         cfg = _save_cfg_media(cfg)
+        cfg_en = _save_cfg_media(cfg_en)
         image = _save_activity_file(item.get('image'), 'paimg_')
         video = _save_activity_file(item.get('video'), 'pavideo_')
         db.session.add(PracticalActivity(
             lesson_id=lesson.id, section_id=section.id, order=order, lang=lang,
-            activity_type=typ, title=title, prompt=prompt,
-            config_json=json.dumps(cfg, ensure_ascii=False), image_file=image, video_file=video,
+            activity_type=typ, title=title, title_en=title_en, prompt=prompt, prompt_en=prompt_en,
+            config_json=json.dumps(cfg, ensure_ascii=False), config_en_json=json.dumps(cfg_en, ensure_ascii=False), image_file=image, video_file=video,
             include_final=bool(item.get('include_final', True))
         ))
         order += 1
@@ -5433,7 +5447,6 @@ def new_lesson():
         add_questions_from_payload(les.id, sec.id, 'study', request.form.get('questions_json',''), request.form.get('study_questions',''), image_map, lang='cs')
         add_questions_from_payload(les.id, sec.id, 'study', request.form.get('questions_json_en',''), '', image_map, lang='en')
         save_practical_activities_from_payload(les, sec, request.form.get('activities_json','[]'), 'cs')
-        save_practical_activities_from_payload(les, sec, request.form.get('activities_json_en','[]'), 'en')
         db.session.commit()
         return redirect(url_for('lesson', lesson_id=les.id))
     return render_template('lesson_form.html', course=course_from_lesson(None), lesson=None, section=None, subjects=Subject.query.all(), questions_json='[]', activities_json='[]', questions_json_en='[]', activities_json_en='[]', gallery_images=[])
@@ -5484,7 +5497,6 @@ def edit_lesson(lesson_id):
         add_questions_from_payload(les.id, sec.id, 'study', request.form.get('questions_json',''), request.form.get('study_questions',''), image_map, lang='cs')
         add_questions_from_payload(les.id, sec.id, 'study', request.form.get('questions_json_en',''), '', image_map, lang='en')
         save_practical_activities_from_payload(les, sec, request.form.get('activities_json','[]'), 'cs')
-        save_practical_activities_from_payload(les, sec, request.form.get('activities_json_en','[]'), 'en')
         db.session.commit()
         return redirect(url_for('lesson', lesson_id=les.id))
     return render_template('lesson_form.html', course=course_from_lesson(les), lesson=les, section=sec, subjects=Subject.query.all(), questions_json=questions_editor_json(les, 'study', 'cs'), activities_json=practical_activities_editor_json(les, 'cs'), questions_json_en=questions_editor_json(les, 'study', 'en'), activities_json_en=practical_activities_editor_json(les, 'en'), gallery_images=lesson_gallery(les))
@@ -5777,7 +5789,7 @@ def ensure_schema_updates():
             'image_en': "VARCHAR(255) DEFAULT ''", 'activity_en': "TEXT DEFAULT ''"
         },
         'question': {'lang': "VARCHAR(2) DEFAULT 'cs'"},
-        'practical_activity': {'lang': "VARCHAR(2) DEFAULT 'cs'"},
+        'practical_activity': {'lang': "VARCHAR(2) DEFAULT 'cs'", 'title_en': "VARCHAR(220) DEFAULT ''", 'prompt_en': "TEXT DEFAULT ''", 'config_en_json': "TEXT DEFAULT '{}'"},
         'result': {
             'focus_lost': 'INTEGER DEFAULT 0',
             'status': "VARCHAR(60) DEFAULT 'dokončeno'"
