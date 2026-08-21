@@ -6,6 +6,7 @@
     let readComplete=root.dataset.readComplete==='1';
     const reviewMode=root.dataset.review==='1';
     let current=0;
+    let sectionSaving=false, sectionSaved=false;
     const nextBtn=document.getElementById('nextBtn'), lockMsg=document.getElementById('lockMsg'), doneBox=document.getElementById('sequenceDone');
     const counter=document.getElementById('journeyCounter'),bar=document.getElementById('journeyBar');
 
@@ -31,11 +32,28 @@
       const total=Math.max(items.length,1), completed=items.filter(x=>x.dataset.completed==='1').length;
       if(counter)counter.textContent=`${Math.min(completed+1,total)} / ${total}`;
       if(bar)bar.style.width=`${Math.round(completed/total*100)}%`;
-      const allItems=completed===items.length; const unlocked=allItems&&readComplete;
+      const allItems=completed===items.length; const requirementsMet=allItems&&readComplete;
+      const unlocked=requirementsMet&&sectionSaved;
       if(doneBox)doneBox.hidden=reviewMode || !allItems;
       if(nextBtn){nextBtn.classList.toggle('locked-next',!unlocked);nextBtn.setAttribute('aria-disabled',String(!unlocked));}
-      if(lockMsg){lockMsg.textContent=reviewMode?'📖 Režim opakování: výklad, otázky i aktivity máš znovu otevřené. Výsledek se tím nezhorší.':(unlocked?'Hotovo. Můžeš pokračovat. ✓':(!readComplete?'Projdi jednou celý studijní materiál vlevo a dokonči aktuální krok.':'Dokonči aktuální otázku nebo praktickou aktivitu.'));lockMsg.classList.toggle('ok',unlocked||reviewMode);}
-      if(unlocked){fetch('/api/section-complete',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({lesson_id:Number(root.dataset.lessonId),step:Number(root.dataset.step)})}).catch(()=>{});}
+      if(lockMsg){
+        const text=reviewMode?'📖 Režim opakování: výklad, otázky i aktivity máš znovu otevřené. Výsledek se tím nezhorší.'
+          :(unlocked?'Hotovo. Můžeš pokračovat. ✓'
+          :(requirementsMet?'Ukládám dokončení lekce…'
+          :(!readComplete?'Projdi jednou celý studijní materiál vlevo a dokonči aktuální krok.':'Dokonči aktuální otázku nebo praktickou aktivitu.')));
+        lockMsg.textContent=text; lockMsg.classList.toggle('ok',unlocked||reviewMode);
+      }
+      if(requirementsMet&&!sectionSaved&&!sectionSaving){
+        sectionSaving=true;
+        fetch('/api/section-complete',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({lesson_id:Number(root.dataset.lessonId),step:Number(root.dataset.step)})})
+          .then(r=>r.json().then(data=>({ok:r.ok,data})))
+          .then(({ok,data})=>{
+            sectionSaving=false;
+            if(ok&&data.ok){sectionSaved=true;refresh();}
+            else{if(lockMsg)lockMsg.textContent=data.message||'Dokončení se nepodařilo uložit. Zkus to znovu.';setTimeout(refresh,1200);}
+          })
+          .catch(()=>{sectionSaving=false;if(lockMsg)lockMsg.textContent='Dokončení se nepodařilo uložit. Zkouším znovu…';setTimeout(refresh,1200);});
+      }
     }
     async function checkQuestion(card,answer){
       const fb=card.querySelector('.feedback');
