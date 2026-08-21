@@ -5514,6 +5514,33 @@ def save_practical_activities_from_payload(lesson, section, payload, lang='cs'):
         data = json.loads(payload or '[]')
     except Exception:
         data = []
+
+    # Média praktických aktivit mohou být v payloadu odkazována vícekrát
+    # (např. stejný obrázek v české i anglické konfiguraci). FileStorage ale
+    # nelze bezpečně ukládat opakovaně, protože po prvním save() je ukazatel
+    # na konci souboru. Proto každý upload uložíme právě jednou a dále už
+    # používáme stejné uložené jméno. Tím se zároveň opravuje občasné 404 u
+    # aktivit „Najdi na obrázku“ a u obrázkových kartiček.
+    activity_upload_cache = {}
+
+    def _resolve_activity_media(ref):
+        ref = str(ref or '').strip()
+        if not ref.startswith('__file__:'):
+            return ref
+        field = ref.split(':', 1)[1]
+        if field in activity_upload_cache:
+            return activity_upload_cache[field]
+        f = request.files.get(field)
+        saved = ''
+        if f and f.filename:
+            try:
+                f.stream.seek(0)
+            except Exception:
+                pass
+            saved = save_upload(f)
+        activity_upload_cache[field] = saved
+        return saved
+
     PracticalActivity.query.filter_by(lesson_id=lesson.id).delete(synchronize_session=False)
     order = 1
     for item in data if isinstance(data, list) else []:
@@ -5534,12 +5561,12 @@ def save_practical_activities_from_payload(lesson, section, payload, lang='cs'):
             if isinstance(value, list):
                 return [_save_cfg_media(v) for v in value]
             if isinstance(value, str) and value.startswith('__file__:'):
-                return _save_activity_file(value, 'pacfg_')
+                return _resolve_activity_media(value)
             return value
         cfg = _save_cfg_media(cfg)
         cfg_en = _save_cfg_media(cfg_en)
-        image = _save_activity_file(item.get('image'), 'paimg_')
-        video = _save_activity_file(item.get('video'), 'pavideo_')
+        image = _resolve_activity_media(item.get('image'))
+        video = _resolve_activity_media(item.get('video'))
         db.session.add(PracticalActivity(
             lesson_id=lesson.id, section_id=section.id, order=order, lang=lang,
             activity_type=typ, title=title, title_en=title_en, prompt=prompt, prompt_en=prompt_en,
