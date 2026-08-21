@@ -20,9 +20,9 @@
     <div class="video-find-wrap">
       {% if activity.video %}
         <video class="activity-video" controls preload="metadata" src="{{ url_for('uploads', filename=activity.video) }}"></video>
-        <div class="video-time-hint">⏱️ Zastav kolem času <b class="target-time"></b></div>
+        <div class="video-time-hint">⏱️ Po stisku tlačítka se video automaticky zastaví na snímku nastaveném učitelem (<b class="target-time"></b>).</div>
         <div class="video-freeze-stage hotspot-stage" hidden><canvas></canvas><button type="button" class="click-layer" aria-label="Klikni na hledané místo"></button></div>
-        <button type="button" class="freeze-video secondary-action">⏸️ Zastavit a označit</button>
+        <button type="button" class="freeze-video secondary-action">⏸️ ZASTAVIT A OZNAČIT</button>
       {% else %}<div class="missing-media">Učitel zatím nevložil video.</div>{% endif %}
     </div>
 

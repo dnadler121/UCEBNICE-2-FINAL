@@ -22,13 +22,88 @@
     layer.addEventListener('click',ev=>{const p=pctPoint(ev,stage); check(card,p);});
   }
   function initVideoFind(card,cfg){
-    const video=card.querySelector('video'); const freeze=card.querySelector('.freeze-video'); const stage=card.querySelector('.video-freeze-stage'); const canvas=stage?.querySelector('canvas'); const layer=stage?.querySelector('.click-layer');
-    const hint=card.querySelector('.target-time'); if(hint) hint.textContent=new Date((Number(cfg.time||0))*1000).toISOString().substring(14,19);
+    const video=card.querySelector('video');
+    const freeze=card.querySelector('.freeze-video');
+    const stage=card.querySelector('.video-freeze-stage');
+    const canvas=stage?.querySelector('canvas');
+    const layer=stage?.querySelector('.click-layer');
+    const hint=card.querySelector('.target-time');
+    const targetTime=Math.max(0,Number(cfg.time||0));
+    let frameReady=false;
+
+    if(hint) hint.textContent=new Date(targetTime*1000).toISOString().substring(14,19);
     if(!video||!freeze||!stage||!canvas||!layer) return;
+
+    function clearMarker(){
+      stage.querySelectorAll('.video-click-marker').forEach(el=>el.remove());
+    }
+
+    function showMarker(p){
+      clearMarker();
+      const marker=document.createElement('span');
+      marker.className='video-click-marker';
+      marker.style.left=`${p.x*100}%`;
+      marker.style.top=`${p.y*100}%`;
+      stage.appendChild(marker);
+    }
+
+    function captureTeacherFrame(){
+      const w=video.videoWidth||640, h=video.videoHeight||360;
+      canvas.width=w; canvas.height=h;
+      canvas.getContext('2d').drawImage(video,0,0,w,h);
+      stage.hidden=false;
+      frameReady=true;
+      layer.disabled=false;
+      freeze.disabled=false;
+      freeze.textContent='↻ Zobrazit snímek znovu';
+    }
+
+    function seekAndFreeze(){
+      frameReady=false;
+      layer.disabled=true;
+      freeze.disabled=true;
+      freeze.textContent='⏳ Připravuji snímek…';
+      clearMarker();
+      video.pause();
+
+      const maxTime=Number.isFinite(video.duration) && video.duration>0
+        ? Math.max(0,Math.min(targetTime,Math.max(0,video.duration-0.01)))
+        : targetTime;
+
+      const finish=()=>{
+        video.pause();
+        captureTeacherFrame();
+      };
+
+      // Pokud jsme už přesně na požadovaném čase, seeked se nemusí vyvolat.
+      if(Math.abs(video.currentTime-maxTime)<0.015 && video.readyState>=2){
+        finish();
+        return;
+      }
+
+      video.addEventListener('seeked',finish,{once:true});
+      // currentTime použijeme záměrně místo fastSeek: potřebujeme co nejpřesnější snímek,
+      // ne pouze nejbližší keyframe videa.
+      video.currentTime=maxTime;
+    }
+
     freeze.addEventListener('click',()=>{
-      video.pause(); const w=video.videoWidth||640,h=video.videoHeight||360; canvas.width=w;canvas.height=h; canvas.getContext('2d').drawImage(video,0,0,w,h); stage.hidden=false;
+      if(video.readyState<1){
+        freeze.disabled=true;
+        freeze.textContent='⏳ Načítám video…';
+        video.addEventListener('loadedmetadata',seekAndFreeze,{once:true});
+        return;
+      }
+      seekAndFreeze();
     });
-    layer.addEventListener('click',ev=>{const p=pctPoint(ev,stage); check(card,{time:video.currentTime,x:p.x,y:p.y});});
+
+    layer.addEventListener('click',ev=>{
+      if(!frameReady) return;
+      const p=pctPoint(ev,stage);
+      showMarker(p);
+      // Kontrola vždy používá přesný čas nastavený učitelem, ne náhodný čas přehrávače.
+      check(card,{time:targetTime,x:p.x,y:p.y});
+    });
   }
   function initVideoObserve(card,cfg){
     const box=card.querySelector('.observe-options'); if(!box) return;
