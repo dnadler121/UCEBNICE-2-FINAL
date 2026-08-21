@@ -2088,7 +2088,18 @@ def api_section_complete():
         read_row = StudentSectionProgress.query.filter_by(user_id=user.id, lesson_id=lesson.id, section_id=sec.id).first()
         if not read_row or not read_row.read_complete:
             return jsonify({'ok': False, 'error': 'read', 'message': 'Nejdřív projdi celý studijní materiál.'}), 400
-        q_ids = {q.id for q in sec.questions if q.area == 'study'}
+        # Vyžaduj pouze otázky, které student v právě zvolené jazykové verzi
+        # skutečně vidí. Dříve se zde spojily CZ i EN otázky dohromady, takže
+        # např. po splnění 5/5 anglických otázek stále chybělo 5 českých a test
+        # zůstal zamčený.
+        study_qs = sorted([q for q in sec.questions if q.area == 'study'], key=lambda q: (q.order, q.id))
+        cs_qs = [q for q in study_qs if (q.lang or 'cs') == 'cs']
+        en_qs = [q for q in study_qs if (q.lang or 'cs') == 'en']
+        if current_lang() == 'en':
+            visible_qs = [en_qs[i] if i < len(en_qs) else q for i, q in enumerate(cs_qs)]
+        else:
+            visible_qs = cs_qs
+        q_ids = {q.id for q in visible_qs}
         done_q = {r.question_id for r in StudyQuestionProgress.query.filter_by(user_id=user.id, lesson_id=lesson.id, completed=True).all()}
         if not q_ids.issubset(done_q):
             return jsonify({'ok': False, 'error': 'questions', 'message': 'Ještě nejsou splněné všechny otázky.'}), 400
