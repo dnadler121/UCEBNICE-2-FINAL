@@ -12,7 +12,7 @@
 
   {% if activity.type == 'find_image' %}
     <div class="hotspot-stage image-stage">
-      {% if activity.image %}<img src="{{ url_for('uploads', filename=activity.image) }}" alt="Obrázek k aktivitě">{% else %}<div class="missing-media">Učitel zatím nevložil obrázek.</div>{% endif %}
+      {% if activity.image %}<img src="{{ url_for('activity_image_media', activity_id=activity.id) }}" alt="Obrázek k aktivitě" loading="eager">{% else %}<div class="missing-media">Učitel zatím nevložil obrázek.</div>{% endif %}
       <button type="button" class="click-layer" aria-label="Klikni na hledané místo"></button>
     </div>
 

@@ -49,7 +49,7 @@
     // Zamícháme pouze nabídku obrázků; cíle zůstávají očíslované 1..N.
     items.sort(()=>Math.random()-.5).forEach(({it,idx})=>{
       const tile=document.createElement('div');tile.className='image-drag-card';tile.draggable=true;tile.dataset.card=idx;
-      const img=document.createElement('img');img.alt='Obrázek k přiřazení';img.src=`/uploads/${encodeURIComponent(it.image||'')}`;tile.appendChild(img);
+      const img=document.createElement('img');img.alt='Obrázek k přiřazení';img.src=`/activity-media/${encodeURIComponent(card.dataset.activityId)}/card/${idx}`;tile.appendChild(img);
       tile.addEventListener('dragstart',e=>e.dataTransfer.setData('text/plain',String(idx)));bank.appendChild(tile);
     });
     (cfg.cards||[]).forEach((it,idx)=>{

@@ -5871,9 +5871,17 @@ def process_inline_images(html_text):
     return html_text
 
 def save_upload(file):
-    if not file or not file.filename: return ''
-    name = datetime.now().strftime('%Y%m%d%H%M%S_') + secure_filename(file.filename)
-    file.save(UPLOADS / name)
+    if not file or not file.filename:
+        return ''
+    original = secure_filename(file.filename) or 'soubor'
+    # UUID zabrání přepsání více obrázků se stejným názvem nahraných ve stejné sekundě.
+    name = datetime.now().strftime('%Y%m%d%H%M%S_') + uuid.uuid4().hex[:10] + '_' + original
+    target = UPLOADS / name
+    try:
+        file.stream.seek(0)
+    except Exception:
+        pass
+    file.save(target)
     return name
 
 
@@ -5919,9 +5927,64 @@ def handle_images(les, sec, image_map=None, lang='cs'):
         else: les.hero_image = h
     # Obrázky výkladu se vkládají přímo přes CKEditor a ukládají se v endpointu /teacher/upload-image.
 
-@app.route('/uploads/<filename>')
+def _normalize_upload_filename(ref):
+    """Vrátí pouze skutečný název souboru z různých historických tvarů odkazu.
+
+    Starší verze mohly do DB uložit jen název, /uploads/nazev nebo celou URL.
+    Studentské aktivity proto vždy normalizujeme na basename souboru v persistentním uploads.
+    """
+    ref = urllib.parse.unquote(str(ref or '').strip())
+    if not ref:
+        return ''
+    try:
+        parsed = urllib.parse.urlparse(ref)
+        if parsed.scheme or parsed.netloc:
+            ref = parsed.path or ref
+    except Exception:
+        pass
+    ref = ref.replace('\\', '/')
+    if '/uploads/' in ref:
+        ref = ref.rsplit('/uploads/', 1)[1]
+    ref = ref.split('?', 1)[0].split('#', 1)[0]
+    return Path(ref).name
+
+
+def _send_activity_upload(ref):
+    name = _normalize_upload_filename(ref)
+    if not name:
+        return ('', 404)
+    path = UPLOADS / name
+    if not path.is_file():
+        return ('', 404)
+    return send_from_directory(UPLOADS, name)
+
+@app.route('/uploads/<path:filename>')
 def uploads(filename):
-    return send_from_directory(UPLOADS, filename)
+    # Kompatibilita i se staršími odkazy, které obsahují /uploads/ nebo URL-encoding.
+    return _send_activity_upload(filename)
+
+@app.route('/activity-media/<int:activity_id>/image')
+def activity_image_media(activity_id):
+    a = db.session.get(PracticalActivity, activity_id)
+    if not a:
+        return ('', 404)
+    return _send_activity_upload(a.image_file)
+
+@app.route('/activity-media/<int:activity_id>/card/<int:index>')
+def activity_card_media(activity_id, index):
+    a = db.session.get(PracticalActivity, activity_id)
+    if not a:
+        return ('', 404)
+    english = current_lang() == 'en'
+    raw = a.config_en_json if english and (a.config_en_json or '').strip() else a.config_json
+    try:
+        cfg = json.loads(raw or '{}')
+    except Exception:
+        cfg = {}
+    cards = cfg.get('cards') or []
+    if not (0 <= index < len(cards)) or not isinstance(cards[index], dict):
+        return ('', 404)
+    return _send_activity_upload(cards[index].get('image'))
 
 @app.route('/teacher/upload-image', methods=['POST'])
 def upload_editor_image():
