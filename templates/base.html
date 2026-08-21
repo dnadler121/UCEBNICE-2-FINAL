@@ -11,12 +11,8 @@
   <a class="brand brand-link" href="{{ url_for('portal') if user else url_for('login') }}"><div class="leaf">{{ course.icon }}</div><div class="brand-title">{{ course.subject|upper }}</div>{% if course.grade %}<span class="pill">{{ course.grade }}</span>{% endif %}</a>
   <div class="crumbs">{% if user and lesson %}{{ course.subject }} {{ course.grade }} <span>›</span> {{ lesson.block }} <span>›</span> <b>{{ lesson.title }}</b>{% elif user %}{{ t('Vyber předmět, školu a ročník, téma a lekci') }}{% else %}{{ t('Přihlášení') }}{% endif %}</div>
   <div class="lang-switch" style="display:flex;gap:6px;align-items:center;margin-left:auto;margin-right:12px">
-    {% if language_locked and user and user.role == 'student' %}
-      <span title="{{ t('Jazyk je během rozpracované práce uzamčen.') }}">🔒 {{ '🇨🇿 CZ' if lang == 'cs' else '🇬🇧 EN' }}</span>
-    {% else %}
-      <a class="toplink" href="{{ url_for('set_language', lang='cs') }}" {% if lang=='cs' %}style="font-weight:800"{% endif %}>🇨🇿 CZ</a>
-      <a class="toplink" href="{{ url_for('set_language', lang='en') }}" {% if lang=='en' %}style="font-weight:800"{% endif %}>🇬🇧 EN</a>
-    {% endif %}
+    <a class="toplink" href="{{ url_for('set_language', lang='cs') }}" {% if lang=='cs' %}style="font-weight:800"{% endif %}>🇨🇿 CZ</a>
+    <a class="toplink" href="{{ url_for('set_language', lang='en') }}" {% if lang=='en' %}style="font-weight:800"{% endif %}>🇬🇧 EN</a>
   </div>
   <div class="profile">
     {% if user %}

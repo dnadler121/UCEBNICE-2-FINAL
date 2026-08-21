@@ -75,10 +75,10 @@ def tr(value):
 def set_language(lang):
     if lang not in ('cs','en'):
         return redirect(request.referrer or url_for('index'))
-    # Student cannot change language while a protected attempt is active.
-    if session.get('language_locked') and current_user() and current_user().role == 'student':
-        flash(tr('Jazyk je během rozpracované práce uzamčen.'))
-        return redirect(request.referrer or url_for('portal'))
+    # Jazyk lze přepínat i během studentské lekce. Obsah, otázky i aktivity
+    # se znovu načtou v právě zvoleném jazyce.
+    session.pop('language_locked', None)
+    session.pop('work_lang', None)
     session['lang'] = lang
     session.modified = True
     return redirect(request.referrer or url_for('index'))
@@ -1545,7 +1545,8 @@ def lesson(lesson_id):
     lesson = db.session.get(Lesson, lesson_id)
     if not lesson: return 'Lekce nenalezena', 404
     if current_user().role == 'student':
-        lock_language()
+        # Přepínač CZ/EN musí zůstat dostupný i během práce v lekci.
+        unlock_language()
         consume_pending_lesson_reset(lesson.id)
         begin_focus_attempt('html', lesson.id)
     step = int(request.args.get('step',0))

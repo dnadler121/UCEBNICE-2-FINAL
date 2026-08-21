@@ -166,7 +166,14 @@
         <label>🔎 Najdi na obrázku <input type="number" data-brief="find_image" min="0" value="1"></label>
         <label>🌱 Skutečná mise <input type="number" data-brief="real_world" min="0" value="1"></label>
       </div>
-      <button type="button" id="downloadAiBrief" class="savebtn">⬇️ Stáhnout CSV zadání pro AI</button>
+      <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
+        <button type="button" id="downloadAiBrief" class="savebtn">⬇️ Stáhnout CSV zadání pro AI</button>
+        {% if lesson %}
+          <a class="savebtn" href="{{ url_for('download_lesson_solutions', lesson_id=lesson.id, mode='cs') }}">📥 Stáhnout řešení CZ</a>
+          <a class="savebtn" href="{{ url_for('download_lesson_solutions', lesson_id=lesson.id, mode='bilingual') }}">📥 Stáhnout řešení CZ+EN</a>
+        {% endif %}
+      </div>
+      {% if lesson %}<p style="margin-top:10px"><small>Řešení obsahuje správné odpovědi k otázkám i praktickým aktivitám.</small></p>{% endif %}
     </section>
 
     <button class="testbtn submit">Uložit lekci</button>
