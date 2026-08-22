@@ -43,7 +43,7 @@ I18N = {
         'Vyber předmět, školu a ročník, téma a lekci':'Choose a subject, school and grade, topic and lesson',
         'DIGITÁLNÍ UČEBNICE':'DIGITAL TEXTBOOK','Vyber si předmět a začni pracovat':'Choose a subject and start learning',
         'Jedno přihlášení, všechny lekce na jednom místě. Každá lekce se automaticky zařadí podle předmětu, školy, ročníku a tématu.':'One login, all lessons in one place. Each lesson is organised by subject, school, grade and topic.',
-        'PŘEDMĚTY':'SUBJECTS','Biologie a občanská výchova':'Biology and Civics',
+        'PŘEDMĚTY':'SUBJECTS','Biologie a občanská výchova':'Biology and Civics','Biologie, občanská výchova a zeměpis':'Biology, Civics and Geography',
         'Výklady z HTML, otázky, aktivity a závěrečné testy.':'HTML lessons, questions, activities and final tests.',
         'INTERAKTIVNÍ LEKCE':'INTERACTIVE LESSONS','Matematika':'Mathematics','Informatika':'Computer Science',
         'Školy a ročníky, témata a samostatné matematické podaplikace.':'Schools and grades, topics and interactive mathematics activities.',
@@ -1096,7 +1096,7 @@ def portal():
     if r: return r
     counts = {
         'bio_obc': Lesson.query.join(Block).join(Grade).join(Subject).filter(
-            db.or_(Subject.name.ilike('%bio%'), Subject.name.ilike('%občan%'), Subject.name.ilike('%obcan%')),
+            db.or_(Subject.name.ilike('%bio%'), Subject.name.ilike('%občan%'), Subject.name.ilike('%obcan%'), Subject.name.ilike('%zeměpis%'), Subject.name.ilike('%zemepis%'), Subject.name.ilike('%geog%')),
             Lesson.is_published.is_(True)
         ).count(),
         'matematika': Lesson.query.join(Block).join(Grade).join(Subject).filter(
@@ -1115,7 +1115,7 @@ def subject_catalog(kind):
     r = require_login()
     if r: return r
     filters = {
-        'bio-obc': lambda q: q.filter(db.or_(Subject.name.ilike('%bio%'), Subject.name.ilike('%občan%'), Subject.name.ilike('%obcan%'))),
+        'bio-obc': lambda q: q.filter(db.or_(Subject.name.ilike('%bio%'), Subject.name.ilike('%občan%'), Subject.name.ilike('%obcan%'), Subject.name.ilike('%zeměpis%'), Subject.name.ilike('%zemepis%'), Subject.name.ilike('%geog%'))),
         'matematika': lambda q: q.filter(Subject.name.ilike('%matemat%')),
         'informatika': lambda q: q.filter(Subject.name.ilike('%informat%')),
     }
@@ -1124,7 +1124,7 @@ def subject_catalog(kind):
     q = Subject.query
     subjects = filters[kind](q).order_by(Subject.name).all()
     titles = {
-        'bio-obc': ('Biologie a občanská výchova', '🧬'),
+        'bio-obc': ('Biologie, občanská výchova a zeměpis', '🧬'),
         'matematika': ('Matematika', '➗'),
         'informatika': ('Informatika', '💻'),
     }
