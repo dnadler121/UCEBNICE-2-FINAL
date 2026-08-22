@@ -2,13 +2,13 @@
 {% block content %}
 <div class="layout montessori-layout">
   {% include 'sidebar.html' %}
-  <main class="main-card montessori-main" id="montessoriLesson" data-lesson-id="{{ lesson._id }}" data-step="{{ step }}" data-read-complete="{{ 1 if section_read_complete else 0 }}" data-review="{{ 1 if request.args.get('review') == '1' else 0 }}">
+  <main class="main-card montessori-main" id="montessoriLesson" data-lesson-id="{{ lesson._id }}" data-step="{{ step }}" data-read-complete="{{ 1 if section_read_complete else 0 }}" data-section-completed="{{ 1 if step in completed_steps else 0 }}" data-review="{{ 1 if request.args.get('review') == '1' else 0 }}">
     <div class="title-row">
       <div><h1>{{ lesson.title }}</h1><p>{{ t('Objevuj, hledej ve studijním materiálu a postupuj krok za krokem.') }}</p></div>
       <div class="lesson-actions">
         <a class="switch" href="{{ url_for('dashboard') }}">💾 {{ t('Ukončit a uložit') }}</a>
         {% if user and user.role == 'teacher' %}<a class="switch" href="{{ url_for('edit_lesson', lesson_id=lesson._id) }}">✏️ Upravit</a>{% endif %}
-        {% if ready_for_test %}<a class="switch" href="{{ url_for('final_test', lesson_id=lesson._id) }}">🧠 {{ t('Teď to zkus sám') }}</a>{% else %}<span class="switch locked-test">🔒 {{ t('Ověření se odemkne po lekci') }}</span>{% endif %}
+        <a id="topTestBtn" class="switch{% if not ready_for_test %} locked-test{% endif %}" href="{{ url_for('final_test', lesson_id=lesson._id) }}" aria-disabled="{{ 'false' if ready_for_test else 'true' }}" data-ready-label="🧠 {{ t('Teď to zkus sám') }}" data-locked-label="🔒 {{ t('Ověření se odemkne po lekci') }}">{% if ready_for_test %}🧠 {{ t('Teď to zkus sám') }}{% else %}🔒 {{ t('Ověření se odemkne po lekci') }}{% endif %}</a>
       </div>
     </div>
     {% with messages = get_flashed_messages() %}{% if messages %}<div class="flash-msg">{{ messages[0] }}</div>{% endif %}{% endwith %}

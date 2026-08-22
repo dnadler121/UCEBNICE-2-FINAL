@@ -6,8 +6,8 @@
     let readComplete=root.dataset.readComplete==='1';
     const reviewMode=root.dataset.review==='1';
     let current=0;
-    let sectionSaving=false, sectionSaved=false;
-    const nextBtn=document.getElementById('nextBtn'), lockMsg=document.getElementById('lockMsg'), doneBox=document.getElementById('sequenceDone');
+    let sectionSaving=false, sectionSaved=root.dataset.sectionCompleted==='1';
+    const nextBtn=document.getElementById('nextBtn'), topTestBtn=document.getElementById('topTestBtn'), lockMsg=document.getElementById('lockMsg'), doneBox=document.getElementById('sequenceDone');
     const counter=document.getElementById('journeyCounter'),bar=document.getElementById('journeyBar');
 
     async function markRead(){
@@ -36,6 +36,14 @@
       const unlocked=requirementsMet&&sectionSaved;
       if(doneBox)doneBox.hidden=reviewMode || !allItems;
       if(nextBtn){nextBtn.classList.toggle('locked-next',!unlocked);nextBtn.setAttribute('aria-disabled',String(!unlocked));}
+      // Horní tlačítko bylo dříve vyrenderované jako zamčený <span> a po
+      // dokončení poslední části se už bez reloadu neumělo změnit. Držíme ho
+      // jako odkaz a odemykáme ho současně se spodním tlačítkem.
+      if(topTestBtn){
+        topTestBtn.classList.toggle('locked-test',!unlocked);
+        topTestBtn.setAttribute('aria-disabled',String(!unlocked));
+        topTestBtn.textContent=unlocked ? (topTestBtn.dataset.readyLabel||'🧠 Teď to zkus sám') : (topTestBtn.dataset.lockedLabel||'🔒 Ověření se odemkne po lekci');
+      }
       if(lockMsg){
         const text=reviewMode?'📖 Režim opakování: výklad, otázky i aktivity máš znovu otevřené. Výsledek se tím nezhorší.'
           :(unlocked?'Hotovo. Můžeš pokračovat. ✓'
@@ -67,6 +75,7 @@
     });
     document.addEventListener('activity-completed',()=>setTimeout(refresh,450));
     nextBtn?.addEventListener('click',e=>{if(nextBtn.classList.contains('locked-next')){e.preventDefault();const visible=items.find(x=>x.style.display!=='none');visible?.scrollIntoView({behavior:'smooth',block:'center'});}});
+    topTestBtn?.addEventListener('click',e=>{if(topTestBtn.classList.contains('locked-test')){e.preventDefault();const visible=items.find(x=>x.style.display!=='none');visible?.scrollIntoView({behavior:'smooth',block:'center'});}});
     if(items.length===1&&items[0].dataset.kind==='read'&&readComplete){items[0].dataset.completed='1';}
     refresh();
   });
