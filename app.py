@@ -2103,11 +2103,7 @@ def api_section_complete():
         done_q = {r.question_id for r in StudyQuestionProgress.query.filter_by(user_id=user.id, lesson_id=lesson.id, completed=True).all()}
         if not q_ids.issubset(done_q):
             return jsonify({'ok': False, 'error': 'questions', 'message': 'Ještě nejsou splněné všechny otázky.'}), 400
-        # Stejně jako u otázek kontroluj jen praktické aktivity, které se
-        # studentovi opravdu zobrazují. Starší importy mohly v DB ponechat
-        # samostatné EN kopie aktivit; lesson_to_dict je záměrně nezobrazuje,
-        # takže jejich vyžadování zde by po 5/5 drželo test navždy zamčený.
-        act_ids = {a.id for a in sec.practical_activities if (a.lang or 'cs') != 'en'}
+        act_ids = {a.id for a in sec.practical_activities}
         done_a = {r.activity_id for r in StudentActivityProgress.query.filter_by(user_id=user.id, context='study', completed=True).all()}
         if not act_ids.issubset(done_a):
             return jsonify({'ok': False, 'error': 'activities', 'message': 'Ještě nejsou splněné všechny praktické aktivity.'}), 400

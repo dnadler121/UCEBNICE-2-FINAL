@@ -6,7 +6,7 @@
     let readComplete=root.dataset.readComplete==='1';
     const reviewMode=root.dataset.review==='1';
     let current=0;
-    let sectionSaving=false, sectionSaved=root.dataset.sectionComplete==='1';
+    let sectionSaving=false, sectionSaved=false;
     const nextBtn=document.getElementById('nextBtn'), lockMsg=document.getElementById('lockMsg'), doneBox=document.getElementById('sequenceDone');
     const counter=document.getElementById('journeyCounter'),bar=document.getElementById('journeyBar');
 
@@ -49,21 +49,7 @@
           .then(r=>r.json().then(data=>({ok:r.ok,data})))
           .then(({ok,data})=>{
             sectionSaving=false;
-            if(ok&&data.ok){
-              sectionSaved=true;
-              // Na poslední části odemkni i horní tlačítko testu bez nutnosti reloadu.
-              if(data.ready_for_test){
-                const top=document.getElementById('topTestBtn');
-                if(top && top.tagName!=='A'){
-                  const a=document.createElement('a');
-                  a.id='topTestBtn'; a.className='switch';
-                  a.href=`/test/${Number(root.dataset.lessonId)}`;
-                  a.textContent='🧠 '+(nextBtn?.textContent.replace('→','').replace('🧠','').trim()||'Teď to zkus sám');
-                  top.replaceWith(a);
-                }
-              }
-              refresh();
-            }
+            if(ok&&data.ok){sectionSaved=true;refresh();}
             else{if(lockMsg)lockMsg.textContent=data.message||'Dokončení se nepodařilo uložit. Zkus to znovu.';setTimeout(refresh,1200);}
           })
           .catch(()=>{sectionSaving=false;if(lockMsg)lockMsg.textContent='Dokončení se nepodařilo uložit. Zkouším znovu…';setTimeout(refresh,1200);});
