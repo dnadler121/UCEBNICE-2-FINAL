@@ -120,20 +120,53 @@
     }
     const targets=card.querySelector('.image-card-targets'); if(!targets)return;
     const assignments={};
+    let selectedTile=null;
+    function selectTile(tile){
+      if(!tile || tile.closest('.image-target-drop'))return;
+      card.querySelectorAll('.image-drag-card.selected-card').forEach(el=>{el.classList.remove('selected-card');el.setAttribute('aria-pressed','false');});
+      selectedTile=tile;
+      tile.classList.add('selected-card');
+      card.querySelectorAll('.image-card-target').forEach(el=>el.classList.add('awaiting-card'));
+    }
+    function clearSelection(){
+      card.querySelectorAll('.image-drag-card.selected-card').forEach(el=>{el.classList.remove('selected-card');el.setAttribute('aria-pressed','false');});
+      card.querySelectorAll('.image-card-target.awaiting-card').forEach(el=>el.classList.remove('awaiting-card'));
+      selectedTile=null;
+    }
+    function placeTile(tile,z,idx){
+      if(!tile)return;
+      const cardIdx=Number(tile.dataset.card);
+      if(cardIdx!==idx){
+        z.classList.add('wrong-drop');
+        setTimeout(()=>z.classList.remove('wrong-drop'),650);
+        clearSelection();
+        return;
+      }
+      z.querySelector('.image-target-drop').innerHTML='';
+      z.querySelector('.image-target-drop').appendChild(tile);
+      z.classList.add('correct-drop');
+      tile.draggable=false;
+      tile.setAttribute('aria-pressed','false');
+      assignments[String(cardIdx)]=idx;
+      clearSelection();
+    }
     const items=(cfg.cards||[]).map((it,idx)=>({it,idx}));
     // Zamícháme pouze nabídku obrázků; cíle zůstávají očíslované 1..N.
     items.sort(()=>Math.random()-.5).forEach(({it,idx})=>{
-      const tile=document.createElement('div');tile.className='image-drag-card';tile.draggable=true;tile.dataset.card=idx;
+      const tile=document.createElement('button');tile.type='button';tile.className='image-drag-card';tile.draggable=true;tile.dataset.card=idx;tile.setAttribute('aria-label','Vybrat obrázek k přiřazení');tile.setAttribute('aria-pressed','false');
       const img=document.createElement('img');img.alt='Obrázek k přiřazení';img.src=`/activity-media/${encodeURIComponent(card.dataset.activityId)}/card/${idx}`;tile.appendChild(img);
-      tile.addEventListener('dragstart',e=>e.dataTransfer.setData('text/plain',String(idx)));bank.appendChild(tile);
+      tile.addEventListener('dragstart',e=>{e.dataTransfer.setData('text/plain',String(idx));clearSelection();});
+      tile.addEventListener('click',()=>{selectTile(tile);tile.setAttribute('aria-pressed','true');});
+      bank.appendChild(tile);
     });
     (cfg.cards||[]).forEach((it,idx)=>{
       const z=document.createElement('div');z.className='image-card-target';z.dataset.target=idx;
       z.innerHTML=`<div class="image-target-title"><span class="image-target-number">${idx+1}</span><b>${it.label||''}</b></div><div class="image-target-drop">Sem přetáhni obrázek</div>`;targets.appendChild(z);
+      z.tabIndex=0;z.setAttribute('role','button');z.setAttribute('aria-label',`Vložit vybraný obrázek do kolonky ${idx+1}: ${it.label||''}`);
+      z.addEventListener('click',()=>placeTile(selectedTile,z,idx));
+      z.addEventListener('keydown',e=>{if((e.key==='Enter'||e.key===' ')&&selectedTile){e.preventDefault();placeTile(selectedTile,z,idx);}});
       z.addEventListener('dragover',e=>e.preventDefault());z.addEventListener('drop',e=>{
-        e.preventDefault();const cardIdx=Number(e.dataTransfer.getData('text/plain'));const tile=card.querySelector(`.image-drag-card[data-card="${cardIdx}"]`);if(!tile)return;
-        if(cardIdx!==idx){z.classList.add('wrong-drop');setTimeout(()=>z.classList.remove('wrong-drop'),650);return;}
-        z.querySelector('.image-target-drop').innerHTML='';z.querySelector('.image-target-drop').appendChild(tile);z.classList.add('correct-drop');assignments[String(cardIdx)]=idx;
+        e.preventDefault();const cardIdx=Number(e.dataTransfer.getData('text/plain'));const tile=card.querySelector(`.image-drag-card[data-card="${cardIdx}"]`);placeTile(tile,z,idx);
       });
     });
     card.querySelector('.check-activity')?.addEventListener('click',()=>check(card,{assignments}));
