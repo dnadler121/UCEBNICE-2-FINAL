@@ -3724,6 +3724,148 @@ def format_math_display(value):
 
 app.jinja_env.filters['math_display'] = format_math_display
 
+
+def _auto_basic_arithmetic_states(problem):
+    """Vrátí přirozené mezikroky pro jednoduchý celočíselný výraz.
+
+    Používá se pouze pro základní aritmetiku (+, -, *, /, závorky).
+    U ostatní matematiky se nadále používá učitelem zadaný `expected`.
+
+    Příklad:
+        7 + 5 * 29 - 21
+        -> 7+145-21
+        -> 145-14
+        -> 131
+    """
+    raw = str(problem or '').strip()
+    raw = raw.replace('×', '*').replace('·', '*').replace('÷', '/').replace(':', '/')
+    raw = raw.replace('−', '-').replace('–', '-')
+    raw = re.sub(r'\s+', '', raw)
+    raw = re.sub(r'=+$', '', raw)
+    if not raw or not re.fullmatch(r'[0-9+\-*/().]+', raw):
+        return []
+
+    # Nepouštíme automatiku na desetinná čísla; ta mají vlastní didaktiku/zápis.
+    if '.' in raw:
+        return []
+
+    def fmt_num(v):
+        try:
+            if isinstance(v, float) and v.is_integer():
+                v = int(v)
+            return str(v)
+        except Exception:
+            return str(v)
+
+    def safe_eval(expr):
+        # Výraz je výše omezen pouze na číslice a základní operátory.
+        try:
+            val = eval(expr, {"__builtins__": {}}, {})
+            if isinstance(val, float) and not val.is_integer():
+                return None
+            return int(val) if isinstance(val, float) else val
+        except Exception:
+            return None
+
+    states = []
+    expr = raw
+
+    # 1) Nejprve zjednodušujeme nejvnitřnější závorky.
+    guard = 0
+    while '(' in expr and guard < 20:
+        guard += 1
+        matches = list(re.finditer(r'\([^()]+\)', expr))
+        if not matches:
+            return []
+        m = matches[0]
+        inside = m.group(0)[1:-1]
+        val = safe_eval(inside)
+        if val is None:
+            return []
+        expr = expr[:m.start()] + fmt_num(val) + expr[m.end():]
+        states.append(expr)
+
+    # Pomocné hledání násobení/dělení bez toho, aby mínus před číslem
+    # bylo omylem považováno za binární operaci.
+    muldiv_re = re.compile(r'(?<![\d)])(-?\d+)([*/])(-?\d+)')
+    guard = 0
+    while guard < 30:
+        guard += 1
+        m = muldiv_re.search(expr)
+        if not m:
+            break
+        a, op, b = int(m.group(1)), m.group(2), int(m.group(3))
+        if op == '*':
+            val = a * b
+        else:
+            if b == 0 or a % b != 0:
+                # U necelého dělení necháme původní učitelský krok.
+                return []
+            val = a // b
+        expr = expr[:m.start()] + str(val) + expr[m.end():]
+        states.append(expr)
+
+    # 2) Zbývající sčítání/odčítání. Zachováme matematickou hodnotu,
+    # ale u tří a více členů dovolíme přirozenější seskupení krajních
+    # členů (např. 7+145-21 -> 145-14), což odpovídá práci žáka.
+    def additive_terms(s):
+        if not re.fullmatch(r'[+\-]?\d+(?:[+\-]\d+)+', s):
+            return None
+        return [int(x) for x in re.findall(r'[+\-]?\d+', s)]
+
+    def terms_to_expr(vals):
+        if not vals:
+            return ''
+        out = str(vals[0])
+        for v in vals[1:]:
+            out += ('+' if v >= 0 else '-') + str(abs(v))
+        return out
+
+    guard = 0
+    while guard < 30:
+        guard += 1
+        terms = additive_terms(expr)
+        if not terms or len(terms) < 2:
+            break
+
+        if len(terms) >= 3:
+            # Preferujeme spojit první a poslední člen, pokud mají opačné
+            # znaménko. Výsledný výraz bývá pro žáka kratší a přehlednější.
+            if (terms[0] >= 0 > terms[-1]) or (terms[0] < 0 <= terms[-1]):
+                combined = terms[0] + terms[-1]
+                middle = terms[1:-1]
+                terms = middle + [combined]
+            else:
+                terms = [terms[0] + terms[1]] + terms[2:]
+        else:
+            terms = [terms[0] + terms[1]]
+
+        expr = terms_to_expr(terms)
+        states.append(expr)
+
+    # Odstraníme případné duplicitní stavy.
+    out = []
+    for s in states:
+        if not out or out[-1] != s:
+            out.append(s)
+    return out
+
+
+def _effective_math_expected(example, step, authored_expected):
+    """Pro základní aritmetiku použije automaticky dopočítaný mezikrok.
+
+    Když automatika daný příklad bezpečně nerozpozná, vrátí původní
+    učitelem zadanou správnou odpověď.
+    """
+    try:
+        states = _auto_basic_arithmetic_states(getattr(example, 'problem', '') or '')
+        idx = int(getattr(step, 'order', 0) or 0) - 1
+        if states and 0 <= idx < len(states):
+            return states[idx]
+    except Exception:
+        pass
+    return authored_expected
+
 def math_input_layout(expected):
     """Vytvoří strom studentských políček.
 
@@ -4856,7 +4998,7 @@ def math_lesson(lesson_id):
 
             if current:
                 ex,step=current
-                expected_now = math_variants.get(ex.id, {}).get('steps', {}).get(step.id, {}).get('expected', step.expected)
+                expected_now = _effective_math_expected(ex, step, math_variants.get(ex.id, {}).get('steps', {}).get(step.id, {}).get('expected', step.expected))
                 answer = math_answer_from_fields(expected_now, request.form)
                 if math_answers_equivalent(answer, expected_now):
                     answers = _safe_json(attempt.answers_json, [])
@@ -4896,7 +5038,7 @@ def math_lesson(lesson_id):
     current_input_html = None
     if current and current_user().role == 'student':
         ex_now, st_now = current
-        expected_now = math_variants.get(ex_now.id, {}).get('steps', {}).get(st_now.id, {}).get('expected', st_now.expected)
+        expected_now = _effective_math_expected(ex_now, st_now, math_variants.get(ex_now.id, {}).get('steps', {}).get(st_now.id, {}).get('expected', st_now.expected))
         current_input_html = render_math_input_layout(math_input_layout(expected_now))
 
     course={'subject':'Matematika','grade':item.grade_name,'block':item.topic,'icon':'➗'}
