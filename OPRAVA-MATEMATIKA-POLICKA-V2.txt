@@ -1,0 +1,15 @@
+OPRAVA MATEMATIKY – POČET POLÍČEK PODLE VYGENEROVANÉHO PŘÍKLADU
+
+Opraven problém u náhodně generovaných matematických variant.
+
+Příklad:
+15 + 4 : 2 * 17
+1. krok: 15+2*17
+2. krok: 15+34
+3. krok: 49
+
+Ve 3. kroku se nyní vytvoří přesně 2 políčka: [4] [9].
+
+Důležité:
+Automatické mezikroky se nyní počítají z konkrétní varianty vygenerované
+pro daného žáka, ne z obecné šablony n1+n2:n3*n4.

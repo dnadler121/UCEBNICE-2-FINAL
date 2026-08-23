@@ -3851,14 +3851,14 @@ def _auto_basic_arithmetic_states(problem):
     return out
 
 
-def _effective_math_expected(example, step, authored_expected):
+def _effective_math_expected(example, step, authored_expected, rendered_problem=None):
     """Pro základní aritmetiku použije automaticky dopočítaný mezikrok.
 
     Když automatika daný příklad bezpečně nerozpozná, vrátí původní
     učitelem zadanou správnou odpověď.
     """
     try:
-        states = _auto_basic_arithmetic_states(getattr(example, 'problem', '') or '')
+        states = _auto_basic_arithmetic_states(rendered_problem if rendered_problem is not None else (getattr(example, 'problem', '') or ''))
         idx = int(getattr(step, 'order', 0) or 0) - 1
         if states and 0 <= idx < len(states):
             return states[idx]
@@ -4998,7 +4998,13 @@ def math_lesson(lesson_id):
 
             if current:
                 ex,step=current
-                expected_now = _effective_math_expected(ex, step, math_variants.get(ex.id, {}).get('steps', {}).get(step.id, {}).get('expected', step.expected))
+                variant_now = math_variants.get(ex.id, {})
+                expected_now = _effective_math_expected(
+                    ex,
+                    step,
+                    variant_now.get('steps', {}).get(step.id, {}).get('expected', step.expected),
+                    variant_now.get('problem', ex.problem),
+                )
                 answer = math_answer_from_fields(expected_now, request.form)
                 if math_answers_equivalent(answer, expected_now):
                     answers = _safe_json(attempt.answers_json, [])
@@ -5038,7 +5044,13 @@ def math_lesson(lesson_id):
     current_input_html = None
     if current and current_user().role == 'student':
         ex_now, st_now = current
-        expected_now = _effective_math_expected(ex_now, st_now, math_variants.get(ex_now.id, {}).get('steps', {}).get(st_now.id, {}).get('expected', st_now.expected))
+        variant_now = math_variants.get(ex_now.id, {})
+        expected_now = _effective_math_expected(
+            ex_now,
+            st_now,
+            variant_now.get('steps', {}).get(st_now.id, {}).get('expected', st_now.expected),
+            variant_now.get('problem', ex_now.problem),
+        )
         current_input_html = render_math_input_layout(math_input_layout(expected_now))
 
     course={'subject':'Matematika','grade':item.grade_name,'block':item.topic,'icon':'➗'}
