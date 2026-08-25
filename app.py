@@ -300,6 +300,18 @@ class InteractiveProgress(db.Model):
     interactive_lesson = db.relationship('InteractiveLesson')
 
 
+class InteractiveState(db.Model):
+    """Průběžný stav importované interaktivní aplikace pro konkrétního studenta."""
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    interactive_lesson_id = db.Column(db.Integer, db.ForeignKey('interactive_lesson.id'), nullable=False)
+    state_json = db.Column(db.Text, default='{}')
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow)
+    user = db.relationship('User')
+    interactive_lesson = db.relationship('InteractiveLesson')
+    __table_args__ = (db.UniqueConstraint('user_id', 'interactive_lesson_id', name='uq_interactive_state_user_lesson'),)
+
+
 class InformaticsLesson(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     school = db.Column(db.String(160), default='')
@@ -808,7 +820,9 @@ def inject():
 def normalize_subject(value):
     value = strip_accents(value).replace(' ', '-')
     aliases = {'matematika': 'matematika', 'math': 'matematika',
-               'informatika': 'informatika', 'ict': 'informatika'}
+               'informatika': 'informatika', 'ict': 'informatika',
+               'biologie': 'biologie', 'biology': 'biologie',
+               'zemepis': 'zemepis', 'geography': 'zemepis'}
     return aliases.get(value, value)
 
 
@@ -818,9 +832,16 @@ def safe_package_slug(value):
 
 
 def interactive_groups_for(subject_kind):
-    subject_value = 'matematika' if subject_kind == 'matematika' else 'informatika'
-    lessons = InteractiveLesson.query.filter_by(
-        subject=subject_value, is_published=True
+    subject_values = {
+        'matematika': ('matematika',),
+        'informatika': ('informatika',),
+        'bio-obc': ('biologie', 'zemepis'),
+    }.get(subject_kind, ())
+    if not subject_values:
+        return []
+    lessons = InteractiveLesson.query.filter(
+        InteractiveLesson.subject.in_(subject_values),
+        InteractiveLesson.is_published.is_(True)
     ).order_by(
         InteractiveLesson.school,
         InteractiveLesson.grade_name,
@@ -1098,6 +1119,9 @@ def portal():
         'bio_obc': Lesson.query.join(Block).join(Grade).join(Subject).filter(
             db.or_(Subject.name.ilike('%bio%'), Subject.name.ilike('%občan%'), Subject.name.ilike('%obcan%'), Subject.name.ilike('%zeměpis%'), Subject.name.ilike('%zemepis%'), Subject.name.ilike('%geog%')),
             Lesson.is_published.is_(True)
+        ).count() + InteractiveLesson.query.filter(
+            InteractiveLesson.subject.in_(('biologie', 'zemepis')),
+            InteractiveLesson.is_published.is_(True)
         ).count(),
         'matematika': Lesson.query.join(Block).join(Grade).join(Subject).filter(
             Subject.name.ilike('%matemat%'), Lesson.is_published.is_(True)
@@ -1129,7 +1153,7 @@ def subject_catalog(kind):
         'informatika': ('Informatika', '💻'),
     }
     title, icon = titles[kind]
-    interactive_groups = interactive_groups_for(kind) if kind in ('matematika', 'informatika') else []
+    interactive_groups = interactive_groups_for(kind) if kind in ('bio-obc', 'matematika', 'informatika') else []
     informatics_lessons = InformaticsLesson.query.filter_by(is_published=True).order_by(
         InformaticsLesson.school, InformaticsLesson.grade_name, InformaticsLesson.topic, InformaticsLesson.title
     ).all() if kind == 'informatika' else []
@@ -1292,13 +1316,13 @@ def restore_interactive_lessons_from_files():
             if InteractiveLesson.query.filter_by(slug=slug).first():
                 continue
             subject = normalize_subject(meta.get('subject', ''))
-            if subject not in ('matematika', 'informatika'):
+            if subject not in ('matematika', 'informatika', 'biologie', 'zemepis'):
                 continue
             db.session.add(InteractiveLesson(
                 slug=slug, subject=subject, school=str(meta.get('school', '')).strip(),
                 grade_name=str(meta.get('grade', '')).strip(), topic=str(meta.get('topic', '')).strip(),
                 title=str(meta.get('title', slug)).strip(), description=str(meta.get('description', '')).strip(),
-                icon=str(meta.get('icon', '➗' if subject == 'matematika' else '💻')).strip(),
+                icon=str(meta.get('icon', {'matematika':'➗','informatika':'💻','biologie':'🧬','zemepis':'🗺️'}.get(subject, '📦'))).strip(),
                 package_dir=str(meta_file.parent), is_published=bool(meta.get('is_published', True)),
                 imported_at=datetime.utcnow()
             ))
@@ -1353,8 +1377,8 @@ def import_interactive_lesson():
         meta = json.loads(meta_file.read_text(encoding='utf-8-sig'))
 
         subject = normalize_subject(meta.get('subject', ''))
-        if subject not in ('matematika', 'informatika'):
-            raise ValueError('V lesson.json musí být předmět matematika nebo informatika.')
+        if subject not in ('matematika', 'informatika', 'biologie', 'zemepis'):
+            raise ValueError('V lesson.json musí být předmět matematika, informatika, biologie nebo zemepis.')
 
         school = str(meta.get('school', '')).strip()
         grade_name = str(meta.get('grade', '')).strip()
@@ -1396,7 +1420,7 @@ def import_interactive_lesson():
             icon=str(
                 meta.get(
                     'icon',
-                    '➗' if subject == 'matematika' else '💻'
+                    {'matematika':'➗','informatika':'💻','biologie':'🧬','zemepis':'🗺️'}.get(subject, '📦')
                 )
             ).strip(),
             package_dir=str(destination),
@@ -1424,6 +1448,20 @@ def import_interactive_lesson():
     return redirect(url_for('import_interactive_lesson'))
 
 
+def interactive_focus_guard_enabled(lesson_item):
+    """Vrati False jen u balicku, ktery v lesson.json vyslovne povoli opusteni stranky."""
+    try:
+        meta_file = BASE / lesson_item.package_dir / 'lesson.json'
+        if meta_file.exists():
+            meta = json.loads(meta_file.read_text(encoding='utf-8'))
+            if meta.get('focus_guard') is False or meta.get('allow_page_leave') is True:
+                return False
+    except Exception:
+        # Pri poskozenych metadatech zachovame bezpecne stavajici chovani.
+        pass
+    return True
+
+
 @app.route('/interactive/<slug>')
 def interactive_lesson(slug):
     r = require_login()
@@ -1433,7 +1471,8 @@ def interactive_lesson(slug):
     if not lesson_item:
         return 'Interaktivní lekce nebyla nalezena.', 404
 
-    if current_user().role == 'student':
+    focus_guard_enabled = current_user().role == 'student' and interactive_focus_guard_enabled(lesson_item)
+    if focus_guard_enabled:
         begin_focus_attempt('interactive', slug)
 
     template_file = BASE / lesson_item.package_dir / 'templates' / 'index.html'
@@ -1441,7 +1480,7 @@ def interactive_lesson(slug):
         return 'Balíček lekce neobsahuje templates/index.html.', 500
 
     html_source = template_file.read_text(encoding='utf-8')
-    if current_user().role == 'student':
+    if focus_guard_enabled:
         guard = render_template_string(
             '<script>window.UCEBNICE_FOCUS_GUARD={{ cfg|tojson }};</script>'
             "<script src=\"{{ url_for('static', filename='js/focus_guard.js') }}\"></script>",
@@ -1461,7 +1500,8 @@ def interactive_lesson(slug):
         asset_url=lambda path: url_for('interactive_asset', slug=slug, filename=path),
         api_url=lambda action: url_for('interactive_api', slug=slug, action=action),
         complete_url=url_for('complete_interactive', slug=slug),
-        portal_url=url_for('subject_catalog', kind=lesson_item.subject)
+        state_url=url_for('interactive_state', slug=slug),
+        portal_url=url_for('subject_catalog', kind=('bio-obc' if lesson_item.subject in ('biologie', 'zemepis') else lesson_item.subject))
     )
 
 
@@ -1505,6 +1545,52 @@ def interactive_api(slug, action):
         return jsonify({'ok': False, 'error': str(exc)}), 400
 
 
+@app.route('/interactive/<slug>/state', methods=['GET', 'POST'])
+def interactive_state(slug):
+    r = require_login()
+    if r:
+        return jsonify({'ok': False, 'error': 'login'}), 401
+
+    user = current_user()
+    lesson_item = InteractiveLesson.query.filter_by(slug=slug, is_published=True).first()
+    if not lesson_item:
+        return jsonify({'ok': False, 'error': 'lesson'}), 404
+    if not user or user.role != 'student':
+        return jsonify({'ok': False, 'error': 'student_only'}), 403
+
+    row = InteractiveState.query.filter_by(
+        user_id=user.id,
+        interactive_lesson_id=lesson_item.id
+    ).first()
+
+    if request.method == 'GET':
+        state = {}
+        if row and row.state_json:
+            try:
+                parsed = json.loads(row.state_json)
+                if isinstance(parsed, dict):
+                    state = parsed
+            except Exception:
+                state = {}
+        return jsonify({'ok': True, 'state': state})
+
+    payload = request.get_json(silent=True) or {}
+    state = payload.get('state', payload)
+    if not isinstance(state, dict):
+        return jsonify({'ok': False, 'error': 'Neplatný stav aplikace.'}), 400
+    encoded = json.dumps(state, ensure_ascii=False, separators=(',', ':'))
+    if len(encoded.encode('utf-8')) > 100000:
+        return jsonify({'ok': False, 'error': 'Stav aplikace je příliš velký.'}), 400
+
+    if not row:
+        row = InteractiveState(user_id=user.id, interactive_lesson_id=lesson_item.id)
+        db.session.add(row)
+    row.state_json = encoded
+    row.updated_at = datetime.utcnow()
+    db.session.commit()
+    return jsonify({'ok': True, 'state': state})
+
+
 @app.route('/interactive/<slug>/complete', methods=['POST'])
 def complete_interactive(slug):
     r = require_login()
@@ -1538,6 +1624,7 @@ def delete_interactive_lesson(lesson_id):
     if item:
         InteractiveResult.query.filter_by(interactive_lesson_id=item.id).delete()
         InteractiveProgress.query.filter_by(interactive_lesson_id=item.id).delete()
+        InteractiveState.query.filter_by(interactive_lesson_id=item.id).delete()
         package_path = BASE / item.package_dir
         db.session.delete(item)
         db.session.commit()

@@ -41,7 +41,7 @@
       </a>
       <a class="admin-choice app-choice" href="{{ url_for('import_interactive_lesson') }}">
         <span>📦</span>
-        <div><h2>Interaktivní aplikace</h2><p>Importovat stávající matematickou nebo starší informatickou ZIP aplikaci.</p></div>
+        <div><h2>Interaktivní aplikace</h2><p>Importovat ZIP aplikaci pro matematiku, informatiku, biologii nebo zeměpis.</p></div>
         <b>Importovat ZIP aplikaci →</b>
       </a>
     </section>
@@ -148,7 +148,7 @@
         <div class="empty-admin-state">
           <span>📦</span>
           <h3>Zatím není importovaná žádná aplikace</h3>
-          <p>První matematickou nebo informatickou lekci nahraješ tlačítkem níže.</p>
+          <p>První interaktivní aplikaci pro matematiku, informatiku, biologii nebo zeměpis nahraješ tlačítkem níže.</p>
           <a class="switch import-action" href="{{ url_for('import_interactive_lesson') }}">Importovat první aplikaci</a>
         </div>
       {% endif %}
