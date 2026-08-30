@@ -41,7 +41,7 @@ I18N = {
     'cs': {},
     'en': {
         'Přihlášení':'Log in','Odhlásit':'Log out','Nepřihlášeno':'Not logged in',
-        'Učitel':'Teacher','Student':'Student','Editor':'Editor','Studenti':'Students','Databáze':'Database',
+        'Učitel':'Teacher','Student':'Student','Editor':'Editor','Studenti':'Students','Databáze':'Database','Hodnocení':'Grades',
         'Vyber předmět, školu a ročník, téma a lekci':'Choose a subject, school and grade, topic and lesson',
         'DIGITÁLNÍ UČEBNICE':'DIGITAL TEXTBOOK','Vyber si předmět a začni pracovat':'Choose a subject and start learning',
         'Jedno přihlášení, všechny lekce na jednom místě. Každá lekce se automaticky zařadí podle předmětu, školy, ročníku a tématu.':'One login, all lessons in one place. Each lesson is organised by subject, school, grade and topic.',
