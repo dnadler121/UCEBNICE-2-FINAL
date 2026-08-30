@@ -1,4 +1,4 @@
-import os, json, unicodedata, random, html, re, base64, uuid, urllib.parse, urllib.request, urllib.error, zipfile, shutil, importlib.util, tempfile, threading, hmac, hashlib, ast, math, io
+import os, json, unicodedata, random, html, re, base64, uuid, urllib.parse, urllib.request, urllib.error, zipfile, shutil, importlib.util, tempfile, threading, hmac, hashlib, ast, math, io, sqlite3
 from pathlib import Path
 from datetime import datetime
 from flask import Flask, render_template, render_template_string, request, jsonify, session, redirect, url_for, send_from_directory, send_file, flash
@@ -24,6 +24,8 @@ INTERACTIVE_LESSONS = DATA_DIR / 'interactive_lessons'
 INTERACTIVE_LESSONS.mkdir(parents=True, exist_ok=True)
 
 DB_PATH = DATA_DIR / 'montessori.db'
+# Samostatný archiv známek. Smazání výsledků z hlavní databáze ho nemaže.
+GRADES_DB_PATH = DATA_DIR / 'hodnoceni.db'
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'change-me')
@@ -70,6 +72,99 @@ I18N = {
         'Když si nejsi jistý/á, vše potřebné můžeš najít ve studijním materiálu vedle.':'If you are unsure, you can find everything you need in the study material next to the task.'
     }
 }
+
+
+def init_grades_db():
+    """Vytvoří samostatnou jednoduchou databázi známek."""
+    with sqlite3.connect(GRADES_DB_PATH) as conn:
+        conn.execute('''
+            CREATE TABLE IF NOT EXISTS grades_archive (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                username TEXT NOT NULL,
+                student_name TEXT NOT NULL DEFAULT '',
+                subject TEXT NOT NULL,
+                topic TEXT NOT NULL,
+                grade INTEGER NOT NULL CHECK(grade BETWEEN 1 AND 5),
+                updated_at TEXT NOT NULL,
+                UNIQUE(username, subject, topic)
+            )
+        ''')
+        conn.execute('CREATE INDEX IF NOT EXISTS idx_grades_archive_user ON grades_archive(username)')
+        conn.execute('CREATE INDEX IF NOT EXISTS idx_grades_archive_subject ON grades_archive(subject)')
+        conn.commit()
+
+
+def archive_grade(user, subject, topic, grade):
+    """Uloží nebo aktualizuje jednu známku za téma v nezávislém archivu."""
+    if not user or getattr(user, 'role', '') != 'student':
+        return
+    subject = str(subject or '').strip()
+    topic = str(topic or '').strip()
+    if not subject or not topic:
+        return
+    try:
+        grade = max(1, min(5, int(grade)))
+    except (TypeError, ValueError):
+        return
+    init_grades_db()
+    with sqlite3.connect(GRADES_DB_PATH) as conn:
+        conn.execute('''
+            INSERT INTO grades_archive(username, student_name, subject, topic, grade, updated_at)
+            VALUES(?,?,?,?,?,?)
+            ON CONFLICT(username, subject, topic) DO UPDATE SET
+                student_name=excluded.student_name,
+                grade=excluded.grade,
+                updated_at=excluded.updated_at
+        ''', (user.username, user.name or user.username, subject, topic, grade, datetime.utcnow().isoformat(timespec='seconds')))
+        conn.commit()
+
+
+def archive_existing_results():
+    """Doplní archiv z výsledků, které při startu ještě existují v hlavní DB."""
+    init_grades_db()
+    for r in Result.query.order_by(Result.created_at.asc()).all():
+        if r.user and r.lesson:
+            archive_grade(r.user, r.lesson.block.grade.subject.name, r.lesson.block.title, r.grade)
+    for r in InteractiveResult.query.order_by(InteractiveResult.completed_at.asc()).all():
+        if r.user and r.interactive_lesson:
+            archive_grade(r.user, r.interactive_lesson.subject.capitalize(), r.interactive_lesson.topic, r.grade)
+    for r in InformaticsSubmission.query.filter(InformaticsSubmission.status != 'kontrola').order_by(InformaticsSubmission.created_at.asc()).all():
+        if r.user and r.task and r.task.lesson:
+            archive_grade(r.user, 'Informatika', r.task.lesson.topic, r.grade or informatics_grade_from_percent(r.percent))
+    for r in MathAttempt.query.filter(MathAttempt.status != 'rozpracováno').order_by(MathAttempt.updated_at.asc()).all():
+        if r.user and r.lesson:
+            archive_grade(r.user, 'Matematika', r.lesson.topic, r.grade)
+
+
+def grades_archive_rows():
+    init_grades_db()
+    with sqlite3.connect(GRADES_DB_PATH) as conn:
+        conn.row_factory = sqlite3.Row
+        rows = conn.execute('''
+            SELECT id, username, student_name, subject, topic, grade, updated_at
+            FROM grades_archive
+            ORDER BY username COLLATE NOCASE, subject COLLATE NOCASE, topic COLLATE NOCASE
+        ''').fetchall()
+    grouped = []
+    users = {}
+    for row in rows:
+        username = row['username']
+        if username not in users:
+            user_group = {'username': username, 'student_name': row['student_name'], 'subjects': []}
+            users[username] = user_group
+            grouped.append(user_group)
+        user_group = users[username]
+        subject_group = next((x for x in user_group['subjects'] if x['subject'] == row['subject']), None)
+        if subject_group is None:
+            subject_group = {'subject': row['subject'], 'topics': [], 'average': None}
+            user_group['subjects'].append(subject_group)
+        subject_group['topics'].append(dict(row))
+    for user_group in grouped:
+        for subject_group in user_group['subjects']:
+            vals = [int(x['grade']) for x in subject_group['topics']]
+            subject_group['average'] = round(sum(vals) / len(vals), 2) if vals else None
+    return grouped
+
 
 def current_lang():
     lang = session.get('lang', 'cs')
@@ -917,6 +1012,7 @@ def upsert_interactive_progress(lesson, percent=100, grade=None, focus_lost=0):
         status='dokončeno'
     ))
     db.session.commit()
+    archive_grade(user, lesson.subject.capitalize(), lesson.topic, grade)
 
 def get_focus_session(kind, key, create=False):
     user = current_user()
@@ -1959,6 +2055,8 @@ def persist_final_result(lesson, status='dokončeno', focus_lost=None):
         row.created_at = datetime.utcnow()
 
     db.session.commit()
+    if should_store:
+        archive_grade(user, lesson.block.grade.subject.name, lesson.block.title, progress['grade'])
     touch_progress(lesson.id, 1000 if status == 'dokončeno' else 999, status)
     return progress
 
@@ -3639,6 +3737,7 @@ def informatics_task(task_id):
             row.focus_lost = consume_focus_count('informatics', task.id)
             row.created_at = datetime.utcnow()
             db.session.commit()
+            archive_grade(current_user(), 'Informatika', task.lesson.topic, row.grade)
             flash(f'Úkol byl odevzdán: {row.percent} %, známka {row.grade}.')
             return redirect(url_for('informatics_lesson', lesson_id=task.lesson_id))
 
@@ -5080,6 +5179,7 @@ def math_lesson(lesson_id):
                 attempt.focus_lost=consume_focus_count('math',item.id)
                 attempt.updated_at=datetime.utcnow()
                 db.session.commit()
+                archive_grade(current_user(), 'Matematika', item.topic, attempt.grade)
                 flash(f'Lekce byla odevzdána: {percent} %, známka {attempt.grade}.')
                 return redirect(url_for('subject_catalog',kind='matematika'))
 
@@ -5526,6 +5626,38 @@ def download_lesson_solutions(lesson_id, mode):
     data.seek(0)
     return send_file(data, mimetype='text/plain; charset=utf-8', as_attachment=True,
                      download_name=f'RESENI_{slug}_{suffix}.txt')
+
+
+@app.route('/teacher/grades')
+def teacher_grades():
+    r = require_teacher()
+    if r: return r
+    return render_template('grades_archive.html', course=course_from_lesson(None), groups=grades_archive_rows())
+
+
+@app.route('/teacher/grades/<int:grade_id>/delete', methods=['POST'])
+def delete_archived_grade(grade_id):
+    r = require_teacher()
+    if r: return r
+    init_grades_db()
+    with sqlite3.connect(GRADES_DB_PATH) as conn:
+        conn.execute('DELETE FROM grades_archive WHERE id=?', (grade_id,))
+        conn.commit()
+    flash('Hodnocení bylo z archivu smazáno a průměr se přepočítal.')
+    return redirect(url_for('teacher_grades'))
+
+
+@app.route('/teacher/grades/student/<username>/delete', methods=['POST'])
+def delete_archived_student(username):
+    r = require_teacher()
+    if r: return r
+    init_grades_db()
+    with sqlite3.connect(GRADES_DB_PATH) as conn:
+        conn.execute('DELETE FROM grades_archive WHERE username=?', (username,))
+        conn.commit()
+    flash('Archivní hodnocení vybraného studenta bylo smazáno.')
+    return redirect(url_for('teacher_grades'))
+
 
 @app.route('/teacher/database')
 def teacher_database():
@@ -6366,6 +6498,8 @@ Která věc je neživá? | strom | houba | sklenice | 3'''
     # Odstraní i prázdné odkazy, které mohly zůstat v databázi po starších verzích.
     cleanup_empty_curriculum()
     db.session.commit()
+    init_grades_db()
+    archive_existing_results()
 
 with app.app_context():
     seed()
