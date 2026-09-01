@@ -917,7 +917,8 @@ def normalize_subject(value):
     aliases = {'matematika': 'matematika', 'math': 'matematika',
                'informatika': 'informatika', 'ict': 'informatika',
                'biologie': 'biologie', 'biology': 'biologie',
-               'zemepis': 'zemepis', 'geography': 'zemepis'}
+               'zemepis': 'zemepis', 'geography': 'zemepis',
+               'fyzika': 'fyzika', 'physics': 'fyzika'}
     return aliases.get(value, value)
 
 
@@ -931,6 +932,7 @@ def interactive_groups_for(subject_kind):
         'matematika': ('matematika',),
         'informatika': ('informatika',),
         'bio-obc': ('biologie', 'zemepis'),
+        'fyzika': ('fyzika',),
     }.get(subject_kind, ())
     if not subject_values:
         return []
@@ -1219,6 +1221,9 @@ def portal():
             InteractiveLesson.subject.in_(('biologie', 'zemepis')),
             InteractiveLesson.is_published.is_(True)
         ).count(),
+        'fyzika': Lesson.query.join(Block).join(Grade).join(Subject).filter(
+            Subject.name.ilike('%fyz%'), Lesson.is_published.is_(True)
+        ).count() + InteractiveLesson.query.filter_by(subject='fyzika', is_published=True).count(),
         'matematika': Lesson.query.join(Block).join(Grade).join(Subject).filter(
             Subject.name.ilike('%matemat%'), Lesson.is_published.is_(True)
         ).count() + InteractiveLesson.query.filter_by(subject='matematika', is_published=True).count()
@@ -1236,6 +1241,7 @@ def subject_catalog(kind):
     if r: return r
     filters = {
         'bio-obc': lambda q: q.filter(db.or_(Subject.name.ilike('%bio%'), Subject.name.ilike('%občan%'), Subject.name.ilike('%obcan%'), Subject.name.ilike('%zeměpis%'), Subject.name.ilike('%zemepis%'), Subject.name.ilike('%geog%'))),
+        'fyzika': lambda q: q.filter(Subject.name.ilike('%fyz%')),
         'matematika': lambda q: q.filter(Subject.name.ilike('%matemat%')),
         'informatika': lambda q: q.filter(Subject.name.ilike('%informat%')),
     }
@@ -1245,11 +1251,12 @@ def subject_catalog(kind):
     subjects = filters[kind](q).order_by(Subject.name).all()
     titles = {
         'bio-obc': ('Biologie, občanská výchova a zeměpis', '🧬'),
+        'fyzika': ('Fyzika', '⚛️'),
         'matematika': ('Matematika', '➗'),
         'informatika': ('Informatika', '💻'),
     }
     title, icon = titles[kind]
-    interactive_groups = interactive_groups_for(kind) if kind in ('bio-obc', 'matematika', 'informatika') else []
+    interactive_groups = interactive_groups_for(kind) if kind in ('bio-obc', 'fyzika', 'matematika', 'informatika') else []
     informatics_lessons = InformaticsLesson.query.filter_by(is_published=True).order_by(
         InformaticsLesson.school, InformaticsLesson.grade_name, InformaticsLesson.topic, InformaticsLesson.title
     ).all() if kind == 'informatika' else []
@@ -1412,13 +1419,13 @@ def restore_interactive_lessons_from_files():
             if InteractiveLesson.query.filter_by(slug=slug).first():
                 continue
             subject = normalize_subject(meta.get('subject', ''))
-            if subject not in ('matematika', 'informatika', 'biologie', 'zemepis'):
+            if subject not in ('matematika', 'informatika', 'biologie', 'zemepis', 'fyzika'):
                 continue
             db.session.add(InteractiveLesson(
                 slug=slug, subject=subject, school=str(meta.get('school', '')).strip(),
                 grade_name=str(meta.get('grade', '')).strip(), topic=str(meta.get('topic', '')).strip(),
                 title=str(meta.get('title', slug)).strip(), description=str(meta.get('description', '')).strip(),
-                icon=str(meta.get('icon', {'matematika':'➗','informatika':'💻','biologie':'🧬','zemepis':'🗺️'}.get(subject, '📦'))).strip(),
+                icon=str(meta.get('icon', {'matematika':'➗','informatika':'💻','biologie':'🧬','zemepis':'🗺️','fyzika':'⚛️'}.get(subject, '📦'))).strip(),
                 package_dir=str(meta_file.parent), is_published=bool(meta.get('is_published', True)),
                 imported_at=datetime.utcnow()
             ))
@@ -1473,8 +1480,8 @@ def import_interactive_lesson():
         meta = json.loads(meta_file.read_text(encoding='utf-8-sig'))
 
         subject = normalize_subject(meta.get('subject', ''))
-        if subject not in ('matematika', 'informatika', 'biologie', 'zemepis'):
-            raise ValueError('V lesson.json musí být předmět matematika, informatika, biologie nebo zemepis.')
+        if subject not in ('matematika', 'informatika', 'biologie', 'zemepis', 'fyzika'):
+            raise ValueError('V lesson.json musí být předmět matematika, informatika, biologie, zemepis nebo fyzika.')
 
         school = str(meta.get('school', '')).strip()
         grade_name = str(meta.get('grade', '')).strip()
@@ -1516,7 +1523,7 @@ def import_interactive_lesson():
             icon=str(
                 meta.get(
                     'icon',
-                    {'matematika':'➗','informatika':'💻','biologie':'🧬','zemepis':'🗺️'}.get(subject, '📦')
+                    {'matematika':'➗','informatika':'💻','biologie':'🧬','zemepis':'🗺️','fyzika':'⚛️'}.get(subject, '📦')
                 )
             ).strip(),
             package_dir=str(destination),

@@ -105,7 +105,7 @@
       <div>{{ icon }}</div><h2>Zatím tu není žádná lekce</h2>
       <p>Jakmile učitel vytvoří nebo později importuje první lekci, automaticky se zde zobrazí pod správným ročníkem a tématem.</p>
       {% if user.role == 'teacher' %}
-      {% if kind in ['bio-obc', 'matematika', 'informatika'] %}
+      {% if kind in ['bio-obc', 'fyzika', 'matematika', 'informatika'] %}
         <a class="switch" href="{{ url_for('import_interactive_lesson') }}">📦 Importovat první lekci</a>
       {% else %}
         <a class="switch" href="{{ url_for('new_lesson') }}">➕ Vytvořit první lekci</a>

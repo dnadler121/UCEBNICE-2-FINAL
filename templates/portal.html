@@ -23,6 +23,16 @@
       <div class="subject-foot"><b>{{ counts.bio_obc }}</b> {{ t('lekcí') }} <span>{{ t('Otevřít →') }}</span></div>
     </a>
 
+    <a class="subject-tile tile-physics" href="{{ url_for('subject_catalog', kind='fyzika') }}">
+      <div class="subject-icon">⚛️</div>
+      <div>
+        <span class="subject-label">{{ t('INTERAKTIVNÍ LEKCE') }}</span>
+        <h2>{{ t('Fyzika') }}</h2>
+        <p>{{ t('Síly, pohyb, energie a další fyzikální témata.') }}</p>
+      </div>
+      <div class="subject-foot"><b>{{ counts.fyzika }}</b> {{ t('lekcí') }} <span>{{ t('Otevřít →') }}</span></div>
+    </a>
+
     <a class="subject-tile tile-math" href="{{ url_for('subject_catalog', kind='matematika') }}">
       <div class="subject-icon">➗</div>
       <div>
@@ -48,7 +58,7 @@
   <section class="teacher-quickbar">
     <div><b>{{ t('Učitelská správa') }}</b><span>{{ t('Vytváření lekcí, studenti a výsledky') }}</span></div>
     <a href="{{ url_for('new_lesson') }}">➕ {{ t('HTML lekce') }}</a>
-    <a href="{{ url_for('import_interactive_lesson') }}">📦 {{ t('Import matematika / informatika') }}</a>
+    <a href="{{ url_for('import_interactive_lesson') }}">📦 {{ t('Import interaktivní lekce') }}</a>
     <a href="{{ url_for('teacher_students') }}">👨‍🎓 {{ t('Studenti') }}</a>
     <a href="{{ url_for('teacher_database') }}">🗄️ {{ t('Výsledky') }}</a>
   </section>
