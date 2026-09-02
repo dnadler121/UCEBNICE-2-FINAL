@@ -1005,14 +1005,31 @@ def upsert_interactive_progress(lesson, percent=100, grade=None, focus_lost=0):
     progress.current_grade = int(grade)
     progress.last_completed_at = datetime.utcnow()
     progress.updated_at = datetime.utcnow()
-    db.session.add(InteractiveResult(
+    # U interaktivních testů uchováváme v databázi poslední výsledek
+    # studenta pro danou lekci. Opakovaný test tedy přepíše předchozí pokus.
+    result = InteractiveResult.query.filter_by(
         user_id=user.id,
-        interactive_lesson_id=lesson.id,
-        percent=int(percent),
-        grade=int(grade),
-        focus_lost=int(focus_lost or 0),
-        status='dokončeno'
-    ))
+        interactive_lesson_id=lesson.id
+    ).order_by(InteractiveResult.completed_at.desc()).first()
+    if not result:
+        result = InteractiveResult(
+            user_id=user.id,
+            interactive_lesson_id=lesson.id
+        )
+        db.session.add(result)
+    result.percent = int(percent)
+    result.grade = int(grade)
+    result.focus_lost = int(focus_lost or 0)
+    result.status = 'dokončeno'
+    result.completed_at = datetime.utcnow()
+
+    # Odstraníme případné starší duplicitní výsledky stejné lekce.
+    InteractiveResult.query.filter(
+        InteractiveResult.user_id == user.id,
+        InteractiveResult.interactive_lesson_id == lesson.id,
+        InteractiveResult.id != result.id
+    ).delete(synchronize_session=False)
+
     db.session.commit()
     archive_grade(user, lesson.subject.capitalize(), lesson.topic, grade)
 
@@ -1416,20 +1433,30 @@ def restore_interactive_lessons_from_files():
         try:
             meta = json.loads(meta_file.read_text(encoding='utf-8'))
             slug = safe_package_slug(meta.get('slug', meta_file.parent.name))
-            if InteractiveLesson.query.filter_by(slug=slug).first():
-                continue
             subject = normalize_subject(meta.get('subject', ''))
             if subject not in ('matematika', 'informatika', 'biologie', 'zemepis', 'fyzika'):
                 continue
-            db.session.add(InteractiveLesson(
-                slug=slug, subject=subject, school=str(meta.get('school', '')).strip(),
-                grade_name=str(meta.get('grade', '')).strip(), topic=str(meta.get('topic', '')).strip(),
-                title=str(meta.get('title', slug)).strip(), description=str(meta.get('description', '')).strip(),
-                icon=str(meta.get('icon', {'matematika':'➗','informatika':'💻','biologie':'🧬','zemepis':'🗺️','fyzika':'⚛️'}.get(subject, '📦'))).strip(),
-                package_dir=str(meta_file.parent), is_published=bool(meta.get('is_published', True)),
-                imported_at=datetime.utcnow()
-            ))
-            restored += 1
+
+            # Synchronizace balíčků s databází: pokud už lekce existuje,
+            # aktualizujeme její zařazení a metadata podle lesson.json.
+            # Díky tomu fungují i změny předmětu (např. informatika -> biologie)
+            # na persistentní databázi po novém nasazení aplikace.
+            item = InteractiveLesson.query.filter_by(slug=slug).first()
+            if not item:
+                item = InteractiveLesson(slug=slug)
+                db.session.add(item)
+                restored += 1
+
+            item.subject = subject
+            item.school = str(meta.get('school', '')).strip()
+            item.grade_name = str(meta.get('grade', '')).strip()
+            item.topic = str(meta.get('topic', '')).strip()
+            item.title = str(meta.get('title', slug)).strip()
+            item.description = str(meta.get('description', '')).strip()
+            item.icon = str(meta.get('icon', {'matematika':'➗','informatika':'💻','biologie':'🧬','zemepis':'🗺️','fyzika':'⚛️'}.get(subject, '📦'))).strip()
+            item.package_dir = str(meta_file.parent)
+            item.is_published = bool(meta.get('is_published', True))
+            item.imported_at = datetime.utcnow()
         except Exception:
             continue
     db.session.commit()
@@ -1498,8 +1525,6 @@ def import_interactive_lesson():
             raise ValueError('Nepodařilo se vytvořit platný název lekce.')
 
         existing = InteractiveLesson.query.filter_by(slug=slug).first()
-        if existing:
-            raise ValueError(f'Interaktivní lekce se slugem „{slug}“ už existuje.')
 
         if not (package_root / 'templates' / 'index.html').exists():
             raise ValueError('Balíček musí obsahovat templates/index.html.')
@@ -1512,28 +1537,27 @@ def import_interactive_lesson():
             shutil.rmtree(destination)
         shutil.copytree(package_root, destination)
 
-        item = InteractiveLesson(
-            slug=slug,
-            subject=subject,
-            school=school,
-            grade_name=grade_name,
-            topic=topic,
-            title=title,
-            description=str(meta.get('description', '')).strip(),
-            icon=str(
-                meta.get(
-                    'icon',
-                    {'matematika':'➗','informatika':'💻','biologie':'🧬','zemepis':'🗺️','fyzika':'⚛️'}.get(subject, '📦')
-                )
-            ).strip(),
-            package_dir=str(destination),
-            is_published=bool(meta.get('is_published', True)),
-            imported_at=datetime.utcnow()
-        )
-        db.session.add(item)
+        item = existing or InteractiveLesson(slug=slug)
+        if not existing:
+            db.session.add(item)
+        item.subject = subject
+        item.school = school
+        item.grade_name = grade_name
+        item.topic = topic
+        item.title = title
+        item.description = str(meta.get('description', '')).strip()
+        item.icon = str(
+            meta.get(
+                'icon',
+                {'matematika':'➗','informatika':'💻','biologie':'🧬','zemepis':'🗺️','fyzika':'⚛️'}.get(subject, '📦')
+            )
+        ).strip()
+        item.package_dir = str(destination)
+        item.is_published = bool(meta.get('is_published', True))
+        item.imported_at = datetime.utcnow()
         db.session.commit()
 
-        flash(f'Interaktivní lekce „{title}“ byla úspěšně importována.')
+        flash(f'Interaktivní lekce „{title}“ byla úspěšně ' + ('aktualizována.' if existing else 'importována.'))
         return redirect(url_for('teacher_home'))
 
     except zipfile.BadZipFile:

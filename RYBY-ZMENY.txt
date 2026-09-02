@@ -1,0 +1,8 @@
+RYBY – úprava 2026-09-02
+- Ryby jsou zařazeny pod BIOLOGII, takže se zobrazí ve studentském katalogu BIOLOGIE/OBČANSKÁ VÝCHOVA/ZEMĚPIS.
+- CZ/EN zobrazuje vždy pouze zvolený jazyk.
+- Procvičování: neomezené pokusy, chybná kartička se nepřijme.
+- Test: správnost se během práce neukazuje, na konci se počítá 20 bodů -> procenta -> známka.
+- Známky: 90–100=1, 75–89=2, 60–74=3, 40–59=4, pod 40=5.
+- Test lze opakovat libovolně.
+- InteractiveResult se pro stejného studenta a lekci aktualizuje; starší duplicitní výsledky se odstraní.

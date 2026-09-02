@@ -1,0 +1,196 @@
+<!doctype html>
+<html lang="cs">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Ryby – stavba těla</title>
+<style>
+:root{--blue:#0b5ba7;--blue2:#063e77;--green:#159447;--ink:#0b2850;--pale:#edf9ff;--card:#fff;--shadow:0 8px 24px #003a6d22}
+*{box-sizing:border-box} body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Arial,sans-serif;background:linear-gradient(#dff7ff,#effbf8);color:var(--ink)}
+.app{max-width:1540px;margin:auto;min-height:100vh;background:rgba(255,255,255,.72)}
+header{background:linear-gradient(110deg,var(--blue2),var(--blue));color:white;padding:14px 22px;display:flex;align-items:center;gap:18px;flex-wrap:wrap;box-shadow:var(--shadow)}
+.brand{display:flex;align-items:center;gap:12px;min-width:320px}.fishicon{font-size:44px}.title{font-weight:900;font-size:clamp(24px,3vw,42px);line-height:1}.subtitle{opacity:.92;margin-top:7px;font-weight:650}
+.lang{margin-left:auto;display:flex;background:white;border-radius:16px;padding:4px;box-shadow:0 2px 12px #002d5933}.lang button{border:0;background:transparent;color:var(--ink);font-weight:900;padding:10px 18px;border-radius:12px;font-size:16px;cursor:pointer}.lang button.active{background:#e6f2ff;color:var(--blue)}
+.top-actions{display:flex;gap:8px}.btn{border:0;border-radius:12px;padding:11px 16px;font-weight:850;color:white;background:var(--blue);cursor:pointer;font-size:15px}.btn.green{background:var(--green)}.btn.gray{background:#6d7b89}
+.instructions{padding:10px 22px;background:#fff;border-bottom:1px solid #c9e4ef;font-weight:700}
+.stage{position:relative;min-height:650px;background:radial-gradient(circle at 50% 5%,#e9fbff 0,#b8eaf5 47%,#86cfdc 100%);overflow:hidden;border-bottom:5px solid #c9e9e3}
+.stage:after{content:"";position:absolute;inset:auto 0 0;height:78px;background:linear-gradient(180deg,transparent,#6daf9b55)}
+.fishwrap{position:absolute;left:20%;top:16%;width:60%;z-index:1}.fishwrap img{display:block;width:100%;filter:drop-shadow(0 8px 12px #124b6244)}
+.callout{position:absolute;width:18%;min-width:190px;background:#ffffffee;border:2px solid #d6e9f2;border-radius:14px;padding:8px;z-index:3;box-shadow:var(--shadow)}
+.callout .head{font-weight:900;font-size:14px;margin-bottom:7px;display:flex;gap:7px;align-items:center}.num{background:var(--blue2);color:#fff;border-radius:50%;width:24px;height:24px;display:inline-flex;align-items:center;justify-content:center;flex:0 0 24px}
+.slot{min-height:43px;border:2px dashed #2589e6;border-radius:9px;margin:6px 0;padding:8px;text-align:center;font-weight:800;background:#f8fcff;display:flex;align-items:center;justify-content:center;cursor:pointer}
+.slot.desc{border-color:#27a45a;background:#f9fffb;font-size:12px}.slot.good{background:#dff7e6;border-style:solid}.slot.bad{animation:shake .25s;background:#ffe9e9;border-color:#d43d3d}@keyframes shake{25%{transform:translateX(-4px)}75%{transform:translateX(4px)}}
+.c1{left:2%;top:6%}.c2{left:2%;top:30%}.c3{left:2%;top:55%}.c4{left:41%;top:2%}.c5{left:24%;top:69%}.c6{left:42%;top:72%}.c7{left:60%;top:69%}.c8{left:62%;top:46%}.c9{right:2%;top:46%}.c10{right:2%;top:10%}
+.lines{position:absolute;inset:0;width:100%;height:100%;z-index:2;pointer-events:none}.lines line{stroke:#073d7b;stroke-width:2}.lines circle{fill:#0a61ad;stroke:white;stroke-width:2}
+.bank{background:#f7fbfd;padding:12px;border-top:1px solid #cbe3ec}.row{display:grid;grid-template-columns:105px repeat(5,1fr);gap:8px;margin-bottom:9px}.label{border-radius:10px;color:#fff;background:var(--blue2);font-weight:900;display:flex;align-items:center;justify-content:center;text-align:center;padding:8px}.row.descs .label{background:var(--green)}
+.tile{min-height:54px;border:2px solid #72aee5;border-radius:10px;background:#fff;color:var(--ink);font-weight:850;padding:8px;display:flex;align-items:center;justify-content:center;text-align:center;cursor:grab;box-shadow:0 2px 8px #00355d12;user-select:none}.descs .tile{border-color:#79c692;font-size:13px}.tile.selected{outline:4px solid #ffbd2e;transform:translateY(-2px)}.tile.used{opacity:.23;pointer-events:none}
+footer{display:flex;gap:10px;align-items:center;justify-content:center;padding:13px;position:sticky;bottom:0;background:#ffffffee;box-shadow:0 -3px 15px #002a4f18;z-index:9}.score{font-size:21px;font-weight:950;min-width:150px;text-align:center}.msg{font-weight:800}
+@media(max-width:1050px){.stage{min-height:930px}.fishwrap{left:10%;top:29%;width:80%}.callout{width:30%}.c1{left:1%;top:2%}.c2{left:35%;top:2%}.c3{right:1%;left:auto;top:2%}.c4{left:1%;top:65%}.c5{left:35%;top:65%}.c6{right:1%;left:auto;top:65%}.c7{left:1%;top:80%}.c8{left:35%;top:80%}.c9{right:1%;left:auto;top:80%}.c10{right:1%;top:46%}.row{grid-template-columns:90px repeat(2,1fr)}.lines{display:none}}
+@media(max-width:650px){header{padding:10px}.brand{min-width:0}.lang{margin-left:0}.stage{min-height:1650px}.fishwrap{position:relative;left:0;top:0;width:100%;padding:10px}.callout{position:relative!important;left:auto!important;right:auto!important;top:auto!important;width:calc(100% - 20px);margin:8px 10px}.lines{display:none}.row{grid-template-columns:1fr 1fr}.label{grid-column:1/-1}.top-actions{width:100%}.btn{flex:1}.subtitle{font-size:13px}footer{flex-wrap:wrap}}
+</style>
+</head>
+<body>
+<div class="app">
+<header>
+  <div class="brand"><div class="fishicon">🐟</div><div><div class="title" id="title"></div><div class="subtitle" id="subtitle"></div></div></div>
+  <div class="lang mode"><button id="practiceBtn" class="active">🎯 Procvičování</button><button id="testBtn">📝 Test</button></div><div class="lang"><button id="csBtn" class="active">🇨🇿 ČESKY</button><button id="enBtn">🇬🇧 ENGLISH</button></div>
+  <div class="top-actions"><button class="btn" id="checkBtn"></button><button class="btn green" id="solutionBtn"></button></div>
+</header>
+<div class="instructions" id="instructions"></div>
+
+<div class="stage" id="stage">
+  <div class="fishwrap"><img src="{{ asset_url('kapr.png') }}" alt="kapr / carp"></div>
+  <svg class="lines" viewBox="0 0 1000 650" preserveAspectRatio="none">
+    <line x1="185" y1="100" x2="292" y2="255"/><circle cx="292" cy="255" r="5"/>
+    <line x1="185" y1="255" x2="265" y2="300"/><circle cx="265" cy="300" r="5"/>
+    <line x1="185" y1="415" x2="340" y2="326"/><circle cx="340" cy="326" r="5"/>
+    <line x1="500" y1="120" x2="500" y2="190"/><circle cx="500" cy="190" r="5"/>
+    <line x1="330" y1="500" x2="410" y2="370"/><circle cx="410" cy="370" r="5"/>
+    <line x1="505" y1="525" x2="510" y2="405"/><circle cx="510" cy="405" r="5"/>
+    <line x1="680" y1="505" x2="620" y2="315"/><circle cx="620" cy="315" r="5"/>
+    <line x1="705" y1="345" x2="625" y2="295"/><circle cx="625" cy="295" r="5"/>
+    <line x1="825" y1="350" x2="700" y2="365"/><circle cx="700" cy="365" r="5"/>
+    <line x1="825" y1="135" x2="760" y2="270"/><circle cx="760" cy="270" r="5"/>
+  </svg>
+  <div id="callouts"></div>
+</div>
+
+<div class="bank">
+  <div class="row" id="nameBank"><div class="label" id="namesLabel"></div></div>
+  <div class="row descs" id="descBank"><div class="label" id="descLabel"></div></div>
+</div>
+<footer>
+  <button class="btn gray" id="backBtn">←</button>
+  <button class="btn" id="resetBtn"></button>
+  <div class="score">⭐ <span id="score">0</span> / 20</div>
+  <div class="msg" id="msg"></div>
+</footer>
+</div>
+<script>
+const PARTS=[
+{id:"mouth",cs:"Ústa",en:"Mouth",csd:"Slouží k přijímání potravy.",end:"Used for taking in food."},
+{id:"eye",cs:"Oko",en:"Eye",csd:"Slouží k vidění a orientaci.",end:"Used for seeing and orientation."},
+{id:"gills",cs:"Žábry",en:"Gills",csd:"Umožňují rybě dýchat kyslík rozpuštěný ve vodě.",end:"Allow the fish to breathe oxygen dissolved in water."},
+{id:"dorsal",cs:"Hřbetní ploutev",en:"Dorsal fin",csd:"Pomáhá udržovat stabilitu při plavání.",end:"Helps the fish stay stable while swimming."},
+{id:"pectoral",cs:"Prsní ploutve",en:"Pectoral fins",csd:"Pomáhají měnit směr a brzdit.",end:"Help to change direction and brake."},
+{id:"pelvic",cs:"Břišní ploutve",en:"Pelvic fins",csd:"Pomáhají udržovat rovnováhu.",end:"Help the fish keep balance."},
+{id:"lateral",cs:"Postranní čára",en:"Lateral line",csd:"Vnímá pohyb a vibrace vody.",end:"Detects movement and vibrations in the water."},
+{id:"scales",cs:"Šupiny",en:"Scales",csd:"Chrání tělo ryby.",end:"Protect the fish's body."},
+{id:"anal",cs:"Řitní ploutev",en:"Anal fin",csd:"Stabilizuje tělo při plavání.",end:"Stabilizes the body while swimming."},
+{id:"caudal",cs:"Ocasní ploutev",en:"Caudal fin",csd:"Pohání rybu dopředu.",end:"Propels the fish forward."}
+];
+let lang="cs", mode="practice", selected=null, state={}, testEvaluated=false;
+const T={
+cs:{title:"Stavba těla ryby",subtitle:"Přiřaď názvy a popisy k jednotlivým částem těla ryby.",instructions:"Do horního políčka vlož NÁZEV části těla. Do spodního políčka vlož, K ČEMU SLOUŽÍ.",check:"✓ Zkontrolovat",solution:"👁 Zobrazit řešení",reset:"↻ Začít znovu",names:"NÁZVY",descs:"POPISY",nameph:"Sem vlož název",descph:"Sem vlož popis",ok:"Výborně! Všech 20 přiřazení je správně.",try:"Zkontrolováno. Oprav červeně označená políčka.",back:"← Zpět",practice:"🎯 Procvičování",test:"📝 Test",evaluate:"✓ Vyhodnotit test",practiceInfo:"Procvičování: chybná kartička se nepřijme. Zkoušej, dokud není vše správně.",testInfo:"Test: během práce se správnost neukazuje. Po vyplnění stiskni Vyhodnotit test.",result:"Výsledek testu"},
+en:{title:"Structure of a fish",subtitle:"Match the names and descriptions to the correct parts of the fish.",instructions:"Put the NAME of the body part in the upper box. Put WHAT IT IS USED FOR in the lower box.",check:"✓ Check",solution:"👁 Show solution",reset:"↻ Start again",names:"NAMES",descs:"DESCRIPTIONS",nameph:"Put the name here",descph:"Put the description here",ok:"Excellent! All 20 matches are correct.",try:"Checked. Correct the red marked boxes.",back:"← Back",practice:"🎯 Practice",test:"📝 Test",evaluate:"✓ Evaluate test",practiceInfo:"Practice: an incorrect card is rejected. Keep trying until everything is correct.",testInfo:"Test: correctness is hidden while you work. When finished, press Evaluate test.",result:"Test result"}
+};
+function shuffle(a){a=[...a];for(let i=a.length-1;i>0;i--){let j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]]}return a}
+function keyVal(p,type){return lang==="cs"?(type==="name"?p.cs:p.csd):(type==="name"?p.en:p.end)}
+function render(){
+  const t=T[lang];
+  document.documentElement.lang=lang; document.getElementById("title").textContent=t.title; document.getElementById("subtitle").textContent=t.subtitle;
+  document.getElementById("instructions").textContent=t.instructions; document.getElementById("checkBtn").textContent=t.check;document.getElementById("solutionBtn").textContent=t.solution;
+  document.getElementById("resetBtn").textContent=t.reset; document.getElementById("namesLabel").textContent=t.names;document.getElementById("descLabel").textContent=t.descs;document.getElementById("backBtn").textContent=t.back;
+  document.getElementById("csBtn").classList.toggle("active",lang==="cs");document.getElementById("enBtn").classList.toggle("active",lang==="en");
+  document.getElementById("practiceBtn").textContent=t.practice;
+  document.getElementById("testBtn").textContent=t.test;
+  document.getElementById("practiceBtn").classList.toggle("active",mode==="practice");
+  document.getElementById("testBtn").classList.toggle("active",mode==="test");
+  document.getElementById("instructions").textContent = mode==="practice" ? t.practiceInfo : t.testInfo;
+  document.getElementById("checkBtn").textContent = mode==="practice" ? t.check : t.evaluate;
+  document.getElementById("solutionBtn").style.display = mode==="practice" ? "" : "none";
+
+  const co=document.getElementById("callouts"); co.innerHTML="";
+  PARTS.forEach((p,i)=>{
+    const c=document.createElement("div"); c.className=`callout c${i+1}`;
+    c.innerHTML=`<div class="head"><span class="num">${i+1}</span><span>${i+1}. ${lang==="cs"?"část těla":"body part"}</span></div>
+      <div class="slot" data-target="${p.id}" data-type="name">${state[p.id]?.name?keyVal(PARTS.find(x=>x.id===state[p.id].name),"name"):t.nameph}</div>
+      <div class="slot desc" data-target="${p.id}" data-type="desc">${state[p.id]?.desc?keyVal(PARTS.find(x=>x.id===state[p.id].desc),"desc"):t.descph}</div>`;
+    co.appendChild(c)
+  });
+  bindSlots(); renderBanks(); updateScore(false);
+}
+function renderBanks(){
+ const nb=document.getElementById("nameBank"), db=document.getElementById("descBank");
+ nb.querySelectorAll(".tile").forEach(x=>x.remove()); db.querySelectorAll(".tile").forEach(x=>x.remove());
+ shuffle(PARTS).forEach(p=>nb.appendChild(tile(p,"name"))); shuffle(PARTS).forEach(p=>db.appendChild(tile(p,"desc")));
+}
+function tile(p,type){
+ const d=document.createElement("div");d.className="tile";d.draggable=true;d.dataset.id=p.id;d.dataset.type=type;d.textContent=keyVal(p,type);
+ d.addEventListener("dragstart",e=>e.dataTransfer.setData("text/plain",JSON.stringify({id:p.id,type})));
+ d.addEventListener("click",()=>{document.querySelectorAll(".tile").forEach(x=>x.classList.remove("selected"));selected={id:p.id,type};d.classList.add("selected")});
+ return d;
+}
+function bindSlots(){
+ document.querySelectorAll(".slot").forEach(s=>{
+   s.addEventListener("dragover",e=>e.preventDefault());
+   s.addEventListener("drop",e=>{e.preventDefault();try{place(s,JSON.parse(e.dataTransfer.getData("text/plain")))}catch(_){}} );
+   s.addEventListener("click",()=>{if(selected)place(s,selected)});
+ });
+}
+function place(slot,item){
+ const type=slot.dataset.type;if(item.type!==type)return;
+ const target=slot.dataset.target;
+ if(mode==="practice" && item.id!==target){
+   slot.classList.remove("good"); slot.classList.add("bad");
+   setTimeout(()=>slot.classList.remove("bad"),350);
+   selected=null; document.querySelectorAll(".tile").forEach(x=>x.classList.remove("selected"));
+   return;
+ }
+ state[target]??={}; state[target][type]=item.id;
+ slot.classList.remove("bad","good"); selected=null; render(); save();
+}
+function updateScore(showErrors){
+ let score=0;
+ document.querySelectorAll(".slot").forEach(s=>{
+   const v=state[s.dataset.target]?.[s.dataset.type]; const good=v===s.dataset.target;
+   if(good)score++;
+   if(showErrors){s.classList.toggle("good",!!v&&good);s.classList.toggle("bad",!!v&&!good)}
+ });
+ document.getElementById("score").textContent=score; return score;
+}
+function gradeFromPercent(percent){
+ if(percent>=90)return 1;
+ if(percent>=75)return 2;
+ if(percent>=60)return 3;
+ if(percent>=40)return 4;
+ return 5;
+}
+function check(){
+ const t=T[lang], m=document.getElementById("msg");
+ if(mode==="practice"){
+   const score=updateScore(true);
+   m.textContent=score===20?t.ok:t.try;
+   save();
+   return;
+ }
+ const filled=Object.values(state).reduce((n,x)=>n+(x.name?1:0)+(x.desc?1:0),0);
+ const score=updateScore(true);
+ const percent=Math.round(score/20*100);
+ const grade=gradeFromPercent(percent);
+ testEvaluated=true;
+ m.textContent=`${t.result}: ${score}/20 = ${percent} % • ${lang==="cs"?"známka":"grade"} ${grade}`;
+ document.getElementById("score").textContent=`${percent} % • ${grade}`;
+ fetch("{{ complete_url }}",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({percent,grade})})
+   .then(()=>save()).catch(()=>save());
+}
+function solution(){
+ PARTS.forEach(p=>state[p.id]={name:p.id,desc:p.id});render();updateScore(true);document.getElementById("msg").textContent=T[lang].ok;
+}
+function reset(){state={};selected=null;render();document.getElementById("msg").textContent="";fetch("{{ api_url('reset') }}",{method:"POST"}).catch(()=>{})}
+function save(){let score=updateScore(false);fetch("{{ api_url('save') }}",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({score,total:20,lang,mode})}).catch(()=>{})}
+function switchLang(x){lang=x;selected=null;render();save()}
+function switchMode(x){
+ mode=x; state={}; selected=null; testEvaluated=false;
+ document.getElementById("msg").textContent="";
+ render(); save();
+}
+document.getElementById("practiceBtn").onclick=()=>switchMode("practice");
+document.getElementById("testBtn").onclick=()=>switchMode("test");
+document.getElementById("csBtn").onclick=()=>switchLang("cs");document.getElementById("enBtn").onclick=()=>switchLang("en");
+document.getElementById("checkBtn").onclick=check;document.getElementById("solutionBtn").onclick=solution;document.getElementById("resetBtn").onclick=reset;
+document.getElementById("backBtn").onclick=()=>{window.location.href="{{ portal_url }}"};
+render();
+fetch("{{ api_url('load') }}").then(r=>r.json()).then(x=>{if(x?.state?.lang){lang=x.state.lang;if(x.state.mode)mode=x.state.mode;render()}}).catch(()=>{});
+</script>
+</body></html>
