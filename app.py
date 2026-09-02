@@ -1732,13 +1732,34 @@ def complete_interactive(slug):
     except (TypeError, ValueError):
         return jsonify({'ok': False, 'error': 'Neplatný výsledek.'}), 400
 
+    user = current_user()
+    if not user or user.role != 'student':
+        return jsonify({
+            'ok': False,
+            'error': 'Výsledek testu se ukládá pouze přihlášenému studentovi.'
+        }), 403
+
     focus_lost = consume_focus_count('interactive', slug)
     upsert_interactive_progress(lesson_item, percent=percent, grade=grade, focus_lost=focus_lost)
+
+    # Ověření, že řádek skutečně existuje v databázi, ze které čte
+    # /teacher/database. Endpoint už tedy nemůže vrátit falešné "uloženo".
+    saved = InteractiveResult.query.filter_by(
+        user_id=user.id,
+        interactive_lesson_id=lesson_item.id
+    ).order_by(InteractiveResult.completed_at.desc()).first()
+    if not saved:
+        return jsonify({
+            'ok': False,
+            'error': 'Výsledek se nepodařilo zapsat do databáze.'
+        }), 500
+
     return jsonify({
         'ok': True,
-        'message': 'Dokončení lekce bylo uloženo.',
-        'percent': percent,
-        'grade': grade
+        'message': 'Dokončení lekce bylo uloženo do databáze.',
+        'percent': int(saved.percent),
+        'grade': int(saved.grade),
+        'result_id': int(saved.id)
     })
 
 
