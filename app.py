@@ -1512,6 +1512,158 @@ def interactive_lesson(slug):
         return 'Balíček lekce neobsahuje templates/index.html.', 500
 
     html_source = template_file.read_text(encoding='utf-8')
+
+    # Spolecny most pro prubezne ukladani vysledku vsech interaktivnich testu.
+    # Nemeni kod jednotlivych balicku: sleduje jejich komunikaci (fetch/sendBeacon),
+    # rozpozna testovy rezim a zapisuje posledni znamy vysledek do hlavni databaze.
+    if current_user().role == 'student':
+        autosave_bridge = render_template_string(r'''<script>
+(function(){
+  if (window.__UCEBNICE_RESULT_BRIDGE__) return;
+  window.__UCEBNICE_RESULT_BRIDGE__ = true;
+
+  const completeUrl = {{ complete_url|tojson }};
+  const slug = {{ slug|tojson }};
+  const storageKey = 'ucebnice:test-progress:' + slug;
+  const originalFetch = window.fetch ? window.fetch.bind(window) : null;
+  const originalBeacon = navigator.sendBeacon ? navigator.sendBeacon.bind(navigator) : null;
+  let testStarted = false;
+  let lastPercent = 0;
+  let sending = false;
+
+  function gradeFromPercent(p){
+    p = Math.max(0, Math.min(100, Number(p)||0));
+    if (p >= 90) return 1;
+    if (p >= 75) return 2;
+    if (p >= 60) return 3;
+    if (p >= 40) return 4;
+    return 5;
+  }
+  function clampPercent(v){
+    const n = Number(v);
+    if (!Number.isFinite(n)) return null;
+    return Math.max(0, Math.min(100, Math.round(n)));
+  }
+  function parseBody(body){
+    if (!body) return null;
+    if (typeof body === 'string') {
+      try { return JSON.parse(body); } catch(e) {
+        try { return Object.fromEntries(new URLSearchParams(body)); } catch(_) { return null; }
+      }
+    }
+    if (body instanceof URLSearchParams) return Object.fromEntries(body.entries());
+    if (body instanceof FormData) return Object.fromEntries(body.entries());
+    return null;
+  }
+  function deepFind(obj, names, depth=0){
+    if (!obj || typeof obj !== 'object' || depth > 4) return undefined;
+    for (const n of names) if (obj[n] !== undefined && obj[n] !== null && obj[n] !== '') return obj[n];
+    for (const v of Object.values(obj)) {
+      if (v && typeof v === 'object') {
+        const hit = deepFind(v, names, depth+1);
+        if (hit !== undefined) return hit;
+      }
+    }
+  }
+  function isTestPayload(obj){
+    const mode = String(deepFind(obj, ['mode','context','type','phase']) ?? '').toLowerCase();
+    return mode.includes('test') || mode.includes('zkous') || mode.includes('zkouš');
+  }
+  function percentFrom(obj){
+    if (!obj || typeof obj !== 'object') return null;
+    let p = deepFind(obj, ['percent','percentage','pct','progress_percent','result_percent']);
+    p = clampPercent(p);
+    if (p !== null) return p;
+    const score = Number(deepFind(obj, ['score','correct','spravne','správně','points','body']));
+    const total = Number(deepFind(obj, ['total','max','maximum','questions','count','celkem']));
+    if (Number.isFinite(score) && Number.isFinite(total) && total > 0) return clampPercent(score / total * 100);
+    return null;
+  }
+  function persistLocal(){
+    try { sessionStorage.setItem(storageKey, JSON.stringify({started:testStarted, percent:lastPercent})); } catch(e){}
+  }
+  function sendResult(percent, beacon=false){
+    if (!testStarted || sending) return;
+    const p = clampPercent(percent);
+    if (p === null) return;
+    lastPercent = p;
+    persistLocal();
+    const payload = JSON.stringify({percent:p, grade:gradeFromPercent(p), partial:true});
+    if (beacon && originalBeacon) {
+      try { originalBeacon(completeUrl, new Blob([payload], {type:'application/json'})); return; } catch(e){}
+    }
+    if (!originalFetch) return;
+    sending = true;
+    originalFetch(completeUrl, {method:'POST', headers:{'Content-Type':'application/json'}, body:payload, keepalive:true})
+      .catch(()=>{}).finally(()=>{ sending=false; });
+  }
+  function startTest(){
+    if (!testStarted) {
+      testStarted = true;
+      lastPercent = 0;
+      persistLocal();
+      sendResult(0, false);
+    }
+  }
+  try {
+    const saved = JSON.parse(sessionStorage.getItem(storageKey) || 'null');
+    if (saved && saved.started) { testStarted = true; lastPercent = clampPercent(saved.percent) ?? 0; }
+  } catch(e){}
+
+  // Zachyti kliknuti na tlacitko/zalozku Test i u starsich balicku.
+  document.addEventListener('click', function(ev){
+    const el = ev.target && ev.target.closest ? ev.target.closest('button,a,[role="button"],input[type="button"],input[type="submit"],label') : null;
+    if (!el) return;
+    const txt = String(el.innerText || el.textContent || el.value || el.getAttribute('aria-label') || '').trim().toLowerCase();
+    if (/^(test|testovat|zkouška|zkouska)$/.test(txt) || txt.includes(' test')) startTest();
+  }, true);
+
+  // Sleduje data, ktera lekce sama posila pri praci (save/state/API).
+  if (originalFetch) {
+    window.fetch = function(input, init){
+      try {
+        const url = typeof input === 'string' ? input : (input && input.url) || '';
+        if (url !== completeUrl) {
+          const obj = parseBody(init && init.body);
+          if (obj) {
+            if (isTestPayload(obj)) startTest();
+            const p = percentFrom(obj);
+            if (testStarted && p !== null) sendResult(p, false);
+          }
+        }
+      } catch(e){}
+      return originalFetch(input, init);
+    };
+  }
+
+  // Nektere lekce pouzivaji sendBeacon.
+  if (originalBeacon) {
+    navigator.sendBeacon = function(url, data){
+      try {
+        if (String(url) !== completeUrl && typeof data === 'string') {
+          const obj = parseBody(data);
+          if (obj) {
+            if (isTestPayload(obj)) startTest();
+            const p = percentFrom(obj);
+            if (testStarted && p !== null) sendResult(p, true);
+          }
+        }
+      } catch(e){}
+      return originalBeacon(url, data);
+    };
+  }
+
+  // Pojistka pri zavreni karty/aplikace nebo navratu do katalogu.
+  window.addEventListener('pagehide', function(){ if (testStarted) sendResult(lastPercent, true); });
+  window.addEventListener('beforeunload', function(){ if (testStarted) sendResult(lastPercent, true); });
+})();
+</script>''', complete_url=url_for('complete_interactive', slug=slug), slug=slug)
+        if '</body>' in html_source.lower():
+            autosave_pos = html_source.lower().rfind('</body>')
+            html_source = html_source[:autosave_pos] + autosave_bridge + html_source[autosave_pos:]
+        else:
+            html_source += autosave_bridge
+
     if focus_guard_enabled:
         guard = render_template_string(
             '<script>window.UCEBNICE_FOCUS_GUARD={{ cfg|tojson }};</script>'
