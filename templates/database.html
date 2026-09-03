@@ -4,11 +4,10 @@
   <main class="main-card">
     <div class="title-row">
       <div>
-        <h1>Výsledky studentů</h1>
-        <p>Každý řádek je jedno dokončení. Smazání výsledků nesmaže studenty ani jejich trvalý pokrok na stránkách.</p>
+        <h1>🗄️ Databáze studentů</h1>
+        <p>Každý student je v přehledu pouze jednou. Jeho výsledky jsou uvnitř seřazené podle předmětů.</p>
       </div>
       <div class="teacher-actions">
-        <a class="switch" href="{{ url_for('teacher_grades') }}">🎓 Hodnocení žáků</a>
         <a class="switch" href="{{ url_for('teacher_students') }}">👨‍🎓 Studenti</a>
         <a class="switch" href="{{ url_for('teacher_home') }}">← Administrace</a>
       </div>
@@ -20,81 +19,70 @@
 
     <section class="course-card">
       <div class="database-title-row">
-        <div><h2>📊 Výsledky aktuální hodiny</h2><p>Biologie a občanka ukládají závěrečný test. Matematika ukládá dokončení interaktivní lekce a praktická Informatika ukládá každé odevzdání souboru.</p></div>
+        <div>
+          <h2>📊 Výsledky podle studentů a předmětů</h2>
+          <p>Známka zůstává u konkrétního výsledku. Samostatný archiv „Hodnocení“ už není potřeba.</p>
+        </div>
         <form method="post" action="{{ url_for('delete_all_results') }}" onsubmit="return confirm('Smazat všechny výsledky? Studenti a trvalý pokrok zůstanou zachováni.');">
           <button class="link-button danger" type="submit">🗑️ Smazat všechny výsledky</button>
         </form>
       </div>
-
-      <div class="table-wrap">
-        <table class="data-table">
-          <thead>
-            <tr><th>Student</th><th>Předmět</th><th>Škola a ročník</th><th>Téma</th><th>Lekce</th><th>Výsledek</th><th>Aktuální známka</th><th>Opuštění</th><th>Poslední dokončení</th><th></th></tr>
-          </thead>
-          <tbody>
-            {% for r in html_results %}
-              <tr>
-                <td><b>{{ r.user.name }}</b><br><small>{{ r.user.username }}</small></td>
-                <td>{{ r.lesson.block.grade.subject.name }}</td>
-                <td>{{ r.lesson.block.grade.name }}</td>
-                <td>{{ r.lesson.block.title }}</td>
-                <td>{{ r.lesson.title }}</td>
-                <td>{{ r.percent }} %<br><small>{{ r.status or 'dokončeno' }}</small></td>
-                <td><b>{{ r.grade }}</b></td>
-                <td><b>{{ r.focus_lost or 0 }}×</b></td>
-                <td>{{ r.created_at.strftime('%d.%m.%Y %H:%M') }}</td>
-                <td><form method="post" action="{{ url_for('delete_result', result_id=r.id) }}" onsubmit="return confirm('Resetovat celý postup tohoto studenta v této lekci? Student začne znovu od začátku.');"><button class="link-button danger">Resetovat postup</button></form></td>
-              </tr>
-            {% endfor %}
-            {% for r in interactive_results %}
-              <tr>
-                <td><b>{{ r.user.name }}</b><br><small>{{ r.user.username }}</small></td>
-                <td>{{ r.interactive_lesson.subject|capitalize }}</td>
-                <td>{{ r.interactive_lesson.school }} · {{ r.interactive_lesson.grade_name }}</td>
-                <td>{{ r.interactive_lesson.topic }}</td>
-                <td>{{ r.interactive_lesson.title }}</td>
-                <td>{{ r.percent }} %<br><small>{{ r.status or 'dokončeno' }}</small></td>
-                <td><b>{{ r.grade }}</b></td>
-                <td><b>{{ r.focus_lost or 0 }}×</b></td>
-                <td>{{ r.completed_at.strftime('%d.%m.%Y %H:%M') }}</td>
-                <td><form method="post" action="{{ url_for('delete_interactive_result', result_id=r.id) }}"><button class="link-button danger">Smazat</button></form></td>
-              </tr>
-            {% endfor %}
-            {% for r in informatics_results %}
-              <tr>
-                <td><b>{{ r.user.name }}</b><br><small>{{ r.user.username }}</small></td>
-                <td>Informatika</td>
-                <td>{{ r.task.lesson.school }} · {{ r.task.lesson.grade_name }}</td>
-                <td>{{ r.task.lesson.topic }}</td>
-                <td>{{ r.task.lesson.title }}<br><small>{{ r.task.title }}</small></td>
-                <td>{{ r.percent }} %<br><small>odevzdaný soubor</small></td>
-                <td><b>{{ 1 if r.percent >= 90 else 2 if r.percent >= 75 else 3 if r.percent >= 60 else 4 if r.percent >= 40 else 5 }}</b></td>
-                <td>—</td>
-                <td>{{ r.created_at.strftime('%d.%m.%Y %H:%M') }}</td>
-                <td><form method="post" action="{{ url_for('delete_informatics_result', result_id=r.id) }}"><button class="link-button danger">Smazat</button></form></td>
-              </tr>
-            {% endfor %}
-            {% for r in math_results %}
-              <tr>
-                <td><b>{{ r.user.name }}</b><br><small>{{ r.user.username }}</small></td>
-                <td>Matematika</td>
-                <td>{{ r.lesson.school }} · {{ r.lesson.grade_name }}</td>
-                <td>{{ r.lesson.topic }}</td>
-                <td>{{ r.lesson.title }}</td>
-                <td>{{ r.percent }} %<br><small>{{ r.status }}</small></td>
-                <td><b>{{ r.grade }}</b></td>
-                <td><b>{{ r.focus_lost or 0 }}×</b></td>
-                <td>{{ r.updated_at.strftime('%d.%m.%Y %H:%M') }}</td>
-                <td>—</td>
-              </tr>
-            {% endfor %}
-            {% if not html_results and not interactive_results and not informatics_results and not math_results %}
-              <tr><td colspan="10" class="muted">Zatím není uložen žádný výsledek.</td></tr>
-            {% endif %}
-          </tbody>
-        </table>
-      </div>
     </section>
+
+    {% for student in groups %}
+      <section class="course-card" style="margin-top:18px;">
+        <div class="title-row" style="align-items:center;">
+          <div>
+            <h2 style="margin-bottom:2px;">👤 {{ student.user.name or student.user.username }}</h2>
+            <small>{{ student.user.username }}</small>
+          </div>
+        </div>
+
+        {% for subject in student.subjects %}
+          <div style="margin-top:18px;">
+            <div class="database-title-row">
+              <div>
+                <h3 style="margin:0;">📘 {{ subject.name }}</h3>
+              </div>
+              <div><b>Průměr: {{ '%.2f'|format(subject.average) if subject.average is not none else '—' }}</b></div>
+            </div>
+            <div class="table-wrap">
+              <table class="data-table">
+                <thead>
+                  <tr><th>Škola a ročník</th><th>Téma</th><th>Lekce</th><th>Výsledek</th><th>Známka</th><th>Opuštění</th><th>Dokončeno</th><th></th></tr>
+                </thead>
+                <tbody>
+                  {% for r in subject.rows %}
+                    <tr>
+                      <td>{{ r.school_grade }}</td>
+                      <td>{{ r.topic }}</td>
+                      <td>{{ r.lesson }}</td>
+                      <td><b>{{ r.percent }} %</b><br><small>{{ r.status or 'dokončeno' }}</small></td>
+                      <td style="font-size:1.2rem;"><b>{{ r.grade }}</b></td>
+                      <td>{% if r.focus_lost is none %}—{% else %}<b>{{ r.focus_lost }}×</b>{% endif %}</td>
+                      <td>{{ r.completed_at.strftime('%d.%m.%Y %H:%M') if r.completed_at else '—' }}</td>
+                      <td>
+                        {% if r.kind == 'html' %}
+                          <form method="post" action="{{ url_for('delete_result', result_id=r.id) }}" onsubmit="return confirm('Resetovat celý postup tohoto studenta v této lekci? Student začne znovu od začátku.');"><button class="link-button danger">Resetovat postup</button></form>
+                        {% elif r.kind == 'interactive' %}
+                          <form method="post" action="{{ url_for('delete_interactive_result', result_id=r.id) }}" onsubmit="return confirm('Smazat tento výsledek?');"><button class="link-button danger">Smazat</button></form>
+                        {% elif r.kind == 'informatics' %}
+                          <form method="post" action="{{ url_for('delete_informatics_result', result_id=r.id) }}" onsubmit="return confirm('Smazat tento výsledek?');"><button class="link-button danger">Smazat</button></form>
+                        {% else %}—{% endif %}
+                      </td>
+                    </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        {% endfor %}
+      </section>
+    {% else %}
+      <section class="course-card" style="margin-top:18px;">
+        <div class="empty-admin-state"><span>📭</span><h3>Zatím není uložen žádný výsledek</h3><p>Po dokončení úloh se studenti objeví zde a výsledky se automaticky seskupí podle předmětů.</p></div>
+      </section>
+    {% endfor %}
   </main>
 </div>
 {% endblock %}

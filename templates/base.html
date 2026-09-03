@@ -17,7 +17,7 @@
   <div class="profile">
     {% if user %}
       <span class="avatar">👤</span><div><b>{{ user.name }}</b><small>{{ t('Učitel') if user.role == 'teacher' else t('Student') }}</small></div>
-      {% if user.role == 'teacher' %}<a class="toplink" href="{{ url_for('teacher_home') }}">✏️ {{ t('Editor') }}</a><a class="toplink" href="{{ url_for('teacher_students') }}">👨‍🎓 {{ t('Studenti') }}</a><a class="toplink" href="{{ url_for('teacher_database') }}">🗄️ {{ t('Databáze') }}</a><a class="toplink" href="{{ url_for('teacher_grades') }}">🎓 {{ t('Hodnocení') }}</a>{% endif %}
+      {% if user.role == 'teacher' %}<a class="toplink" href="{{ url_for('teacher_home') }}">✏️ {{ t('Editor') }}</a><a class="toplink" href="{{ url_for('teacher_students') }}">👨‍🎓 {{ t('Studenti') }}</a><a class="toplink" href="{{ url_for('teacher_database') }}">🗄️ {{ t('Databáze') }}</a>{% endif %}
       <a class="toplink" href="{{ url_for('logout') }}">{{ t('Odhlásit') }}</a>
     {% else %}
       <span class="avatar">👤</span><div><b>{{ t('Nepřihlášeno') }}</b><small>Login</small></div>
