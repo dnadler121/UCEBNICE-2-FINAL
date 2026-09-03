@@ -938,6 +938,136 @@ def upsert_interactive_progress(lesson, percent=100, grade=None, focus_lost=0):
 
     db.session.commit()
 
+
+def _interactive_deep_value(obj, names, depth=0):
+    """Najde hodnotu v běžném i vnořeném JSON stavu interaktivní lekce."""
+    if depth > 6:
+        return None
+    if isinstance(obj, dict):
+        for name in names:
+            if name in obj and obj[name] not in (None, ''):
+                return obj[name]
+        for value in obj.values():
+            found = _interactive_deep_value(value, names, depth + 1)
+            if found not in (None, ''):
+                return found
+    elif isinstance(obj, (list, tuple)):
+        for value in obj:
+            found = _interactive_deep_value(value, names, depth + 1)
+            if found not in (None, ''):
+                return found
+    return None
+
+
+def _interactive_test_percent(payload):
+    """Vrátí procenta jen tehdy, když payload skutečně patří testovému režimu."""
+    if not isinstance(payload, dict):
+        return None
+
+    mode = _interactive_deep_value(
+        payload,
+        ('mode', 'screen', 'view', 'phase', 'context', 'activity_mode', 'test_mode')
+    )
+    mode_text = str(mode or '').strip().lower()
+    is_test = (
+        mode_text in ('test', 'testing', 'zkouska', 'zkouška')
+        or 'test' in mode_text
+        or 'zkous' in mode_text
+        or 'zkouš' in mode_text
+    )
+
+    # Některé balíčky posílají výslovný příznak místo textového mode.
+    flag = _interactive_deep_value(
+        payload,
+        ('is_test', 'isTest', 'test_active', 'testActive', 'in_test', 'inTest')
+    )
+    if isinstance(flag, bool) and flag:
+        is_test = True
+    elif str(flag or '').strip().lower() in ('1', 'true', 'yes', 'ano'):
+        is_test = True
+
+    if not is_test:
+        return None
+
+    percent = _interactive_deep_value(
+        payload,
+        ('percent', 'percentage', 'pct', 'result_percent', 'progress_percent')
+    )
+    try:
+        if percent not in (None, ''):
+            return max(0, min(100, int(round(float(percent)))))
+    except (TypeError, ValueError):
+        pass
+
+    score = _interactive_deep_value(
+        payload,
+        ('score', 'correct', 'spravne', 'správně', 'points', 'earned')
+    )
+    total = _interactive_deep_value(
+        payload,
+        ('total', 'max', 'maximum', 'questions', 'count', 'celkem')
+    )
+    try:
+        score = float(score)
+        total = float(total)
+        if total > 0:
+            return max(0, min(100, int(round(score / total * 100))))
+    except (TypeError, ValueError):
+        pass
+
+    # Samotný vstup do testu bez vyřešené úlohy = 0 %.
+    return 0
+
+
+def upsert_interactive_partial(lesson, percent):
+    """Zapíše rozpracovaný/přerušený interaktivní test do stejné DB jako učitelský přehled."""
+    user = current_user()
+    if not user or user.role != 'student':
+        return
+
+    percent = max(0, min(100, int(percent or 0)))
+    grade = grade_from_percent(percent)
+    now = datetime.utcnow()
+
+    progress = InteractiveProgress.query.filter_by(
+        user_id=user.id,
+        interactive_lesson_id=lesson.id
+    ).first()
+    if not progress:
+        progress = InteractiveProgress(
+            user_id=user.id,
+            interactive_lesson_id=lesson.id
+        )
+        db.session.add(progress)
+    progress.completed = False
+    progress.current_grade = int(grade)
+    progress.updated_at = now
+
+    result = InteractiveResult.query.filter_by(
+        user_id=user.id,
+        interactive_lesson_id=lesson.id
+    ).order_by(InteractiveResult.completed_at.desc()).first()
+    if not result:
+        result = InteractiveResult(
+            user_id=user.id,
+            interactive_lesson_id=lesson.id
+        )
+        db.session.add(result)
+
+    result.percent = int(percent)
+    result.grade = int(grade)
+    result.focus_lost = int(get_focus_count('interactive', lesson.slug) or 0)
+    result.status = 'rozpracováno / přerušeno'
+    result.completed_at = now
+
+    InteractiveResult.query.filter(
+        InteractiveResult.user_id == user.id,
+        InteractiveResult.interactive_lesson_id == lesson.id,
+        InteractiveResult.id != result.id
+    ).delete(synchronize_session=False)
+
+    db.session.commit()
+
 def get_focus_session(kind, key, create=False):
     user = current_user()
     if not user or user.role != 'student':
@@ -1723,6 +1853,24 @@ def interactive_api(slug, action):
         )
         if not isinstance(result, dict):
             raise ValueError('Funkce handle() musí vrátit slovník.')
+
+        # DŮLEŽITÉ: průběžný test se zapisuje na SERVERU.
+        # Nejsme tedy závislí na tom, zda prohlížeč stihne při zavření
+        # stránky poslat zvláštní complete požadavek.
+        if request.method == 'POST' and current_user().role == 'student':
+            partial_percent = _interactive_test_percent(payload)
+            if partial_percent is not None:
+                completed_key = f'interactive_completed:{slug}'
+                # Po řádném dokončení lekce některé balíčky ještě pošlou
+                # poslední save(). Ten už finální výsledek nesmí přepsat.
+                was_completed = bool(session.get(completed_key))
+                if was_completed and partial_percent == 0:
+                    # 0 % znamená nový testový pokus.
+                    session.pop(completed_key, None)
+                    was_completed = False
+                if not was_completed:
+                    upsert_interactive_partial(lesson_item, partial_percent)
+
         session.modified = True
         return jsonify(result)
     except Exception as exc:
@@ -1772,6 +1920,19 @@ def interactive_state(slug):
     row.state_json = encoded
     row.updated_at = datetime.utcnow()
     db.session.commit()
+
+    # Totéž pro balíčky, které místo vlastního /api/save používají
+    # společný /state endpoint hlavní Učebnice.
+    partial_percent = _interactive_test_percent(state)
+    if partial_percent is not None:
+        completed_key = f'interactive_completed:{slug}'
+        was_completed = bool(session.get(completed_key))
+        if was_completed and partial_percent == 0:
+            session.pop(completed_key, None)
+            was_completed = False
+        if not was_completed:
+            upsert_interactive_partial(lesson_item, partial_percent)
+
     return jsonify({'ok': True, 'state': state})
 
 
@@ -1798,6 +1959,8 @@ def complete_interactive(slug):
 
     focus_lost = consume_focus_count('interactive', slug)
     upsert_interactive_progress(lesson_item, percent=percent, grade=grade, focus_lost=focus_lost)
+    session[f'interactive_completed:{slug}'] = True
+    session.modified = True
 
     # Ověření, že řádek skutečně existuje v databázi, ze které čte
     # /teacher/database. Endpoint už tedy nemůže vrátit falešné "uloženo".
