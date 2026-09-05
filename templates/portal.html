@@ -3,64 +3,27 @@
 <main class="portal-shell">
   <section class="portal-hero">
     <div class="portal-copy">
-      <span class="portal-kicker">{{ t('DIGITÁLNÍ UČEBNICE') }}</span>
-      <h1>{{ t('Vyber si předmět a začni pracovat') }}</h1>
-      <p>{{ t('Jedno přihlášení, všechny lekce na jednom místě. Každá lekce se automaticky zařadí podle předmětu, školy, ročníku a tématu.') }}</p>
+      <span class="portal-kicker">DIGITÁLNÍ UČEBNICE</span>
+      <h1>Vyber školu</h1>
+      <p>Nejdřív vyber školu. Potom předmět, ročník, téma a konkrétní lekci.</p>
     </div>
-    <div class="portal-visual" aria-hidden="true">
-      <span>📘</span><span>✏️</span><span>🧠</span>
-    </div>
+    <div class="portal-visual" aria-hidden="true"><span>🏫</span><span>📘</span><span>🧠</span></div>
   </section>
-
   <section class="subject-grid">
-    <a class="subject-tile tile-bio" href="{{ url_for('subject_catalog', kind='bio-obc') }}">
-      <div class="subject-icon">🧬</div>
-      <div>
-        <span class="subject-label">{{ t('PŘEDMĚTY') }}</span>
-        <h2>{{ t('Biologie, občanská výchova a zeměpis') }}</h2>
-        <p>{{ t('Výklady z HTML, otázky, aktivity a závěrečné testy.') }}</p>
-      </div>
-      <div class="subject-foot"><b>{{ counts.bio_obc }}</b> {{ t('lekcí') }} <span>{{ t('Otevřít →') }}</span></div>
-    </a>
-
-    <a class="subject-tile tile-physics" href="{{ url_for('subject_catalog', kind='fyzika') }}">
-      <div class="subject-icon">⚛️</div>
-      <div>
-        <span class="subject-label">{{ t('INTERAKTIVNÍ LEKCE') }}</span>
-        <h2>{{ t('Fyzika') }}</h2>
-        <p>{{ t('Síly, pohyb, energie a další fyzikální témata.') }}</p>
-      </div>
-      <div class="subject-foot"><b>{{ counts.fyzika }}</b> {{ t('lekcí') }} <span>{{ t('Otevřít →') }}</span></div>
-    </a>
-
-    <a class="subject-tile tile-math" href="{{ url_for('subject_catalog', kind='matematika') }}">
-      <div class="subject-icon">➗</div>
-      <div>
-        <span class="subject-label">{{ t('INTERAKTIVNÍ LEKCE') }}</span>
-        <h2>{{ t('Matematika') }}</h2>
-        <p>{{ t('Školy a ročníky, témata a samostatné matematické podaplikace.') }}</p>
-      </div>
-      <div class="subject-foot"><b>{{ counts.matematika }}</b> {{ t('lekcí') }} <span>{{ t('Otevřít →') }}</span></div>
-    </a>
-
-    <a class="subject-tile tile-info" href="{{ url_for('subject_catalog', kind='informatika') }}">
-      <div class="subject-icon">💻</div>
-      <div>
-        <span class="subject-label">{{ t('INTERAKTIVNÍ LEKCE') }}</span>
-        <h2>{{ t('Informatika') }}</h2>
-        <p>{{ t('Algoritmy, programování, data a další praktická témata.') }}</p>
-      </div>
-      <div class="subject-foot"><b>{{ counts.informatika }}</b> {{ t('lekcí') }} <span>{{ t('Otevřít →') }}</span></div>
-    </a>
+    {% for school in schools %}
+      <a class="subject-tile {% if school.key=='montessori' %}tile-bio{% else %}tile-math{% endif %}" href="{{ url_for('school_catalog', school_key=school.key) }}">
+        <div class="subject-icon">{{ school.icon }}</div>
+        <div><span class="subject-label">ŠKOLA</span><h2>{{ school.name }}</h2><p>Předměty jsou rozdělené podle ročníku a tématu.</p></div>
+        <div class="subject-foot"><b>{{ school.count }}</b> lekcí <span>Otevřít →</span></div>
+      </a>
+    {% endfor %}
   </section>
-
   {% if user.role == 'teacher' %}
   <section class="teacher-quickbar">
-    <div><b>{{ t('Učitelská správa') }}</b><span>{{ t('Vytváření lekcí, studenti a výsledky') }}</span></div>
-    <a href="{{ url_for('new_lesson') }}">➕ {{ t('HTML lekce') }}</a>
-    <a href="{{ url_for('import_interactive_lesson') }}">📦 {{ t('Import interaktivní lekce') }}</a>
-    <a href="{{ url_for('teacher_students') }}">👨‍🎓 {{ t('Studenti') }}</a>
-    <a href="{{ url_for('teacher_database') }}">🗄️ {{ t('Výsledky') }}</a>
+    <div><b>Učitelská správa</b><span>Stejné třídění jako u studentů</span></div>
+    <a href="{{ url_for('import_interactive_lesson') }}">📦 Import interaktivní lekce</a>
+    <a href="{{ url_for('teacher_home') }}">✏️ Editor</a>
+    <a href="{{ url_for('teacher_database') }}">🗄️ Výsledky</a>
   </section>
   {% endif %}
 </main>

@@ -128,31 +128,53 @@
       {% endif %}
     </section>
 
-    <h2 class="section-heading">Interaktivní aplikace</h2>
-    <section class="course-card">
-      {% if interactive_lessons %}
-        {% for l in interactive_lessons %}
-          <div class="teacher-lesson-row">
-            <a class="lesson-row big" href="{{ url_for('interactive_lesson', slug=l.slug) }}">
-              {{ l.icon }} <b>{{ l.title }}</b>
-              <small>{{ l.subject|capitalize }} · {{ l.school }} · {{ l.grade_name }} · {{ l.topic }}</small>
-            </a>
-            <div class="row-actions">
-              <form method="post" action="{{ url_for('delete_interactive_lesson', lesson_id=l.id) }}" onsubmit="return confirm('Smazat interaktivní lekci {{ l.title }} včetně jejích výsledků?');">
-                <button class="link-button danger" type="submit">🗑️ Smazat</button>
-              </form>
+    <h2 class="section-heading">Interaktivní aplikace – škola → předmět → ročník → téma</h2>
+    <style>
+      .school-admin{border:2px solid #dfe8e3;border-radius:20px;padding:16px;margin:16px 0;background:#fbfdfc}
+      .school-admin>h2{margin:0 0 14px;font-size:25px}.subject-admin{border-top:1px solid #e3e9e6;padding-top:12px;margin-top:12px}
+      .subject-admin>h3{margin:0 0 8px;font-size:21px}.grade-admin{margin:10px 0 14px;padding:10px 12px;border-radius:14px;background:#f5f8f7}
+      .grade-admin>h4{margin:0 0 7px}.topic-admin{margin:8px 0}.topic-admin>h5{margin:0 0 6px;color:#45615a;font-size:15px;text-transform:uppercase;letter-spacing:.03em}
+    </style>
+    {% set any_interactive = namespace(value=false) %}
+    {% for school_key, school in interactive_school_tree.items() %}
+      {% if school.subjects %}
+        {% set any_interactive.value = true %}
+        <section class="school-admin">
+          <h2>{{ school.icon }} {{ school.name }}</h2>
+          {% for subject_key, subject in school.subjects.items() %}
+            <div class="subject-admin">
+              <h3>{{ subject.icon }} {{ subject.name }}</h3>
+              {% for grade_name, grade in subject.grades.items() %}
+                <div class="grade-admin">
+                  <h4>🎒 {{ grade_name }}</h4>
+                  {% for topic, lessons_in_topic in grade.topics.items() %}
+                    <div class="topic-admin">
+                      <h5>{{ topic }}</h5>
+                      {% for l in lessons_in_topic %}
+                        <div class="teacher-lesson-row">
+                          <a class="lesson-row big" href="{{ url_for('interactive_lesson', slug=l.slug) }}">
+                            {{ l.icon }} <b>{{ l.title }}</b>
+                            <small>{{ school.name }} · {{ subject.name }} · {{ l.grade_name }} · {{ l.topic }}</small>
+                          </a>
+                          <div class="row-actions">
+                            <form method="post" action="{{ url_for('delete_interactive_lesson', lesson_id=l.id) }}" onsubmit="return confirm('Smazat interaktivní lekci {{ l.title }} včetně jejích výsledků?');">
+                              <button class="link-button danger" type="submit">🗑️ Smazat</button>
+                            </form>
+                          </div>
+                        </div>
+                      {% endfor %}
+                    </div>
+                  {% endfor %}
+                </div>
+              {% endfor %}
             </div>
-          </div>
-        {% endfor %}
-      {% else %}
-        <div class="empty-admin-state">
-          <span>📦</span>
-          <h3>Zatím není importovaná žádná aplikace</h3>
-          <p>První interaktivní aplikaci pro matematiku, informatiku, biologii nebo zeměpis nahraješ tlačítkem níže.</p>
-          <a class="switch import-action" href="{{ url_for('import_interactive_lesson') }}">Importovat první aplikaci</a>
-        </div>
+          {% endfor %}
+        </section>
       {% endif %}
-    </section>
+    {% endfor %}
+    {% if not any_interactive.value %}
+      <section class="course-card"><div class="empty-admin-state"><span>📦</span><h3>Zatím není importovaná žádná aplikace</h3><a class="switch import-action" href="{{ url_for('import_interactive_lesson') }}">Importovat první aplikaci</a></div></section>
+    {% endif %}
   </main>
 </div>
 

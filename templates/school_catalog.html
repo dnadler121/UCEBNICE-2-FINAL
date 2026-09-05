@@ -1,0 +1,20 @@
+{% extends 'base.html' %}
+{% block content %}
+<main class="portal-shell">
+  <section class="portal-hero">
+    <div class="portal-copy"><span class="portal-kicker">{{ school.icon }} {{ school.name }}</span><h1>Vyber předmět</h1><p>Po výběru předmětu se zobrazí ročníky, témata a lekce.</p></div>
+    <div class="portal-visual" aria-hidden="true"><span>📚</span><span>✏️</span><span>🧠</span></div>
+  </section>
+  <section class="subject-grid">
+    {% for subject in subjects %}
+      <a class="subject-tile" href="{{ url_for('school_subject_catalog', school_key=school.key, subject_key=subject.key) }}">
+        <div class="subject-icon">{{ subject.icon }}</div>
+        <div><span class="subject-label">PŘEDMĚT</span><h2>{{ subject.name }}</h2><p>Ročníky → témata → lekce</p></div>
+        <div class="subject-foot"><b>{{ subject.count }}</b> lekcí <span>Otevřít →</span></div>
+      </a>
+    {% endfor %}
+    {% if not subjects %}<section class="empty-catalog"><div>📭</div><h2>Zatím tu není žádná lekce</h2></section>{% endif %}
+  </section>
+  <p style="margin-top:20px"><a class="back-link" href="{{ url_for('portal') }}">← Zpět na výběr školy</a></p>
+</main>
+{% endblock %}

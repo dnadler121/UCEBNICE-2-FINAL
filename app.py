@@ -820,12 +820,81 @@ def inject():
 
 def normalize_subject(value):
     value = strip_accents(value).replace(' ', '-')
-    aliases = {'matematika': 'matematika', 'math': 'matematika',
-               'informatika': 'informatika', 'ict': 'informatika',
-               'biologie': 'biologie', 'biology': 'biologie',
-               'zemepis': 'zemepis', 'geography': 'zemepis',
-               'fyzika': 'fyzika', 'physics': 'fyzika'}
+    aliases = {
+        'matematika': 'matematika', 'math': 'matematika',
+        'informatika': 'informatika', 'ict': 'informatika',
+        'biologie': 'biologie', 'biology': 'biologie', 'prirodopis': 'biologie',
+        'zemepis': 'zemepis', 'geografie': 'zemepis', 'geography': 'zemepis',
+        'fyzika': 'fyzika', 'physics': 'fyzika',
+        'obcanska-nauka': 'obcanska', 'obcanska-vychova': 'obcanska', 'obcanka': 'obcanska', 'obcanska': 'obcanska',
+        'cesky-jazyk': 'cesky-jazyk', 'cestina': 'cesky-jazyk', 'cesky': 'cesky-jazyk',
+        'anglicky-jazyk': 'anglictina', 'anglictina': 'anglictina', 'english': 'anglictina',
+        'dejepis': 'dejepis', 'history': 'dejepis'
+    }
     return aliases.get(value, value)
+
+
+SUBJECT_META = {
+    'matematika': ('Matematika', '➗'),
+    'informatika': ('Informatika', '💻'),
+    'biologie': ('Biologie / přírodopis', '🧬'),
+    'zemepis': ('Zeměpis / geografie', '🌍'),
+    'fyzika': ('Fyzika', '⚛️'),
+    'obcanska': ('Občanská nauka', '🧑‍🤝‍🧑'),
+    'cesky-jazyk': ('Český jazyk', '📖'),
+    'anglictina': ('Anglický jazyk', '🇬🇧'),
+    'dejepis': ('Dějepis', '🏛️'),
+}
+SUBJECT_ORDER = list(SUBJECT_META.keys())
+SCHOOL_META = {
+    'montessori': ('Montessori', '🌿'),
+    'ps': ('PŠ – praktická / pomocná škola', '🎓'),
+}
+
+
+def effective_interactive_subject(lesson):
+    """Vrátí skutečný předmět. Starší společné ZIPy byly ukládány pod fyziku."""
+    subject = normalize_subject(lesson.subject or '')
+    text = strip_accents(' '.join([lesson.topic or '', lesson.title or '', lesson.description or ''])).lower()
+    if subject == 'fyzika':
+        if any(x in text for x in ('obcanska', 'obcan', 'osobnost')):
+            return 'obcanska'
+        if any(x in text for x in ('cesky-jazyk', 'cesky jazyk', 'komunikace a opakovani')):
+            return 'cesky-jazyk'
+        # Když předmět z metadat není rozpoznatelný, podle dohody zůstává Fyzika.
+    return subject if subject in SUBJECT_META else 'fyzika'
+
+
+def effective_school_key(lesson):
+    """Rozdělí lekce na Montessori a PŠ. Praktická škola v ročníku má přednost."""
+    text = strip_accents(' '.join([lesson.school or '', lesson.grade_name or '', lesson.topic or ''])).lower()
+    if any(x in text for x in ('prakticka skola', 'pomocna skola', 'prs ', 'prs-', 'ps ', 'dvouleta', 'prakticka spolecna')):
+        return 'ps'
+    if 'montessori' in text:
+        return 'montessori'
+    # Staré/interaktivní lekce bez jasné školy: Montessori je bezpečné pro dosavadní ZŠ obsah.
+    return 'montessori'
+
+
+def interactive_hierarchy(published_only=True):
+    q = InteractiveLesson.query
+    if published_only:
+        q = q.filter_by(is_published=True)
+    lessons = q.order_by(InteractiveLesson.school, InteractiveLesson.grade_name, InteractiveLesson.topic, InteractiveLesson.title).all()
+    tree = {k: {'key': k, 'name': SCHOOL_META[k][0], 'icon': SCHOOL_META[k][1], 'subjects': {}} for k in SCHOOL_META}
+    for lesson in lessons:
+        sk = effective_school_key(lesson)
+        sub = effective_interactive_subject(lesson)
+        name, icon = SUBJECT_META.get(sub, SUBJECT_META['fyzika'])
+        subj = tree[sk]['subjects'].setdefault(sub, {'key': sub, 'name': name, 'icon': icon, 'grades': {}})
+        grade = lesson.grade_name or 'Bez ročníku'
+        topic = lesson.topic or 'Ostatní'
+        g = subj['grades'].setdefault(grade, {'name': grade, 'topics': {}})
+        g['topics'].setdefault(topic, []).append(lesson)
+    # stabilní pořadí předmětů a odstranění prázdných škol se řeší v šabloně
+    for school in tree.values():
+        school['subjects'] = {k: school['subjects'][k] for k in SUBJECT_ORDER if k in school['subjects']}
+    return tree
 
 
 def safe_package_slug(value):
@@ -1265,27 +1334,44 @@ def index():
 def portal():
     r = require_login()
     if r: return r
-    counts = {
-        'bio_obc': Lesson.query.join(Block).join(Grade).join(Subject).filter(
-            db.or_(Subject.name.ilike('%bio%'), Subject.name.ilike('%občan%'), Subject.name.ilike('%obcan%'), Subject.name.ilike('%zeměpis%'), Subject.name.ilike('%zemepis%'), Subject.name.ilike('%geog%')),
-            Lesson.is_published.is_(True)
-        ).count() + InteractiveLesson.query.filter(
-            InteractiveLesson.subject.in_(('biologie', 'zemepis')),
-            InteractiveLesson.is_published.is_(True)
-        ).count(),
-        'fyzika': Lesson.query.join(Block).join(Grade).join(Subject).filter(
-            Subject.name.ilike('%fyz%'), Lesson.is_published.is_(True)
-        ).count() + InteractiveLesson.query.filter_by(subject='fyzika', is_published=True).count(),
-        'matematika': Lesson.query.join(Block).join(Grade).join(Subject).filter(
-            Subject.name.ilike('%matemat%'), Lesson.is_published.is_(True)
-        ).count() + InteractiveLesson.query.filter_by(subject='matematika', is_published=True).count()
-        + MathLesson.query.filter_by(is_published=True).count(),
-        'informatika': Lesson.query.join(Block).join(Grade).join(Subject).filter(
-            Subject.name.ilike('%informat%'), Lesson.is_published.is_(True)
-        ).count() + InteractiveLesson.query.filter_by(subject='informatika', is_published=True).count()
-        + InformaticsLesson.query.filter_by(is_published=True).count(),
-    }
-    return render_template('portal.html', course=course_from_lesson(None), lesson=None, counts=counts)
+    tree = interactive_hierarchy(True)
+    school_cards = []
+    for key in ('montessori', 'ps'):
+        school = tree[key]
+        count = sum(len(items) for subj in school['subjects'].values() for grade in subj['grades'].values() for items in grade['topics'].values())
+        school_cards.append({**school, 'count': count})
+    return render_template('portal.html', course=course_from_lesson(None), lesson=None, schools=school_cards)
+
+
+@app.route('/school/<school_key>')
+def school_catalog(school_key):
+    r = require_login()
+    if r: return r
+    if school_key not in SCHOOL_META:
+        return 'Neznámá škola', 404
+    tree = interactive_hierarchy(True)
+    school = tree[school_key]
+    subjects = []
+    for key in SUBJECT_ORDER:
+        if key in school['subjects']:
+            subj = school['subjects'][key]
+            count = sum(len(items) for grade in subj['grades'].values() for items in grade['topics'].values())
+            subjects.append({**subj, 'count': count})
+    return render_template('school_catalog.html', course=course_from_lesson(None), lesson=None, school=school, subjects=subjects)
+
+
+@app.route('/school/<school_key>/<subject_key>')
+def school_subject_catalog(school_key, subject_key):
+    r = require_login()
+    if r: return r
+    if school_key not in SCHOOL_META or subject_key not in SUBJECT_META:
+        return 'Neznámá škola nebo předmět', 404
+    tree = interactive_hierarchy(True)
+    school = tree[school_key]
+    subj = school['subjects'].get(subject_key, {
+        'key': subject_key, 'name': SUBJECT_META[subject_key][0], 'icon': SUBJECT_META[subject_key][1], 'grades': {}
+    })
+    return render_template('school_subject_catalog.html', course=course_from_lesson(None), lesson=None, school=school, subject=subj)
 
 @app.route('/catalog/<kind>')
 def subject_catalog(kind):
@@ -1469,8 +1555,8 @@ def restore_interactive_lessons_from_files():
             meta = json.loads(meta_file.read_text(encoding='utf-8'))
             slug = safe_package_slug(meta.get('slug', meta_file.parent.name))
             subject = normalize_subject(meta.get('subject', ''))
-            if subject not in ('matematika', 'informatika', 'biologie', 'zemepis', 'fyzika'):
-                continue
+            if subject not in tuple(SUBJECT_META.keys()):
+                subject = 'fyzika'
 
             # Synchronizace balíčků s databází: pokud už lekce existuje,
             # aktualizujeme její zařazení a metadata podle lesson.json.
@@ -1488,7 +1574,7 @@ def restore_interactive_lessons_from_files():
             item.topic = str(meta.get('topic', '')).strip()
             item.title = str(meta.get('title', slug)).strip()
             item.description = str(meta.get('description', '')).strip()
-            item.icon = str(meta.get('icon', {'matematika':'➗','informatika':'💻','biologie':'🧬','zemepis':'🗺️','fyzika':'⚛️'}.get(subject, '📦'))).strip()
+            item.icon = str(meta.get('icon', {k:v[1] for k,v in SUBJECT_META.items()}.get(subject, '📦'))).strip()
             item.package_dir = str(meta_file.parent)
             item.is_published = bool(meta.get('is_published', True))
             item.imported_at = datetime.utcnow()
@@ -1542,8 +1628,8 @@ def import_interactive_lesson():
         meta = json.loads(meta_file.read_text(encoding='utf-8-sig'))
 
         subject = normalize_subject(meta.get('subject', ''))
-        if subject not in ('matematika', 'informatika', 'biologie', 'zemepis', 'fyzika'):
-            raise ValueError('V lesson.json musí být předmět matematika, informatika, biologie, zemepis nebo fyzika.')
+        if subject not in tuple(SUBJECT_META.keys()):
+            subject = 'fyzika'
 
         school = str(meta.get('school', '')).strip()
         grade_name = str(meta.get('grade', '')).strip()
@@ -1584,7 +1670,7 @@ def import_interactive_lesson():
         item.icon = str(
             meta.get(
                 'icon',
-                {'matematika':'➗','informatika':'💻','biologie':'🧬','zemepis':'🗺️','fyzika':'⚛️'}.get(subject, '📦')
+                {k:v[1] for k,v in SUBJECT_META.items()}.get(subject, '📦')
             )
         ).strip()
         item.package_dir = str(destination)
@@ -5736,6 +5822,11 @@ def teacher_home():
     math_lessons = MathLesson.query.order_by(
         MathLesson.school, MathLesson.grade_name, MathLesson.topic, MathLesson.title
     ).all()
+
+    # Stejná hierarchie jako ve studentské verzi: ŠKOLA → PŘEDMĚT → ROČNÍK → TÉMA → LEKCE.
+    # Starší balíčky, které byly technicky vedené pod fyzikou, se rozpoznají podle názvu/tématu.
+    interactive_school_tree = interactive_hierarchy(False)
+
     return render_template(
         'teacher.html',
         course=course_from_lesson(None),
@@ -5743,6 +5834,7 @@ def teacher_home():
         students=students,
         student_rows=student_overview_rows(),
         interactive_lessons=interactive_lessons,
+        interactive_school_tree=interactive_school_tree,
         informatics_lessons=informatics_lessons,
         math_lessons=math_lessons
     )

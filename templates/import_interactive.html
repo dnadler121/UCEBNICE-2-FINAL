@@ -5,7 +5,7 @@
     <a class="back-link" href="{{ url_for('portal') }}">← Zpět na hlavní stránku</a>
     <div class="catalog-title">
       <span>📦</span>
-      <div><p>MATEMATIKA · INFORMATIKA · BIOLOGIE · ZEMĚPIS</p><h1>Importovat novou lekci</h1></div>
+      <div><p>MONTESSORI · PŠ · VŠECHNY PŘEDMĚTY</p><h1>Importovat novou lekci</h1></div>
     </div>
     <p class="catalog-intro">
       Nahraj ZIP balíček. Aplikace povinně přečte soubor <b>lesson.json</b>
@@ -37,7 +37,8 @@
   "description": "Procvičení pořadí početních operací",
   "icon": "➗"
 }</pre>
-    <p>Povolené hodnoty <code>subject</code>: <code>"matematika"</code>, <code>"informatika"</code>, <code>"biologie"</code>, <code>"zemepis"</code> nebo <code>"fyzika"</code>.</p>
+    <p><b>Předmět:</b> <code>matematika</code>, <code>informatika</code>, <code>biologie</code>, <code>zemepis</code>, <code>fyzika</code>, <code>obcanska</code>, <code>cesky-jazyk</code>, <code>anglictina</code> nebo <code>dejepis</code>. Když předmět není jasný, použij <code>fyzika</code>.</p>
+    <p><b>Škola:</b> u nových balíčků uváděj <code>Montessori</code> nebo <code>PŠ</code>. Dále vždy vyplň ročník a téma. Podle těchto údajů se lekce automaticky zařadí studentovi i učiteli.</p>
   </section>
 </main>
 {% endblock %}
