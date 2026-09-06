@@ -10,6 +10,14 @@
     <label>{{ t('Heslo') }}<input name="password" type="password" autocomplete="current-password" required></label>
     <button>{{ t('Vstoupit do aplikace') }}</button>
     <small>{{ t('Učitelský účet se načítá z') }} <b>.env</b>. {{ t('Studenty vytváří učitel v editoru.') }}</small>
+    {% if is_local_instance %}
+    <div style="margin-top:22px;padding:16px;border-radius:16px;background:#f1faf4;text-align:center">
+      <b>📱 Připojení studentů v místní síti</b><br>
+      <img src="{{ url_for('local_qr_png') }}" alt="QR kód pro studenty" style="width:180px;height:180px;margin:12px auto;display:block">
+      <div style="font-size:14px;word-break:break-all">{{ local_access_url }}</div>
+      <small>Student naskenuje QR kód po připojení ke stejnému Wi‑Fi routeru.</small>
+    </div>
+    {% endif %}
   </form>
 </div>
 {% endblock %}

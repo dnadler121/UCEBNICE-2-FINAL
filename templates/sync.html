@@ -1,1 +1,26 @@
-{% extends "base.html" %}{% block content %}<main class="main-card"><h1>🔄 Offline synchronizace</h1><p>Nejdříve stáhněte současnou UČEBNICI z Renderu do notebooku.</p>{% if msg %}<div class="notice"><p>{{msg}}</p></div>{% endif %}<form method="post"><label>Render URL</label><input name="render_url" value="{{cfg.render_url}}" style="width:100%;padding:12px"><label>SYNC_TOKEN</label><input type="password" name="token" placeholder="{% if cfg.token %}uložen – ponechte prázdné{% endif %}" style="width:100%;padding:12px"><div style="display:flex;gap:10px;margin-top:18px"><button class="switch" name="action" value="save">Uložit</button><button class="switch" name="action" value="pull">⬇️ První stažení z Renderu</button><a class="switch" href="{{url_for('teacher_home')}}">← Zpět</a></div></form></main>{% endblock %}
+{% extends "base.html" %}
+{% block content %}
+<main class="main-card">
+  <h1>🔄 Offline synchronizace</h1>
+  {% if is_render %}
+    <div class="notice"><p><b>🟢 Render je připraven pro synchronizaci.</b></p>
+    <p>Na této online stránce se nic nestahuje. První stažení i ruční odeslání se spouští pouze v lokální UČEBNICI na notebooku.</p></div>
+    <p>Server přijímá výsledky z lokální databáze přes zabezpečený SYNC_TOKEN.</p>
+    <a class="switch" href="{{url_for('teacher_home')}}">← Zpět</a>
+  {% else %}
+    <p>Nejdříve stáhněte současnou UČEBNICI z Renderu do notebooku. Potom se nové výsledky při dostupném internetu odesílají automaticky.</p>
+    {% if msg %}<div class="notice"><p>{{msg}}</p></div>{% endif %}
+    <div class="notice"><p><b>Čekající výsledky k odeslání: {{pending}}</b></p></div>
+    <form method="post">
+      <label>Render URL</label><input name="render_url" value="{{cfg.render_url}}" style="width:100%;padding:12px">
+      <label>SYNC_TOKEN</label><input type="password" name="token" placeholder="{% if cfg.token %}uložen – ponechte prázdné{% endif %}" style="width:100%;padding:12px">
+      <div style="display:flex;gap:10px;margin-top:18px;flex-wrap:wrap">
+        <button class="switch" name="action" value="save">Uložit</button>
+        <button class="switch" name="action" value="pull">⬇️ První stažení z Renderu</button>
+        <button class="switch" name="action" value="flush">🔄 Synchronizovat teď</button>
+        <a class="switch" href="{{url_for('teacher_home')}}">← Zpět</a>
+      </div>
+    </form>
+  {% endif %}
+</main>
+{% endblock %}

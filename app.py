@@ -1,4 +1,4 @@
-import os, json, unicodedata, random, html, re, base64, uuid, urllib.parse, urllib.request, urllib.error, zipfile, shutil, importlib.util, tempfile, threading, hmac, hashlib, ast, math, io, sqlite3
+import os, json, unicodedata, random, html, re, base64, uuid, urllib.parse, urllib.request, urllib.error, zipfile, shutil, importlib.util, tempfile, threading, hmac, hashlib, ast, math, io, sqlite3, socket
 from pathlib import Path
 from datetime import datetime
 from flask import Flask, render_template, render_template_string, request, jsonify, session, redirect, url_for, send_from_directory, send_file, flash
@@ -1006,6 +1006,10 @@ def upsert_interactive_progress(lesson, percent=100, grade=None, focus_lost=0):
     ).delete(synchronize_session=False)
 
     db.session.commit()
+    try:
+        _queue_interactive_sync(lesson, user, result)
+    except Exception:
+        pass
 
 
 def _interactive_deep_value(obj, names, depth=0):
@@ -1136,6 +1140,10 @@ def upsert_interactive_partial(lesson, percent):
     ).delete(synchronize_session=False)
 
     db.session.commit()
+    try:
+        _queue_interactive_sync(lesson, user, result)
+    except Exception:
+        pass
 
 def get_focus_session(kind, key, create=False):
     user = current_user()
@@ -2413,6 +2421,10 @@ def persist_final_result(lesson, status='dokončeno', focus_lost=None):
         row.created_at = datetime.utcnow()
 
     db.session.commit()
+    try:
+        _queue_html_result_sync(lesson, user, row)
+    except Exception:
+        pass
     touch_progress(lesson.id, 1000 if status == 'dokončeno' else 999, status)
     return progress
 
@@ -2554,6 +2566,10 @@ def save_html_partial_result(lesson, status='rozpracováno'):
     row.status = status
     row.created_at = datetime.utcnow()
     db.session.commit()
+    try:
+        _queue_html_result_sync(lesson, user, row)
+    except Exception:
+        pass
     touch_progress(lesson.id, 0, status)
     return row
 
@@ -6905,54 +6921,319 @@ Která věc je neživá? | strom | houba | sklenice | 3'''
     db.session.commit()
 
 
-# --- OFFLINE / RENDER: prvni stazeni celeho obsahu ---
+# --- OFFLINE / RENDER: synchronizace --------------------------------------
 SYNC_CFG = BASE / 'sync_config.json'
+SYNC_QUEUE = DATA_DIR / 'sync_queue.jsonl'
+
+def _is_render_instance():
+    """True na Renderu; False při lokálním spuštění na notebooku."""
+    if str(os.getenv('RENDER', '')).lower() in ('1', 'true', 'yes'):
+        return True
+    if os.getenv('RENDER_SERVICE_ID'):
+        return True
+    try:
+        return '.onrender.com' in (request.host or '').lower()
+    except RuntimeError:
+        return False
+
 def _sync_ok():
-    a=os.getenv('SYNC_TOKEN','').strip(); b=request.headers.get('X-Sync-Token','').strip()
-    return bool(a) and hmac.compare_digest(a,b)
+    a = os.getenv('SYNC_TOKEN', '').strip()
+    b = request.headers.get('X-Sync-Token', '').strip()
+    return bool(a) and hmac.compare_digest(a, b)
+
 def _cfg():
-    try: return json.loads(SYNC_CFG.read_text(encoding='utf-8'))
-    except: return {'render_url':'https://ucebnice-2-final.onrender.com','token':''}
+    try:
+        data = json.loads(SYNC_CFG.read_text(encoding='utf-8'))
+        if not isinstance(data, dict):
+            raise ValueError
+    except Exception:
+        data = {}
+    return {
+        'render_url': (data.get('render_url') or 'https://ucebnice-2-final.onrender.com').rstrip('/'),
+        'token': data.get('token') or ''
+    }
+
+def _write_cfg(cfg):
+    # Token se ukládá jen v lokálním notebooku. Render používá Environment.
+    if _is_render_instance():
+        return
+    SYNC_CFG.write_text(json.dumps(cfg, ensure_ascii=False), encoding='utf-8')
+
+def _post_sync_event(payload, timeout=8):
+    if _is_render_instance():
+        return True
+    cfg = _cfg()
+    token = (cfg.get('token') or '').strip()
+    url = (cfg.get('render_url') or '').rstrip('/')
+    if not token or not url:
+        return False
+    body = json.dumps(payload, ensure_ascii=False).encode('utf-8')
+    req = urllib.request.Request(
+        url + '/sync/result', data=body, method='POST',
+        headers={'Content-Type': 'application/json', 'X-Sync-Token': token}
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            return 200 <= int(getattr(resp, 'status', 200)) < 300
+    except Exception:
+        return False
+
+def _append_sync_queue(payload):
+    if _is_render_instance():
+        return
+    SYNC_QUEUE.parent.mkdir(parents=True, exist_ok=True)
+    with SYNC_QUEUE.open('a', encoding='utf-8') as f:
+        f.write(json.dumps(payload, ensure_ascii=False, separators=(',', ':')) + '\n')
+
+def _flush_sync_queue():
+    if _is_render_instance() or not SYNC_QUEUE.exists():
+        return 0, 0
+    try:
+        lines = [x for x in SYNC_QUEUE.read_text(encoding='utf-8').splitlines() if x.strip()]
+    except Exception:
+        return 0, 0
+    kept = []
+    sent = 0
+    for line in lines:
+        try:
+            payload = json.loads(line)
+        except Exception:
+            continue
+        if _post_sync_event(payload):
+            sent += 1
+        else:
+            kept.append(line)
+    if kept:
+        SYNC_QUEUE.write_text('\n'.join(kept) + '\n', encoding='utf-8')
+    else:
+        try: SYNC_QUEUE.unlink()
+        except Exception: pass
+    return sent, len(kept)
+
+def _queue_sync_payload(payload):
+    if _is_render_instance():
+        return
+    # Nejdříve zkusit okamžitě; bez internetu bezpečně zařadit do fronty.
+    if not _post_sync_event(payload):
+        _append_sync_queue(payload)
+    else:
+        # Když internet funguje, zkusit současně doposlat i starší čekající položky.
+        _flush_sync_queue()
+
+def _queue_interactive_sync(lesson, user, result):
+    if not lesson or not user or not result:
+        return
+    _queue_sync_payload({
+        'kind': 'interactive_result',
+        'username': user.username,
+        'lesson_slug': lesson.slug,
+        'percent': int(result.percent or 0),
+        'grade': int(result.grade or 5),
+        'focus_lost': int(result.focus_lost or 0),
+        'status': result.status or 'dokončeno',
+        'completed_at': (result.completed_at or datetime.utcnow()).isoformat()
+    })
+
+def _queue_html_result_sync(lesson, user, result):
+    if not lesson or not user or not result:
+        return
+    _queue_sync_payload({
+        'kind': 'html_result',
+        'username': user.username,
+        'lesson_id': int(lesson.id),
+        'lesson_title': lesson.title,
+        'percent': int(result.percent or 0),
+        'grade': int(result.grade or 5),
+        'score': int(result.score or 0),
+        'total': int(result.total or 0),
+        'focus_lost': int(result.focus_lost or 0),
+        'status': result.status or 'dokončeno',
+        'created_at': (result.created_at or datetime.utcnow()).isoformat()
+    })
+
+@app.route('/sync/result', methods=['POST'])
+def sync_result():
+    """Render přijímá výsledky vytvořené v offline lokální UČEBNICI."""
+    if not _sync_ok():
+        return jsonify({'ok': False, 'error': 'forbidden'}), 403
+    data = request.get_json(silent=True) or {}
+    user = User.query.filter_by(username=str(data.get('username', '')).strip()).first()
+    if not user:
+        return jsonify({'ok': False, 'error': 'student_not_found'}), 404
+    kind = data.get('kind')
+    if kind == 'interactive_result':
+        lesson = InteractiveLesson.query.filter_by(slug=str(data.get('lesson_slug', '')).strip()).first()
+        if not lesson:
+            return jsonify({'ok': False, 'error': 'lesson_not_found'}), 404
+        row = InteractiveResult.query.filter_by(user_id=user.id, interactive_lesson_id=lesson.id).order_by(InteractiveResult.completed_at.desc()).first()
+        if not row:
+            row = InteractiveResult(user_id=user.id, interactive_lesson_id=lesson.id)
+            db.session.add(row)
+        incoming_dt = datetime.fromisoformat(str(data.get('completed_at'))) if data.get('completed_at') else datetime.utcnow()
+        # Nepřepisovat novější serverový výsledek starší offline kopií.
+        if row.completed_at and incoming_dt < row.completed_at:
+            return jsonify({'ok': True, 'ignored': 'older'})
+        row.percent = max(0, min(100, int(data.get('percent', 0))))
+        row.grade = max(1, min(5, int(data.get('grade', grade_from_percent(row.percent)))))
+        row.focus_lost = max(0, int(data.get('focus_lost', 0) or 0))
+        row.status = str(data.get('status') or 'dokončeno')[:60]
+        row.completed_at = incoming_dt
+        prog = InteractiveProgress.query.filter_by(user_id=user.id, interactive_lesson_id=lesson.id).first()
+        if not prog:
+            prog = InteractiveProgress(user_id=user.id, interactive_lesson_id=lesson.id)
+            db.session.add(prog)
+        prog.completed = row.status == 'dokončeno'
+        prog.current_grade = row.grade
+        prog.last_completed_at = incoming_dt if prog.completed else prog.last_completed_at
+        prog.updated_at = incoming_dt
+        db.session.commit()
+        return jsonify({'ok': True})
+    if kind == 'html_result':
+        lesson = db.session.get(Lesson, int(data.get('lesson_id', 0) or 0))
+        if not lesson:
+            return jsonify({'ok': False, 'error': 'lesson_not_found'}), 404
+        incoming_dt = datetime.fromisoformat(str(data.get('created_at'))) if data.get('created_at') else datetime.utcnow()
+        row = Result.query.filter_by(user_id=user.id, lesson_id=lesson.id).order_by(Result.created_at.desc()).first()
+        if row and row.created_at and incoming_dt < row.created_at:
+            return jsonify({'ok': True, 'ignored': 'older'})
+        if not row:
+            row = Result(user_id=user.id, lesson_id=lesson.id)
+            db.session.add(row)
+        row.percent = max(0, min(100, int(data.get('percent', 0))))
+        row.grade = max(1, min(5, int(data.get('grade', grade_from_percent(row.percent)))))
+        row.score = max(0, int(data.get('score', 0) or 0))
+        row.total = max(0, int(data.get('total', 0) or 0))
+        row.focus_lost = max(0, int(data.get('focus_lost', 0) or 0))
+        row.status = str(data.get('status') or 'dokončeno')[:60]
+        row.created_at = incoming_dt
+        db.session.commit()
+        return jsonify({'ok': True})
+    return jsonify({'ok': False, 'error': 'unknown_kind'}), 400
+
 @app.route('/sync/snapshot')
 def sync_snapshot():
-    if not _sync_ok(): return 'Forbidden',403
-    m=io.BytesIO()
-    with zipfile.ZipFile(m,'w',zipfile.ZIP_DEFLATED) as z:
-        z.write(DB_PATH,'montessori.db')
-        for root,prefix in [(UPLOADS,'uploads'),(INTERACTIVE_LESSONS,'interactive_lessons')]:
-            for f in root.rglob('*'):
-                if f.is_file(): z.write(f,str(Path(prefix)/f.relative_to(root)))
-    m.seek(0); return send_file(m,mimetype='application/zip',as_attachment=True,download_name='snapshot.zip')
-@app.route('/teacher/sync',methods=['GET','POST'])
+    """Render -> notebook: bezpečná první kopie DB a lekčních souborů."""
+    if not _sync_ok():
+        return 'Forbidden', 403
+    m = io.BytesIO()
+    # Konzistentní kopie živé SQLite DB přes backup API.
+    tmp_db = Path(tempfile.mkstemp(prefix='montessori-snapshot-', suffix='.db')[1])
+    try:
+        src = sqlite3.connect(str(DB_PATH)); dst = sqlite3.connect(str(tmp_db))
+        src.backup(dst); dst.close(); src.close()
+        with zipfile.ZipFile(m, 'w', zipfile.ZIP_DEFLATED) as z:
+            z.write(tmp_db, 'montessori.db')
+            for root, prefix in [(UPLOADS, 'uploads'), (INTERACTIVE_LESSONS, 'interactive_lessons')]:
+                if root.exists():
+                    for f in root.rglob('*'):
+                        if f.is_file():
+                            z.write(f, str(Path(prefix) / f.relative_to(root)))
+    finally:
+        try: tmp_db.unlink()
+        except Exception: pass
+    m.seek(0)
+    return send_file(m, mimetype='application/zip', as_attachment=True, download_name='snapshot.zip')
+
+@app.route('/teacher/sync', methods=['GET', 'POST'])
 def teacher_sync():
-    r=require_teacher()
-    if r:return r
-    cfg=_cfg(); msg=''
-    if request.method=='POST':
-        token=request.form.get('token','').strip() or cfg.get('token','')
-        cfg={'render_url':request.form.get('render_url','').strip().rstrip('/'),'token':token}
-        SYNC_CFG.write_text(json.dumps(cfg),encoding='utf-8')
-        if request.form.get('action')=='pull':
+    r = require_teacher()
+    if r: return r
+    is_render = _is_render_instance()
+    cfg = _cfg(); msg = ''
+    if is_render:
+        # Na Renderu se nic nestahuje "samo ze sebe". Tím se odstraní WORKER TIMEOUT.
+        return render_template('sync.html', course=course_from_lesson(None), lesson=None,
+                               cfg={'render_url': request.host_url.rstrip('/'), 'token': ''}, msg='',
+                               is_render=True, pending=0)
+    if request.method == 'POST':
+        token = request.form.get('token', '').strip() or cfg.get('token', '')
+        cfg = {'render_url': request.form.get('render_url', '').strip().rstrip('/'), 'token': token}
+        _write_cfg(cfg)
+        action = request.form.get('action')
+        if action == 'pull':
             try:
-                req=urllib.request.Request(cfg['render_url']+'/sync/snapshot',headers={'X-Sync-Token':token})
-                raw=urllib.request.urlopen(req,timeout=90).read(); zp=BASE/'_snapshot.zip'; zp.write_bytes(raw)
+                req = urllib.request.Request(cfg['render_url'] + '/sync/snapshot', headers={'X-Sync-Token': token})
+                raw = urllib.request.urlopen(req, timeout=90).read()
+                zp = BASE / '_snapshot.zip'; zp.write_bytes(raw)
                 with zipfile.ZipFile(zp) as z:
-                    td=BASE/'_snap'; shutil.rmtree(td,ignore_errors=True); td.mkdir()
-                    z.extract('montessori.db',td); db.session.remove()
-                    a=sqlite3.connect(str(td/'montessori.db')); b=sqlite3.connect(str(DB_PATH)); a.backup(b); b.close(); a.close()
-                    for pref,target in [('uploads/',UPLOADS),('interactive_lessons/',INTERACTIVE_LESSONS)]:
+                    td = BASE / '_snap'; shutil.rmtree(td, ignore_errors=True); td.mkdir()
+                    z.extract('montessori.db', td)
+                    db.session.remove()
+                    a = sqlite3.connect(str(td / 'montessori.db')); b = sqlite3.connect(str(DB_PATH))
+                    a.backup(b); b.close(); a.close()
+                    for pref, target in [('uploads/', UPLOADS), ('interactive_lessons/', INTERACTIVE_LESSONS)]:
                         for n in z.namelist():
                             if n.startswith(pref) and not n.endswith('/'):
-                                out=target/Path(n[len(pref):]); out.parent.mkdir(parents=True,exist_ok=True); out.write_bytes(z.read(n))
-                shutil.rmtree(td,ignore_errors=True); zp.unlink(missing_ok=True)
-                msg='Hotovo. Data z Renderu jsou stažena do notebooku. Klikněte na Zpět.'
-            except Exception as e: msg='Stažení se nezdařilo: '+str(e)
-        else: msg='Nastavení uloženo.'
-    return render_template('sync.html', course=course_from_lesson(None), lesson=None, cfg=cfg, msg=msg)
+                                out = target / Path(n[len(pref):])
+                                out.parent.mkdir(parents=True, exist_ok=True)
+                                out.write_bytes(z.read(n))
+                shutil.rmtree(td, ignore_errors=True); zp.unlink(missing_ok=True)
+                msg = 'Hotovo. Data z Renderu jsou stažena do notebooku. Pro jistotu se odhlaste a znovu přihlaste.'
+            except urllib.error.HTTPError as e:
+                msg = f'Stažení se nezdařilo: Render vrátil HTTP {e.code}. Zkontrolujte SYNC_TOKEN.'
+            except Exception as e:
+                msg = 'Stažení se nezdařilo: ' + str(e)
+        elif action == 'flush':
+            sent, pending = _flush_sync_queue()
+            msg = f'Odesláno: {sent}. Čeká: {pending}.'
+        else:
+            msg = 'Nastavení uloženo.'
+    pending = 0
+    if SYNC_QUEUE.exists():
+        try: pending = len([x for x in SYNC_QUEUE.read_text(encoding='utf-8').splitlines() if x.strip()])
+        except Exception: pending = 0
+    return render_template('sync.html', course=course_from_lesson(None), lesson=None,
+                           cfg=cfg, msg=msg, is_render=False, pending=pending)
+
+def _sync_worker_loop():
+    import time
+    while True:
+        try:
+            with app.app_context():
+                _flush_sync_queue()
+        except Exception:
+            pass
+        time.sleep(60)
+
+def _local_lan_ip():
+    try:
+        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        sock.connect(('8.8.8.8', 80))
+        ip = sock.getsockname()[0]
+        sock.close()
+        return ip
+    except Exception:
+        try:
+            return socket.gethostbyname(socket.gethostname())
+        except Exception:
+            return '127.0.0.1'
+
+@app.route('/local-qr.png')
+def local_qr_png():
+    if _is_render_instance():
+        return '', 404
+    try:
+        import qrcode
+        url = f'http://{_local_lan_ip()}:5000/login'
+        img = qrcode.make(url)
+        buf = io.BytesIO(); img.save(buf, format='PNG'); buf.seek(0)
+        return send_file(buf, mimetype='image/png', max_age=0)
+    except Exception:
+        return '', 404
+
+@app.context_processor
+def inject_local_access():
+    local = not _is_render_instance()
+    return {
+        'is_local_instance': local,
+        'local_access_url': (f'http://{_local_lan_ip()}:5000/login' if local else '')
+    }
 
 
 with app.app_context():
     seed()
 
 if __name__ == '__main__':
-    app.run(debug=True)
+    if not _is_render_instance():
+        threading.Thread(target=_sync_worker_loop, daemon=True, name='ucebnice-sync').start()
+    app.run(host='0.0.0.0', port=5000, debug=False, use_reloader=False)
