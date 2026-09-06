@@ -7112,14 +7112,16 @@ def sync_result():
 
 @app.route('/sync/snapshot')
 def sync_snapshot():
-    """Render -> notebook: první kopie DB a lekcí bez držení ZIPu v RAM."""
+    """Render -> notebook: lehký snapshot pouze databáze.
+
+    Soubory lekcí se neposílají v jednom velkém ZIPu, protože na Render Starteru
+    mohou překročit paměťový limit. Lokální balíček už soubory lekcí obsahuje;
+    databáze z Renderu doplní uživatele, seznam lekcí a aktuální stav.
+    """
     if not _sync_ok():
         return 'Forbidden', 403
 
-    # DŮLEŽITÉ: snapshot se vytváří na disku, ne v io.BytesIO().
-    # Na Render Starteru je limit 512 MB RAM a velký ZIP v paměti shazoval instanci.
     tmp_db = Path(tempfile.mkstemp(prefix='montessori-snapshot-', suffix='.db')[1])
-    tmp_zip = Path(tempfile.mkstemp(prefix='montessori-snapshot-', suffix='.zip')[1])
     try:
         src = sqlite3.connect(str(DB_PATH))
         dst = sqlite3.connect(str(tmp_db))
@@ -7128,26 +7130,13 @@ def sync_snapshot():
         finally:
             dst.close(); src.close()
 
-        # ZIP_STORED je záměrně bez komprese: minimální RAM/CPU při tvorbě snapshotu.
-        with zipfile.ZipFile(tmp_zip, 'w', compression=zipfile.ZIP_STORED, allowZip64=True) as z:
-            z.write(tmp_db, 'montessori.db')
-            for root, prefix in [(UPLOADS, 'uploads'), (INTERACTIVE_LESSONS, 'interactive_lessons')]:
-                if root.exists():
-                    for f in root.rglob('*'):
-                        if f.is_file():
-                            z.write(f, str(Path(prefix) / f.relative_to(root)))
+        response = send_file(str(tmp_db), mimetype='application/octet-stream',
+                             as_attachment=True, download_name='montessori.db', conditional=True)
+        response.call_on_close(lambda: tmp_db.unlink(missing_ok=True))
+        return response
     except Exception:
-        try: tmp_zip.unlink(missing_ok=True)
-        except Exception: pass
+        tmp_db.unlink(missing_ok=True)
         raise
-    finally:
-        try: tmp_db.unlink(missing_ok=True)
-        except Exception: pass
-
-    # send_file cestu streamuje; celý archiv se nenačte do paměti.
-    response = send_file(str(tmp_zip), mimetype='application/zip', as_attachment=True, download_name='snapshot.zip', conditional=True)
-    response.call_on_close(lambda: tmp_zip.unlink(missing_ok=True))
-    return response
 
 @app.route('/teacher/sync', methods=['GET', 'POST'])
 def teacher_sync():
@@ -7168,24 +7157,22 @@ def teacher_sync():
         if action == 'pull':
             try:
                 req = urllib.request.Request(cfg['render_url'] + '/sync/snapshot', headers={'X-Sync-Token': token})
-                # Stahovat proudově rovnou na disk; nedržet celý snapshot v RAM notebooku.
-                zp = BASE / '_snapshot.zip'
-                with urllib.request.urlopen(req, timeout=300) as resp, zp.open('wb') as out:
+                # Stahuje se pouze databáze – je malá a nezatěžuje paměť Renderu.
+                snap_db = BASE / '_snapshot.db'
+                with urllib.request.urlopen(req, timeout=120) as resp, snap_db.open('wb') as out:
                     shutil.copyfileobj(resp, out, length=1024 * 1024)
-                with zipfile.ZipFile(zp) as z:
-                    td = BASE / '_snap'; shutil.rmtree(td, ignore_errors=True); td.mkdir()
-                    z.extract('montessori.db', td)
-                    db.session.remove()
-                    a = sqlite3.connect(str(td / 'montessori.db')); b = sqlite3.connect(str(DB_PATH))
-                    a.backup(b); b.close(); a.close()
-                    for pref, target in [('uploads/', UPLOADS), ('interactive_lessons/', INTERACTIVE_LESSONS)]:
-                        for n in z.namelist():
-                            if n.startswith(pref) and not n.endswith('/'):
-                                out = target / Path(n[len(pref):])
-                                out.parent.mkdir(parents=True, exist_ok=True)
-                                out.write_bytes(z.read(n))
-                shutil.rmtree(td, ignore_errors=True); zp.unlink(missing_ok=True)
-                msg = 'Hotovo. Data z Renderu jsou stažena do notebooku. Pro jistotu se odhlaste a znovu přihlaste.'
+                # Ověřit, že jsme skutečně dostali SQLite databázi, ne HTML chybovou stránku.
+                with snap_db.open('rb') as f:
+                    if f.read(16) != b'SQLite format 3\x00':
+                        raise ValueError('Render nevrátil platnou SQLite databázi.')
+                db.session.remove()
+                a = sqlite3.connect(str(snap_db)); b = sqlite3.connect(str(DB_PATH))
+                try:
+                    a.backup(b)
+                finally:
+                    b.close(); a.close()
+                snap_db.unlink(missing_ok=True)
+                msg = 'Hotovo. Databáze z Renderu je stažena do notebooku. Odhlaste se a znovu přihlaste.'
             except urllib.error.HTTPError as e:
                 msg = (f'Stažení se nezdařilo: Render vrátil HTTP {e.code}. ' + ('SYNC_TOKEN není shodný.' if e.code == 403 else 'Jde o chybu serveru nebo přenosu, ne nutně token.'))
             except Exception as e:
