@@ -6904,6 +6904,53 @@ Která věc je neživá? | strom | houba | sklenice | 3'''
     cleanup_empty_curriculum()
     db.session.commit()
 
+
+# --- OFFLINE / RENDER: prvni stazeni celeho obsahu ---
+SYNC_CFG = BASE / 'sync_config.json'
+def _sync_ok():
+    a=os.getenv('SYNC_TOKEN','').strip(); b=request.headers.get('X-Sync-Token','').strip()
+    return bool(a) and hmac.compare_digest(a,b)
+def _cfg():
+    try: return json.loads(SYNC_CFG.read_text(encoding='utf-8'))
+    except: return {'render_url':'https://ucebnice-2-final.onrender.com','token':''}
+@app.route('/sync/snapshot')
+def sync_snapshot():
+    if not _sync_ok(): return 'Forbidden',403
+    m=io.BytesIO()
+    with zipfile.ZipFile(m,'w',zipfile.ZIP_DEFLATED) as z:
+        z.write(DB_PATH,'montessori.db')
+        for root,prefix in [(UPLOADS,'uploads'),(INTERACTIVE_LESSONS,'interactive_lessons')]:
+            for f in root.rglob('*'):
+                if f.is_file(): z.write(f,str(Path(prefix)/f.relative_to(root)))
+    m.seek(0); return send_file(m,mimetype='application/zip',as_attachment=True,download_name='snapshot.zip')
+@app.route('/teacher/sync',methods=['GET','POST'])
+def teacher_sync():
+    r=require_teacher()
+    if r:return r
+    cfg=_cfg(); msg=''
+    if request.method=='POST':
+        token=request.form.get('token','').strip() or cfg.get('token','')
+        cfg={'render_url':request.form.get('render_url','').strip().rstrip('/'),'token':token}
+        SYNC_CFG.write_text(json.dumps(cfg),encoding='utf-8')
+        if request.form.get('action')=='pull':
+            try:
+                req=urllib.request.Request(cfg['render_url']+'/sync/snapshot',headers={'X-Sync-Token':token})
+                raw=urllib.request.urlopen(req,timeout=90).read(); zp=BASE/'_snapshot.zip'; zp.write_bytes(raw)
+                with zipfile.ZipFile(zp) as z:
+                    td=BASE/'_snap'; shutil.rmtree(td,ignore_errors=True); td.mkdir()
+                    z.extract('montessori.db',td); db.session.remove()
+                    a=sqlite3.connect(str(td/'montessori.db')); b=sqlite3.connect(str(DB_PATH)); a.backup(b); b.close(); a.close()
+                    for pref,target in [('uploads/',UPLOADS),('interactive_lessons/',INTERACTIVE_LESSONS)]:
+                        for n in z.namelist():
+                            if n.startswith(pref) and not n.endswith('/'):
+                                out=target/Path(n[len(pref):]); out.parent.mkdir(parents=True,exist_ok=True); out.write_bytes(z.read(n))
+                shutil.rmtree(td,ignore_errors=True); zp.unlink(missing_ok=True)
+                msg='Hotovo. Data z Renderu jsou stažena do notebooku. Klikněte na Zpět.'
+            except Exception as e: msg='Stažení se nezdařilo: '+str(e)
+        else: msg='Nastavení uloženo.'
+    return render_template('sync.html', course=course_from_lesson(None), lesson=None, cfg=cfg, msg=msg)
+
+
 with app.app_context():
     seed()
 
