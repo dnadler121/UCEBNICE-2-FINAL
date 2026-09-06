@@ -1707,7 +1707,7 @@ def import_interactive_lesson():
 def interactive_focus_guard_enabled(lesson_item):
     """Vrati False jen u balicku, ktery v lesson.json vyslovne povoli opusteni stranky."""
     try:
-        meta_file = BASE / lesson_item.package_dir / 'lesson.json'
+        meta_file = _interactive_package_root(lesson_item) / 'lesson.json'
         if meta_file.exists():
             meta = json.loads(meta_file.read_text(encoding='utf-8'))
             if meta.get('focus_guard') is False or meta.get('allow_page_leave') is True:
@@ -1716,6 +1716,25 @@ def interactive_focus_guard_enabled(lesson_item):
         # Pri poskozenych metadatech zachovame bezpecne stavajici chovani.
         pass
     return True
+
+
+def _interactive_package_root(lesson_item):
+    """Najde balíček lekce na Renderu i lokálně.
+
+    Databáze stažená z Renderu může obsahovat absolutní cestu /var/data/..., která
+    na notebooku neexistuje. Lokálně proto vždy umíme spadnout na
+    interactive_lessons/<slug>.
+    """
+    candidates = []
+    raw = str(getattr(lesson_item, 'package_dir', '') or '').strip()
+    if raw:
+        rp = Path(raw)
+        candidates.append(rp if rp.is_absolute() else BASE / rp)
+    candidates.append(INTERACTIVE_LESSONS / lesson_item.slug)
+    for candidate in candidates:
+        if (candidate / 'lesson.json').exists() or (candidate / 'templates' / 'index.html').exists():
+            return candidate
+    return candidates[-1]
 
 
 @app.route('/interactive/<slug>')
@@ -1731,7 +1750,8 @@ def interactive_lesson(slug):
     if focus_guard_enabled:
         begin_focus_attempt('interactive', slug)
 
-    template_file = BASE / lesson_item.package_dir / 'templates' / 'index.html'
+    package_root = _interactive_package_root(lesson_item)
+    template_file = package_root / 'templates' / 'index.html'
     if not template_file.exists():
         return 'Balíček lekce neobsahuje templates/index.html.', 500
 
@@ -7110,6 +7130,84 @@ def sync_result():
         return jsonify({'ok': True})
     return jsonify({'ok': False, 'error': 'unknown_kind'}), 400
 
+@app.route('/sync/interactive-manifest')
+def sync_interactive_manifest():
+    """Seznam balíčků interaktivních lekcí dostupných na Renderu."""
+    if not _sync_ok():
+        return jsonify({'ok': False, 'error': 'forbidden'}), 403
+    items = []
+    for row in InteractiveLesson.query.order_by(InteractiveLesson.slug).all():
+        root = _interactive_package_root(row)
+        if (root / 'templates' / 'index.html').exists() and (root / 'lesson.json').exists():
+            items.append({'slug': row.slug})
+    return jsonify({'ok': True, 'lessons': items})
+
+
+@app.route('/sync/interactive-package/<slug>')
+def sync_interactive_package(slug):
+    """Stáhne jeden balíček lekce jako ZIP. Po jednom = nízká paměť na Renderu."""
+    if not _sync_ok():
+        return 'Forbidden', 403
+    safe_slug = safe_package_slug(slug)
+    row = InteractiveLesson.query.filter_by(slug=safe_slug).first()
+    if not row:
+        return 'Not found', 404
+    root = _interactive_package_root(row)
+    if not (root / 'templates' / 'index.html').exists():
+        return 'Package missing', 404
+    tmp_dir = Path(tempfile.mkdtemp(prefix='interactive-sync-'))
+    zip_base = tmp_dir / safe_slug
+    zip_path = Path(shutil.make_archive(str(zip_base), 'zip', root_dir=str(root)))
+    response = send_file(str(zip_path), mimetype='application/zip', as_attachment=True,
+                         download_name=f'{safe_slug}.zip', conditional=True)
+    response.call_on_close(lambda: shutil.rmtree(tmp_dir, ignore_errors=True))
+    return response
+
+
+def _pull_interactive_packages(cfg, token):
+    """Render -> notebook: stáhne všechny interaktivní balíčky po jednom."""
+    manifest_req = urllib.request.Request(
+        cfg['render_url'] + '/sync/interactive-manifest',
+        headers={'X-Sync-Token': token}
+    )
+    with urllib.request.urlopen(manifest_req, timeout=60) as resp:
+        manifest = json.loads(resp.read().decode('utf-8'))
+    lessons = manifest.get('lessons', []) if isinstance(manifest, dict) else []
+    downloaded = 0
+    for info in lessons:
+        slug = safe_package_slug((info or {}).get('slug', ''))
+        if not slug:
+            continue
+        req = urllib.request.Request(
+            cfg['render_url'] + '/sync/interactive-package/' + urllib.parse.quote(slug),
+            headers={'X-Sync-Token': token}
+        )
+        tmp_root = Path(tempfile.mkdtemp(prefix='lesson-pull-'))
+        try:
+            zip_path = tmp_root / (slug + '.zip')
+            with urllib.request.urlopen(req, timeout=120) as resp, zip_path.open('wb') as out:
+                shutil.copyfileobj(resp, out, length=1024 * 1024)
+            extract_dir = tmp_root / 'extracted'
+            extract_dir.mkdir(parents=True, exist_ok=True)
+            with zipfile.ZipFile(zip_path, 'r') as archive:
+                safe_extract_zip(archive, extract_dir)
+            # Endpoint balí ZIP s obsahem lekce přímo v kořeni.
+            source = extract_dir
+            destination = INTERACTIVE_LESSONS / slug
+            staged = INTERACTIVE_LESSONS / (slug + '.__new__')
+            shutil.rmtree(staged, ignore_errors=True)
+            shutil.copytree(source, staged)
+            if not (staged / 'templates' / 'index.html').exists():
+                shutil.rmtree(staged, ignore_errors=True)
+                raise ValueError(f'Balíček {slug} neobsahuje templates/index.html.')
+            shutil.rmtree(destination, ignore_errors=True)
+            staged.rename(destination)
+            downloaded += 1
+        finally:
+            shutil.rmtree(tmp_root, ignore_errors=True)
+    return downloaded
+
+
 @app.route('/sync/snapshot')
 def sync_snapshot():
     """Render -> notebook: lehký snapshot pouze databáze.
@@ -7172,7 +7270,12 @@ def teacher_sync():
                 finally:
                     b.close(); a.close()
                 snap_db.unlink(missing_ok=True)
-                msg = 'Hotovo. Databáze z Renderu je stažena do notebooku. Odhlaste se a znovu přihlaste.'
+                # Databáze obsahuje serverové cesty /var/data. Proto zároveň stáhnout
+                # fyzické balíčky lekcí z Renderu a následně přepsat jejich cesty na lokální.
+                packages = _pull_interactive_packages(cfg, token)
+                db.session.remove()
+                restore_interactive_lessons_from_files()
+                msg = f'Hotovo. Databáze i interaktivní lekce jsou stažené do notebooku ({packages} balíčků). Odhlaste se a znovu přihlaste.'
             except urllib.error.HTTPError as e:
                 msg = (f'Stažení se nezdařilo: Render vrátil HTTP {e.code}. ' + ('SYNC_TOKEN není shodný.' if e.code == 403 else 'Jde o chybu serveru nebo přenosu, ne nutně token.'))
             except Exception as e:
