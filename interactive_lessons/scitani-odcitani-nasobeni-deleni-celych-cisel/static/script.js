@@ -9,6 +9,17 @@ const progressText = document.getElementById("progressText");
 const progressBar = document.getElementById("progressBar");
 
 let lessonSaved = false;
+let completedExamples = 0;
+let targetExamples = 10;
+
+function gradeFromPercent(percent) {
+  if (percent >= 95) return 1;
+  if (percent >= 90) return 2;
+  if (percent >= 85) return 3;
+  if (percent >= 80) return 4;
+  return 5;
+}
+
 
 function selectedOperations() {
     return [...document.querySelectorAll('input[name="operation"]:checked')]
@@ -21,6 +32,8 @@ function showMessage(text, type = "neutral") {
 }
 
 function updateProgress(done = 0, target = 10) {
+    completedExamples = Number(done) || 0;
+    targetExamples = Number(target) || 10;
     progressText.textContent = `${done} z ${target} příkladů`;
     progressBar.style.width = `${Math.min(100, (done / target) * 100)}%`;
 }
@@ -117,6 +130,31 @@ async function checkAnswer() {
         answer.focus();
     }
 }
+
+
+async function exitAndSave() {
+    const percent = Math.round((completedExamples / targetExamples) * 100);
+    const grade = gradeFromPercent(percent);
+    const button = document.getElementById("exitLessonBtn");
+    button.disabled = true;
+    button.textContent = "Ukládám výsledek…";
+    try {
+        const response = await fetch(window.LESSON_URLS.completeLesson, {
+            method: "POST",
+            headers: {"Content-Type": "application/json"},
+            body: JSON.stringify({percent, grade})
+        });
+        const data = await response.json();
+        if (!response.ok || !data.ok) throw new Error(data.error || "Výsledek se nepodařilo uložit.");
+        window.location.href = window.LESSON_URLS.portal;
+    } catch (error) {
+        button.disabled = false;
+        button.textContent = "← Ukončit a uložit výsledek";
+        showMessage(error.message || "Výsledek se nepodařilo uložit.", "error");
+    }
+}
+
+document.getElementById("exitLessonBtn").addEventListener("click", exitAndSave);
 
 newButton.addEventListener("click", createExample);
 checkButton.addEventListener("click", checkAnswer);

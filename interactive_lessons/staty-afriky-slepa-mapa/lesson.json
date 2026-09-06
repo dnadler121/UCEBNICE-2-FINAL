@@ -1,0 +1,13 @@
+{
+  "subject": "zemepis",
+  "school": "Montessori",
+  "grade": "5.–9. ročník",
+  "topic": "Afrika",
+  "title": "Státy Afriky – slepá mapa",
+  "slug": "staty-afriky-slepa-mapa",
+  "description": "Interaktivní slepá mapa Afriky – státy, procvičování a test s průběžným ukládáním.",
+  "icon": "🗺️",
+  "is_published": true,
+  "focus_guard": false,
+  "allow_page_leave": true
+}

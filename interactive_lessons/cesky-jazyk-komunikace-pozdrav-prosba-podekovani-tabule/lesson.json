@@ -1,0 +1,14 @@
+{
+  "subject": "fyzika",
+  "school": "Montessori",
+  "grade": "Praktická škola dvouletá – společná výuka",
+  "topic": "Český jazyk – Komunikace a opakování",
+  "title": "Umíme spolu mluvit – interaktivní hodina",
+  "slug": "cesky-jazyk-komunikace-pozdrav-prosba-podekovani-tabule",
+  "description": "Společná 45minutová hodina pro interaktivní tabuli: pozdrav, oslovení, prosba, poděkování, omluva, rozloučení, slovní zásoba a čtení s porozuměním.",
+  "icon": "💬",
+  "is_published": true,
+  "focus_guard": false,
+  "allow_page_leave": true,
+  "version": 1
+}

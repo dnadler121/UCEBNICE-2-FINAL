@@ -1,16 +1,26 @@
+def _grade(percent):
+    if percent >= 90: return 1
+    if percent >= 75: return 2
+    if percent >= 60: return 3
+    if percent >= 40: return 4
+    return 5
+
 def handle(action, payload, session, user):
-    key = "ryby_stavba_tela"
-    if action == "save":
-        session[key] = {
-            "score": int(payload.get("score", 0) or 0),
-            "total": int(payload.get("total", 20) or 20),
-            "lang": str(payload.get("lang", "cs")),
-            "mode": str(payload.get("mode", "practice")),
-        }
-        return {"ok": True, "saved": session[key]}
-    if action == "load":
+    key = f"fish_body_v5_{user['id']}"
+
+    if action == "start":
+        session[key] = {"started": True}
+        return {"ok": True, "message": "Spuštěno."}
+
+    if action == "status":
         return {"ok": True, "state": session.get(key, {})}
+
     if action == "reset":
-        session.pop(key, None)
-        return {"ok": True}
-    return {"ok": True}
+        session[key] = {}
+        return {"ok": True, "message": "Aktivita byla připravena znovu."}
+
+    if action == "grade":
+        percent = max(0, min(100, int(payload.get("percent", 0))))
+        return {"ok": True, "percent": percent, "grade": _grade(percent)}
+
+    return {"ok": False, "message": "Neznámá akce."}

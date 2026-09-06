@@ -1,0 +1,50 @@
+
+<!doctype html>
+<html lang="cs">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>{{ package.title }}</title>
+<link rel="stylesheet" href="{{ asset_url('style.css') }}">
+</head>
+<body>
+<div class="page">
+<header>
+  <div>
+    <h1>{{ package.title }}</h1>
+    <p>Každý příklad dokonči celý. Aplikace tě vede krok za krokem a další úloha se odemkne až po správném výsledku.</p>
+  </div>
+  <div class="progress">
+    <b id="counter">Příklad 1 / 12</b>
+    <div class="bar"><div id="bar"></div></div>
+    <small id="stage">Začínáme</small>
+  </div>
+</header>
+
+<main class="card">
+  <div id="operationBadge" class="badge"></div>
+  <div id="mainExample" class="main-example"></div>
+
+  <section id="teacher" class="teacher">
+    <b>Průvodce</b>
+    <span id="teacherText"></span>
+  </section>
+
+  <section id="workspace"></section>
+
+  <div class="actions">
+    <button id="hintBtn" class="secondary">Nápověda</button>
+    <button id="nextBtn" disabled>Další příklad</button>
+    <button id="returnBtn" class="secondary" type="button">← Ukončit a uložit výsledek</button>
+  </div>
+</main>
+</div>
+<script>
+window.LESSON_URLS = {
+  completeLesson: "{{ complete_url }}",
+  portal: "{{ portal_url }}"
+};
+</script>
+<script src="{{ asset_url('app.js') }}"></script>
+</body>
+</html>

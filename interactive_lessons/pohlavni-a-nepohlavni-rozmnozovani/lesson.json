@@ -1,0 +1,14 @@
+{
+  "subject": "biologie",
+  "school": "Montessori",
+  "grade": "8. ročník",
+  "topic": "Pohlavní a nepohlavní rozmnožování",
+  "title": "Pohlavní a nepohlavní rozmnožování",
+  "slug": "pohlavni-a-nepohlavni-rozmnozovani",
+  "description": "Funkční šablona Živá a neživá příroda: výklad → zařazování pohlavní/nepohlavní → procvičování → test s průběžným ukládáním.",
+  "icon": "🌿",
+  "is_published": true,
+  "focus_guard": false,
+  "allow_page_leave": true,
+  "version": "2.0-ziva-template"
+}

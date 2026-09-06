@@ -1,0 +1,51 @@
+
+<!doctype html>
+<html lang="cs">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>{{ package.title }}</title>
+  <link rel="stylesheet" href="{{ asset_url('style.css') }}">
+</head>
+<body>
+<div class="page">
+  <header>
+    <div>
+      <h1>{{ package.title }}</h1>
+      <p>Výuková aplikace: upravujeme výrazy s mocninami do nejjednoduššího tvaru. Nic zbytečně nedopočítáváme.</p>
+    </div>
+    <div class="progress-card">
+      <strong id="counter">Příklad 1 / 12</strong>
+      <div class="track"><div id="fill"></div></div>
+      <small id="stage">Pravidlo</small>
+    </div>
+  </header>
+
+  <main class="card">
+    <div id="badge" class="badge"></div>
+    <div id="expression" class="expression"></div>
+
+    <section id="teacher" class="teacher">
+      <b>Průvodce</b>
+      <span id="teacherText"></span>
+    </section>
+
+    <section id="workspace"></section>
+
+    <div class="actions">
+      <button id="hintBtn" class="secondary">Nápověda</button>
+      <button id="continueBtn" class="continue hidden">Pokračovat ▶</button>
+      <button id="nextBtn" disabled>Další příklad</button>
+      <button id="returnBtn" class="continue" type="button">← Ukončit a uložit výsledek</button>
+    </div>
+  </main>
+</div>
+<script>
+window.LESSON_URLS = {
+  completeLesson: "{{ complete_url }}",
+  portal: "{{ portal_url }}"
+};
+</script>
+<script src="{{ asset_url('app.js') }}"></script>
+</body>
+</html>

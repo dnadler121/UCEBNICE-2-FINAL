@@ -1,0 +1,14 @@
+{
+  "subject": "biologie",
+  "school": "Montessori",
+  "grade": "8. ročník",
+  "topic": "Člověk – opěrná a pohybová soustava",
+  "title": "Lidská kostra – kosti V7",
+  "slug": "lidska-kostra-kosti",
+  "description": "Interaktivní kostra s tvarovanými oblastmi jako mapa: vyber název kosti a klikni do její oblasti.",
+  "icon": "🦴",
+  "is_published": true,
+  "focus_guard": false,
+  "allow_page_leave": true,
+  "version": "7.2"
+}

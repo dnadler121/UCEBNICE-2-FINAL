@@ -99,7 +99,7 @@ def _add_parentheses(tokens: List[Token]) -> List[Token]:
 def generate_expression(
     number_count: int = 5,
     allowed_operations: Optional[List[str]] = None,
-    max_number: int = 20,
+    max_number: int = 15,
     use_parentheses: bool = True,
 ) -> List[Token]:
     allowed = allowed_operations or ["+", "-", "*", "/"]

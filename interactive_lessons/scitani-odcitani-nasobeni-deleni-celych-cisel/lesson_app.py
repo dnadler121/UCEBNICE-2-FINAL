@@ -16,7 +16,7 @@ def _state_key(user):
 def _new_expression(payload):
     try:
         count = max(3, min(8, int(payload.get("count", 5))))
-        max_number = max(5, min(100, int(payload.get("max_number", 20))))
+        max_number = max(5, min(15, int(payload.get("max_number", 15))))
     except (TypeError, ValueError):
         raise ValueError("Neplatné nastavení generátoru.")
 
@@ -126,11 +126,11 @@ def handle(action, payload, session, user):
         percent = max(0, round(100 * TARGET_EXAMPLES / (TARGET_EXAMPLES + state["total_mistakes"])))
         if percent >= 90:
             grade = 1
-        elif percent >= 75:
+        elif percent >= 80:
             grade = 2
-        elif percent >= 60:
+        elif percent >= 70:
             grade = 3
-        elif percent >= 40:
+        elif percent >= 60:
             grade = 4
         else:
             grade = 5

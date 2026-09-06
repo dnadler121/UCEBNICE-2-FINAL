@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="cs">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>{{ package.title }}</title>
+<style>
+*{box-sizing:border-box}body{margin:0;font-family:Segoe UI,Arial,sans-serif;background:#f4f6fb;color:#172033;touch-action:manipulation}.wrap{max-width:1600px;margin:auto;padding:14px}.top{display:grid;grid-template-columns:78px 1fr 150px;gap:12px;align-items:center;background:#314ea2;color:white;border-radius:20px;padding:12px 16px;box-shadow:0 8px 24px #1e2f7130}.home,.reset,.teacherBtn{border:0;border-radius:14px;background:white;color:#284594;font-weight:900;font-size:18px;padding:14px;cursor:pointer}.title{text-align:center;font-size:34px;font-weight:950}.layout{display:grid;grid-template-columns:310px 1fr;gap:16px;margin-top:16px}.side,.stage{background:white;border-radius:20px;box-shadow:0 8px 28px #28345c14}.side{padding:12px}.stage{min-height:720px;padding:26px;display:flex;flex-direction:column}.progress{font-weight:900;text-align:center;padding:10px 8px}.bar{height:13px;background:#e9edf7;border-radius:10px;overflow:hidden;margin-top:8px}.bar>div{height:100%;background:#4465c5;width:0}.menuBtn{width:100%;border:0;border-radius:14px;background:#eef2fb;color:#20305d;padding:14px 12px;margin:5px 0;text-align:left;font-size:17px;font-weight:900;cursor:pointer}.menuBtn.on{background:#4465c5;color:white}.stageHead{display:flex;align-items:center;gap:14px;font-size:20px;font-weight:900;color:#4465c5}.counter{margin-left:auto;color:#5b6478}.card{flex:1;margin-top:14px;border:2px solid #e5e9f3;border-radius:24px;background:#fbfcff;padding:28px;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center}.eyebrow{font-size:22px;font-weight:900;color:#4465c5;margin-bottom:10px}.prompt{font-size:40px;line-height:1.2;font-weight:950;max-width:1100px}.sub{font-size:24px;line-height:1.45;max-width:1100px;color:#45506a;margin-top:14px}.visual{font-size:100px;margin:18px}.answers{display:grid;grid-template-columns:repeat(2,minmax(260px,1fr));gap:18px;width:min(1050px,100%);margin-top:24px}.ans{border:3px solid #cfd7eb;background:white;border-radius:20px;padding:24px 20px;font-size:28px;font-weight:950;cursor:pointer;min-height:92px}.ans:hover{background:#f0f4ff}.ans.ok{background:#ddf6e4;border-color:#58ad6b}.ans.bad{background:#ffe7e2;border-color:#d96757}.ans.selected{background:#e8efff;border-color:#4465c5}.feedback{min-height:58px;font-size:28px;font-weight:950;margin-top:18px}.nav{display:flex;gap:12px;margin-top:16px}.nav button{border:0;border-radius:14px;padding:15px 24px;font-size:20px;font-weight:900;cursor:pointer}.prev{background:#e9edf7}.next{margin-left:auto;background:#4465c5;color:white}.teacherBtn{border:0;border-radius:14px;background:#fff5ce;color:#604f00;font-weight:900;font-size:18px;padding:14px;cursor:pointer}.teacherPanel{display:none;background:#fff9df;border:3px solid #ead56b;border-radius:20px;padding:24px;margin:16px 0;font-size:21px;line-height:1.5}.teacherPanel.open{display:block}.teacherPanel h2{margin-top:0}.teacherPanel h3{margin-bottom:4px;color:#314ea2}.teacher{background:#fff5ce;border:2px solid #ead56b;border-radius:18px;padding:18px 22px;margin-top:20px;font-size:22px;max-width:1100px}.teacher b{display:block;margin-bottom:6px}.chips{display:flex;flex-wrap:wrap;gap:14px;justify-content:center;max-width:1100px;margin-top:20px}.chip{font-size:26px;font-weight:900;padding:18px 22px;border:3px solid #cfd7eb;background:white;border-radius:18px;cursor:pointer}.chip.on{background:#e8efff;border-color:#4465c5}.twoCols{display:grid;grid-template-columns:1fr 1fr;gap:18px;width:min(1120px,100%);margin-top:20px}.bucket{min-height:260px;border:3px dashed #aeb9d4;border-radius:22px;padding:18px}.bucket h3{font-size:30px;margin:0 0 12px}.bucket p{font-size:19px;color:#566078}.cardsRow{display:flex;flex-wrap:wrap;gap:12px;justify-content:center;width:min(1150px,100%);margin-top:18px}.sortCard{border:3px solid #cfd7eb;background:white;border-radius:18px;padding:16px 20px;font-size:24px;font-weight:900;cursor:pointer}.sortCard.done{opacity:.35;pointer-events:none}.score{font-size:86px;font-weight:950;color:#4465c5;margin:20px}.final{font-size:34px;font-weight:950;max-width:1050px}.mini{font-size:19px;color:#68728a;margin-top:8px}.hidden{display:none!important}@media(max-width:900px){.layout{grid-template-columns:1fr}.side{max-height:260px;overflow:auto}.title{font-size:26px}.top{grid-template-columns:64px 1fr}.reset{grid-column:1/-1}.prompt{font-size:32px}.answers,.twoCols{grid-template-columns:1fr}.ans{font-size:25px}.visual{font-size:78px}.card{padding:20px}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="top">
+    <button class="home" onclick="location.href='{{ portal_url }}'">⌂</button>
+    <div class="title">👤 OBČANSKÁ NAUKA – JÁ A MOJE OSOBNOST</div>
+    <button class="reset" id="resetBtn">↻ ZNOVU</button>
+  </div>
+  <button class="teacherBtn" id="teacherBtn" style="margin-top:14px;width:100%">👨‍🏫 PRO UČITELE – TEORIE A VEDENÍ HODINY</button>
+  <div class="teacherPanel" id="teacherPanel">
+    <h2>👨‍🏫 Tahák pro učitele – Já a moje osobnost</h2>
+    <h3>Cíl hodiny</h3><div>Žák jednoduchým způsobem rozlišuje vlastnost, dovednost a zájem; uvědomuje si, že lidé jsou různí, každý něco umí a každý se může zlepšovat.</div>
+    <h3>Základní teorie</h3><div><b>Osobnost</b> je souhrn toho, co člověka charakterizuje – jeho vlastností, schopností a dovedností, zájmů, způsobů chování a prožívání. Pro žáky stačí věta: <b>„Osobnost znamená, jaký jsem, co mám rád, co umím a jak se chovám.“</b></div>
+    <h3>Vlastnost × dovednost × zájem</h3><div><b>Vlastnost = jaký jsem</b> (trpělivý, kamarádský, pracovitý). <b>Dovednost = co umím</b> (nakoupit, uvařit, použít telefon). <b>Zájem = co mě baví nebo o co se zajímám</b> (sport, hudba, zvířata, počítače).</div>
+    <h3>Čtyři hlavní myšlenky</h3><div>1. Každý jsme jiný. 2. Každý něco umí. 3. Nikdo neumí všechno a můžeme se učit. 4. Na našem chování k druhým záleží.</div>
+    <h3>Jak hodinu vést</h3><div>Nechte žáky chodit k tabuli a střídat se. U situačních úloh se vždy krátce zeptejte „Proč?“. U osobních voleb není správná ani špatná odpověď. Vyhněte se nálepkám typu „ty jsi líný“ – mluvte raději o konkrétním chování.</div>
+    <h3>Doporučený čas</h3><div>Úvod 5 min • osobnost 5 min • vlastnost × dovednost 10 min • situační úlohy 10 min • osobní volby 7 min • závěrečná výzva 8 min.</div>
+  </div>
+  <div class="layout">
+    <aside class="side">
+      <div class="progress">8 ČÁSTÍ<div class="bar"><div id="bar"></div></div></div>
+      <div id="menu"></div>
+    </aside>
+    <main class="stage">
+      <div class="stageHead"><span id="sectionName"></span><span class="counter" id="counter"></span></div>
+      <div class="card" id="card"></div>
+      <div class="nav"><button class="prev" id="prev">◀ PŘEDCHOZÍ</button><button class="next" id="next">DALŠÍ ▶</button></div>
+    </main>
+  </div>
+</div>
+<script>
+const sections=[
+{icon:'🌍',title:'1. Každý jsme jiný',slides:[
+ {type:'choice',q:'Jsou všichni lidé úplně stejní?',v:'👥',opts:['ANO','NE'],correct:'NE',fb:'Správně. Lidé se mohou lišit vzhledem, zájmy, dovednostmi i vlastnostmi.',teacher:'Zeptejte se: V čem mohou být dva lidé stejní a v čem rozdílní?'},
+ {type:'info',q:'Každý člověk je jedinečný.',v:'⭐',text:'Někdo je klidný, jiný veselý. Někdo rád sportuje, jiný rád kreslí. Každý něco umí a každý se může něco nového naučit.',teacher:'Nechte děti uvést jeden příklad, v čem se lidé mohou lišit.'}
+]},
+{icon:'🧩',title:'2. Co tvoří osobnost',slides:[
+ {type:'chips',q:'Co všechno patří k tomu, kdo jsem?',v:'👤',items:['❤️ Co mám rád','⭐ Co umím','🙂 Jaký jsem','🌱 Co se chci naučit'],teacher:'Postupně klepněte na všechny čtyři kartičky a ke každé dejte jednoduchý příklad.'},
+ {type:'info',q:'OSOBNOST = jaký člověk je.',v:'🧠',text:'Do osobnosti patří naše vlastnosti, zájmy, schopnosti, způsob chování a také to, co je pro nás důležité.',teacher:'Držte se praktických příkladů. Není potřeba učit definici nazpaměť.'}
+]},
+{icon:'↔️',title:'3. Vlastnost × dovednost',slides:[
+ {type:'sort',q:'Rozdělíme výroky do dvou skupin.',items:[['Jsem kamarádský','v'],['Umím uvařit čaj','d'],['Jsem trpělivý','v'],['Umím jezdit na kole','d'],['Jsem pracovitý','v'],['Umím nakoupit','d'],['Jsem klidný','v'],['Umím používat telefon','d'],['Jsem spolehlivý','v'],['Umím uklidit pokoj','d'],['Jsem odvážný','v'],['Umím připravit svačinu','d'],['Jsem pořádný','v'],['Umím cestovat autobusem','d'],['Jsem ochotný','v'],['Umím se postarat o zvíře','d']],teacher:'Žák klepne na kartičku a potom na správnou skupinu. Můžete se u tabule střídat.'}
+]},
+{icon:'🎭',title:'4. Jaký je člověk?',slides:[
+ {type:'choice',q:'Petr pomohl spolužákovi sebrat věci ze země. Jaký byl?',v:'🤝',opts:['HODNÝ','LÍNÝ','ZLOSTNÝ','NEPOŘÁDNÝ'],correct:'HODNÝ'},
+ {type:'choice',q:'Eva čeká, až na ni přijde řada. Jaká je?',v:'⏳',opts:['TRPĚLIVÁ','ZLOSTNÁ','LÍNÁ','NEPOŘÁDNÁ'],correct:'TRPĚLIVÁ'},
+ {type:'choice',q:'Tomáš dokončí úkol, i když je těžký. Jaký je?',v:'💪',opts:['VYTRVALÝ','LÍNÝ','NEPOŘÁDNÝ','ZLOSTNÝ'],correct:'VYTRVALÝ'},
+ {type:'choice',q:'Anna uklidila své věci po práci. Jaká je?',v:'🧹',opts:['POŘÁDNÁ','LÍNÁ','HLUČNÁ','NEPOZORNÁ'],correct:'POŘÁDNÁ'},
+ {type:'choice',q:'Marek půjčil spolužákovi pastelku. Jaký je?',v:'🖍️',opts:['OCHOTNÝ','SOBECKÝ','LÍNÝ','NEPOŘÁDNÝ'],correct:'OCHOTNÝ'},
+ {type:'choice',q:'Klára se při neúspěchu hned nerozzlobí. Jaká je?',v:'🙂',opts:['KLIDNÁ','VÝBUŠNÁ','LÍNÁ','NEPOŘÁDNÁ'],correct:'KLIDNÁ'},
+ {type:'choice',q:'David slíbil, že přinese pomůcku, a opravdu ji přinesl. Jaký je?',v:'✅',opts:['SPOLEHLIVÝ','LÍNÝ','NEPOŘÁDNÝ','ZLOSTNÝ'],correct:'SPOLEHLIVÝ'},
+ {type:'choice',q:'Lucie se rozdělila o svačinu s kamarádkou. Jaká je?',v:'🥪',opts:['ŠTĚDRÁ','SOBECKÁ','LÍNÁ','NEPOZORNÁ'],correct:'ŠTĚDRÁ'},
+ {type:'choice',q:'Honza se přiznal, že rozbil hrnek. Jaký je?',v:'🗣️',opts:['UPŘÍMNÝ','LHAVÝ','LÍNÝ','NEPOŘÁDNÝ'],correct:'UPŘÍMNÝ'},
+ {type:'choice',q:'Sára pozorně poslouchá, když někdo mluví. Jaká je?',v:'👂',opts:['POZORNÁ','HLUČNÁ','NETRPĚLIVÁ','LÍNÁ'],correct:'POZORNÁ'},
+ {type:'choice',q:'Adam se zastal slabšího spolužáka. Jaký je?',v:'🛡️',opts:['ODVÁŽNÝ','BOJÁCNÝ','LÍNÝ','SOBECKÝ'],correct:'ODVÁŽNÝ'},
+ {type:'choice',q:'Nela každý den dokončí svou práci. Jaká je?',v:'📚',opts:['PRACOVITÁ','LÍNÁ','NEPOŘÁDNÁ','VÝBUŠNÁ'],correct:'PRACOVITÁ'}
+]},
+{icon:'❤️',title:'5. Co mám rád',slides:[
+ {type:'prefer',q:'Vyber, co máš raději. Tady není špatná odpověď.',sets:[['🐶 PES','🐱 KOČKA'],['☀️ LÉTO','❄️ ZIMA'],['🍕 PIZZA','🍝 TĚSTOVINY'],['⚽ SPORT','🎮 POČÍTAČ'],['🌳 PŘÍRODA','🏙️ MĚSTO'],['🎵 HUDBA','🎬 FILM'],['📖 ČTENÍ','🎨 KRESLENÍ'],['🍎 OVOCE','🥕 ZELENINA'],['🚶 PROCHÁZKA','🛋️ ODPOČINEK'],['👥 SPOLEČNOST','🧘 KLID']],teacher:'Nechte vždy jednoho žáka vybrat a pokud chce, říct proč. Odpovědi nehodnotíme.'}
+]},
+{icon:'⭐',title:'6. Co umím',slides:[
+ {type:'multi',q:'Na co z toho může být člověk pyšný, že už to umí?',v:'🙌',items:['🧹 uklidit','🥪 připravit jednoduché jídlo','🛒 nakoupit','🚲 jezdit na kole','📱 používat telefon','💻 pracovat na počítači','🐕 postarat se o zvíře','🤝 pomoct doma','🚌 cestovat autobusem','💳 zaplatit u pokladny','👕 vybrat si oblečení','🧼 umýt nádobí','🗑️ vynést odpadky','📚 připravit si věci do školy','☎️ zavolat o pomoc','🕒 přijít včas'],teacher:'Každý může vybrat jednu dovednost, kterou už zvládá. Není potřeba, aby všichni zvládali totéž.'}
+]},
+{icon:'🌱',title:'7. Co se chci naučit',slides:[
+ {type:'multi',q:'Co bych se chtěl v budoucnu naučit lépe?',v:'🎯',items:['🍳 vařit','🚌 cestovat autobusem','💻 pracovat na počítači','🛒 samostatně nakupovat','🏃 sportovat','🔧 něco vyrobit','🗣️ lépe mluvit s lidmi','🧹 lépe se starat o domácnost','💰 hospodařit s penězi','📅 plánovat si čas','☎️ vyřídit telefonát','👕 starat se o oblečení','🧭 lépe se orientovat','🤝 pomáhat druhým','📖 lépe číst a psát','🧘 zvládat klidně těžké situace'],teacher:'Každý žák může zvolit jeden cíl. Zdůrazněte, že každý se může postupně zlepšovat.'}
+]},
+{icon:'🏆',title:'8. Závěrečná výzva',slides:[
+ {type:'quiz',questions:[
+  ['Co je vlastnost?',['Umím plavat','Jsem kamarádský','Umím telefonovat','Umím vařit'],'Jsem kamarádský'],
+  ['Co je dovednost?',['Jsem klidný','Jsem veselý','Umím nakoupit','Jsem trpělivý'],'Umím nakoupit'],
+  ['Když někomu pomohu, jakou mohu ukázat vlastnost?',['ochotu','lenost','nepořádnost','vztek'],'ochotu'],
+  ['Jsou všichni lidé stejní?',['Ano','Ne','Jen ve škole','Jen doma'],'Ne'],
+  ['Co je dobrý osobní cíl?',['Naučit se něco nového','Nikdy nic nezkoušet','Vždy se vzdát','Nikomu nepomoci'],'Naučit se něco nového'],
+  ['Co platí o lidech?',['Každý něco umí','Všichni musí umět totéž','Nikdo se nemůže zlepšit','Všichni mají rádi stejné věci'],'Každý něco umí'],
+  ['Když čekám, až na mě přijde řada, jsem…',['trpělivý','nepořádný','líný','zlostný'],'trpělivý'],
+  ['Co je správné?',['Respektovat, že každý má rád něco jiného','Smát se druhému za jeho zájmy','Nutíme všechny ke stejnému názoru','Říkáme, že jen moje volba je správná'],'Respektovat, že každý má rád něco jiného'],
+  ['Která věta popisuje dovednost?',['Jsem veselý','Umím připravit svačinu','Jsem odvážný','Jsem trpělivý'],'Umím připravit svačinu'],
+  ['Která věta popisuje vlastnost?',['Umím jezdit autobusem','Umím uklidit','Jsem spolehlivý','Umím nakoupit'],'Jsem spolehlivý'],
+  ['Co je zájem?',['Něco, co mě baví','Moje výška','Moje adresa','Číslo bot'],'Něco, co mě baví'],
+  ['Když splním, co jsem slíbil, jsem…',['spolehlivý','líný','nepořádný','netrpělivý'],'spolehlivý'],
+  ['Co udělám, když něco ještě neumím?',['Mohu se to učit','Už to nikdy nezkusím','Budu se druhým smát','Řeknu, že to nejde'],'Mohu se to učit'],
+  ['Když má spolužák jiný názor než já, je správné…',['vyslechnout ho','smát se mu','křičet na něj','nutit ho změnit názor'],'vyslechnout ho'],
+  ['Co nejlépe vystihuje osobnost?',['Jaký jsem, co umím, co mám rád a jak se chovám','Jen jak vypadám','Jen kolik mi je let','Jen kde bydlím'],'Jaký jsem, co umím, co mám rád a jak se chovám']
+ ],teacher:'Třída se může radit. Cílem není známka, ale společně dokončit všech 15 otázek.'}
+]}
+];
+let si=0,pi=0,seen=new Set(),quizIndex=0,quizScore=0,sortSelected=null,sortRemaining=[];
+const card=document.getElementById('card'),menu=document.getElementById('menu'),bar=document.getElementById('bar');
+function totalSlides(){return sections.reduce((n,s)=>n+s.slides.length,0)}
+function flatIndex(){let n=0;for(let i=0;i<si;i++)n+=sections[i].slides.length;return n+pi}
+function markSeen(){seen.add(si+'-'+pi);bar.style.width=(seen.size/totalSlides()*100)+'%'}
+function renderMenu(){menu.innerHTML='';sections.forEach((s,i)=>{let b=document.createElement('button');b.className='menuBtn'+(i===si?' on':'');b.textContent=s.icon+' '+s.title;b.onclick=()=>{si=i;pi=0;quizIndex=0;quizScore=0;render()};menu.appendChild(b)})}
+function teacherBox(t){return t?`<div class="teacher"><b>👩‍🏫 Pro učitele</b>${t}</div>`:''}
+function render(){renderMenu();markSeen();let s=sections[si],x=s.slides[pi];sectionName.textContent=s.icon+' '+s.title;counter.textContent=(pi+1)+' / '+s.slides.length;card.innerHTML='';
+ if(x.type==='info')card.innerHTML=`<div class="eyebrow">SPOLEČNĚ</div><div class="prompt">${x.q}</div><div class="visual">${x.v}</div><div class="sub">${x.text}</div>${teacherBox(x.teacher)}`;
+ if(x.type==='choice'){let opts=[...x.opts].sort(()=>Math.random()-.5);card.innerHTML=`<div class="prompt">${x.q}</div><div class="visual">${x.v}</div><div class="answers">${opts.map(o=>`<button class="ans">${o}</button>`).join('')}</div><div class="feedback"></div>${teacherBox(x.teacher)}`;card.querySelectorAll('.ans').forEach(b=>b.onclick=()=>{let ok=b.textContent===x.correct;b.classList.add(ok?'ok':'bad');card.querySelector('.feedback').textContent=ok?'👏 SPRÁVNĚ!': '🙂 ZKUSÍME TO JEŠTĚ JEDNOU.';if(ok){card.querySelectorAll('.ans').forEach(y=>y.disabled=true)}else setTimeout(()=>{b.classList.remove('bad');card.querySelector('.feedback').textContent=''},700)})}
+ if(x.type==='chips'){card.innerHTML=`<div class="prompt">${x.q}</div><div class="visual">${x.v}</div><div class="chips">${x.items.map(i=>`<button class="chip">${i}</button>`).join('')}</div><div class="feedback">Klepněte postupně na všechny části.</div>${teacherBox(x.teacher)}`;card.querySelectorAll('.chip').forEach(b=>b.onclick=()=>b.classList.toggle('on'))}
+ if(x.type==='prefer'){card.innerHTML=`<div class="prompt">${x.q}</div><div class="chips">${x.sets.flat().map(i=>`<button class="chip">${i}</button>`).join('')}</div><div class="feedback">❤️ Každá volba může být správná.</div>${teacherBox(x.teacher)}`;card.querySelectorAll('.chip').forEach(b=>b.onclick=()=>b.classList.toggle('on'))}
+ if(x.type==='multi'){card.innerHTML=`<div class="prompt">${x.q}</div><div class="visual">${x.v}</div><div class="chips">${x.items.map(i=>`<button class="chip">${i}</button>`).join('')}</div><div class="feedback">Vyberte jednu nebo více možností.</div>${teacherBox(x.teacher)}`;card.querySelectorAll('.chip').forEach(b=>b.onclick=()=>b.classList.toggle('on'))}
+ if(x.type==='sort')renderSort(x);
+ if(x.type==='quiz')renderQuiz(x);
+}
+function renderSort(x){sortRemaining=x.items.map((a,i)=>({text:a[0],kind:a[1],id:i}));sortSelected=null;card.innerHTML=`<div class="prompt">${x.q}</div><div class="twoCols"><button class="bucket" id="bv"><h3>🙂 VLASTNOST</h3><p>Jaký jsem</p></button><button class="bucket" id="bd"><h3>⭐ DOVEDNOST</h3><p>Co umím</p></button></div><div class="cardsRow" id="sortCards"></div><div class="feedback" id="sortFb">1. Klepni na kartičku. 2. Klepni na správnou skupinu.</div>${teacherBox(x.teacher)}`;function draw(){let r=document.getElementById('sortCards');r.innerHTML=sortRemaining.map(z=>`<button class="sortCard" data-id="${z.id}">${z.text}</button>`).join('');r.querySelectorAll('.sortCard').forEach(b=>b.onclick=()=>{r.querySelectorAll('.sortCard').forEach(y=>y.classList.remove('on'));b.classList.add('on');sortSelected=sortRemaining.find(z=>z.id==b.dataset.id);document.getElementById('sortFb').textContent='Teď klepni na VLASTNOST nebo DOVEDNOST.'})}draw();['v','d'].forEach(k=>document.getElementById('b'+k).onclick=()=>{if(!sortSelected){document.getElementById('sortFb').textContent='Nejdřív vyber kartičku.';return}if(sortSelected.kind===k){document.getElementById('sortFb').textContent='👏 SPRÁVNĚ!';sortRemaining=sortRemaining.filter(z=>z.id!==sortSelected.id);sortSelected=null;draw();if(!sortRemaining.length)document.getElementById('sortFb').textContent='🏆 VÝBORNĚ – všechno je správně rozdělené!'}else document.getElementById('sortFb').textContent='🙂 To sem nepatří. Zkus druhou skupinu.'})}
+function renderQuiz(x){if(quizIndex>=x.questions.length){card.innerHTML=`<div class="eyebrow">SPOLEČNÁ VÝZVA HOTOVÁ</div><div class="score">${quizScore} / ${x.questions.length}</div><div class="final">Každý jsme jiný. Každý něco umíme. Každý se můžeme něco nového naučit. 🤝 Chováme se k sobě s respektem.</div>${teacherBox(x.teacher)}`;return}let q=x.questions[quizIndex],opts=[...q[1]].sort(()=>Math.random()-.5);card.innerHTML=`<div class="eyebrow">OTÁZKA ${quizIndex+1} Z ${x.questions.length}</div><div class="prompt">${q[0]}</div><div class="answers">${opts.map(o=>`<button class="ans">${o}</button>`).join('')}</div><div class="feedback"></div>${teacherBox(x.teacher)}`;card.querySelectorAll('.ans').forEach(b=>b.onclick=()=>{let ok=b.textContent===q[2];b.classList.add(ok?'ok':'bad');if(ok){quizScore++;card.querySelector('.feedback').textContent='👏 SPRÁVNĚ!';card.querySelectorAll('.ans').forEach(y=>y.disabled=true);setTimeout(()=>{quizIndex++;renderQuiz(x)},650)}else{card.querySelector('.feedback').textContent='🙂 Zkusíme jinou možnost.';setTimeout(()=>{b.classList.remove('bad');card.querySelector('.feedback').textContent=''},600)}})}
+function go(d){pi+=d;if(pi>=sections[si].slides.length){if(si<sections.length-1){si++;pi=0;quizIndex=0;quizScore=0}else pi=sections[si].slides.length-1}if(pi<0){if(si>0){si--;pi=sections[si].slides.length-1}else pi=0}render()}
+document.getElementById('teacherBtn').onclick=()=>document.getElementById('teacherPanel').classList.toggle('open');
+next.onclick=()=>go(1);prev.onclick=()=>go(-1);document.getElementById('resetBtn').onclick=()=>{si=0;pi=0;quizIndex=0;quizScore=0;seen.clear();render()};document.addEventListener('keydown',e=>{if(e.key==='ArrowRight')go(1);if(e.key==='ArrowLeft')go(-1)});render();
+</script>
+</body>
+</html>

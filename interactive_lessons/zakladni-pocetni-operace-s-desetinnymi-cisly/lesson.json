@@ -1,0 +1,11 @@
+{
+  "subject": "matematika",
+  "school": "Střední škola",
+  "grade": "1. ročník",
+  "topic": "Základní početní operace",
+  "title": "Základní početní operace s desetinnými čísly",
+  "slug": "zakladni-pocetni-operace-s-desetinnymi-cisly",
+  "description": "Výuková lekce sčítání, násobení a dělení desetinných čísel pod sebe a úpravy výrazů s mocninami. Lekce pracuje s chybou a vede žáka krok za krokem.",
+  "icon": "🔢",
+  "is_published": true
+}

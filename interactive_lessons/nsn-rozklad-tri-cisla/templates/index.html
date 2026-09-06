@@ -1,0 +1,30 @@
+<!doctype html><html lang="cs"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>{{ package.title }}</title><link rel="stylesheet" href="{{ asset_url('style.css') }}"></head><body>
+<div class="page"><header><a href="{{ portal_url }}">← Zpět do matematiky</a><p>MATEMATIKA · {{ package.grade_name }}</p><h1>{{ package.title }}</h1><p>Rozlož tři čísla na prvočinitele, vyškrtej dvojice a vypočítej NSN.</p></header>
+<section class="card progress"><b>Postup</b><span id="progress">0 z 10 příkladů</span><div class="bar"><i id="bar"></i></div></section>
+<main class="grid"><section class="card"><h2>Jak pracovat</h2><ol><li>Vyber číslo, které ještě není prvočíslo.</li><li>Zkoušej dělitele postupně: <b>2, 3, 5, 7, 11</b>.</li><li>Např. 30 → 2 × 15, potom 15 → 3 × 5.</li><li>Po rozkladu škrtáme stejné činitele, které už máme v předchozích řádcích.</li><li>Nevyškrtnuté činitele vynásobíme.</li></ol></section>
+<section class="card work"><div class="head"><div><small>AKTUÁLNÍ PŘÍKLAD</small><h2 id="numbers">Načítám…</h2></div><button id="new">Nový příklad</button></div><div id="rows"></div><div id="controls"></div><div id="msg" class="msg">Připravuji lekci.</div><div class="stats"><span>Chyby v příkladu: <b id="mistakes">0</b></span></div></section></main>
+<section class="card calculator-card">
+  <div class="calculator-heading">
+    <div><h2>🧮 Vědecká kalkulačka</h2><small>Je součástí lekce, takže kvůli výpočtu nemusíš přepínat do jiné aplikace.</small></div>
+    <button type="button" class="calc-toggle" id="calc-toggle" onclick="toggleCalculator()">Otevřít kalkulačku</button>
+  </div>
+  <div id="student-calculator" class="student-calculator" hidden>
+    <div class="calc-top">
+      <button type="button" id="calc-angle-mode" class="calc-mode" onclick="toggleAngleMode()">DEG</button>
+      <input id="calc-expression" class="calc-display" inputmode="decimal" autocomplete="off" placeholder="např. 2*3*5*7" aria-label="Výraz kalkulačky">
+    </div>
+    <div id="calc-result" class="calc-result">0</div>
+    <div class="calc-grid">
+      <button type="button" onclick="calcInsert('sin(')">sin</button><button type="button" onclick="calcInsert('cos(')">cos</button><button type="button" onclick="calcInsert('tan(')">tan</button><button type="button" onclick="calcInsert('sqrt(')">√</button><button type="button" onclick="calcClear()">C</button>
+      <button type="button" onclick="calcInsert('asin(')">sin⁻¹</button><button type="button" onclick="calcInsert('acos(')">cos⁻¹</button><button type="button" onclick="calcInsert('atan(')">tan⁻¹</button><button type="button" onclick="calcInsert('log(')">log</button><button type="button" onclick="calcInsert('ln(')">ln</button>
+      <button type="button" onclick="calcInsert('7')">7</button><button type="button" onclick="calcInsert('8')">8</button><button type="button" onclick="calcInsert('9')">9</button><button type="button" onclick="calcInsert('/')">÷</button><button type="button" onclick="calcInsert('**')">xʸ</button>
+      <button type="button" onclick="calcInsert('4')">4</button><button type="button" onclick="calcInsert('5')">5</button><button type="button" onclick="calcInsert('6')">6</button><button type="button" onclick="calcInsert('*')">×</button><button type="button" onclick="calcInsert('pi')">π</button>
+      <button type="button" onclick="calcInsert('1')">1</button><button type="button" onclick="calcInsert('2')">2</button><button type="button" onclick="calcInsert('3')">3</button><button type="button" onclick="calcInsert('-')">−</button><button type="button" onclick="calcInsert('(')">(</button>
+      <button type="button" onclick="calcInsert('0')">0</button><button type="button" onclick="calcInsert('.')">,</button><button type="button" onclick="calcInsert(')')">)</button><button type="button" onclick="calcInsert('+')">+</button><button type="button" class="calc-equals" onclick="calcEvaluate()">=</button>
+    </div>
+    <small class="calc-note">Kalkulačka počítá číselné výrazy. Rozklad na prvočinitele musíš udělat sám.</small>
+  </div>
+</section>
+</div>
+<script>window.NSN={api:{new:"{{ api_url('new') }}",split:"{{ api_url('split') }}",cross:"{{ api_url('cross') }}",to_product:"{{ api_url('to_product') }}",answer:"{{ api_url('answer') }}"},complete:"{{ complete_url }}"};</script><script src="{{ asset_url('script.js') }}"></script></body></html>

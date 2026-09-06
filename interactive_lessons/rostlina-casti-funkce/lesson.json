@@ -1,0 +1,14 @@
+{
+  "subject": "biologie",
+  "school": "Montessori",
+  "grade": "6.–9. ročník",
+  "topic": "Rostliny – části rostliny a jejich funkce",
+  "title": "Části rostliny a jejich funkce",
+  "slug": "rostlina-casti-funkce",
+  "description": "Interaktivní čtyřfázová aplikace ve vizuálním stylu Montessori: celá rostlina, detail listu, detail květu a funkce částí s procentním hodnocením.",
+  "icon": "🌱",
+  "is_published": true,
+  "focus_guard": false,
+  "allow_page_leave": true,
+  "version": 4
+}

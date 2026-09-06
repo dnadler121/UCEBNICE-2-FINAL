@@ -6944,6 +6944,7 @@ Která věc je neživá? | strom | houba | sklenice | 3'''
 # --- OFFLINE / RENDER: synchronizace --------------------------------------
 SYNC_CFG = BASE / 'sync_config.json'
 SYNC_QUEUE = DATA_DIR / 'sync_queue.jsonl'
+SYNC_QUEUE_LOCK = threading.RLock()
 
 def _is_render_instance():
     """True na Renderu; False při lokálním spuštění na notebooku."""
@@ -7001,34 +7002,40 @@ def _post_sync_event(payload, timeout=8):
 def _append_sync_queue(payload):
     if _is_render_instance():
         return
-    SYNC_QUEUE.parent.mkdir(parents=True, exist_ok=True)
-    with SYNC_QUEUE.open('a', encoding='utf-8') as f:
-        f.write(json.dumps(payload, ensure_ascii=False, separators=(',', ':')) + '\n')
+    with SYNC_QUEUE_LOCK:
+        SYNC_QUEUE.parent.mkdir(parents=True, exist_ok=True)
+        with SYNC_QUEUE.open('a', encoding='utf-8') as f:
+            f.write(json.dumps(payload, ensure_ascii=False, separators=(',', ':')) + '\n')
 
 def _flush_sync_queue():
-    if _is_render_instance() or not SYNC_QUEUE.exists():
+    if _is_render_instance():
         return 0, 0
-    try:
-        lines = [x for x in SYNC_QUEUE.read_text(encoding='utf-8').splitlines() if x.strip()]
-    except Exception:
-        return 0, 0
-    kept = []
-    sent = 0
-    for line in lines:
+    # Ukládání výsledku a minutový worker mohou běžet současně. Zámek zabrání
+    # přepsání fronty ve chvíli, kdy student právě dokončuje další úlohu.
+    with SYNC_QUEUE_LOCK:
+        if not SYNC_QUEUE.exists():
+            return 0, 0
         try:
-            payload = json.loads(line)
+            lines = [x for x in SYNC_QUEUE.read_text(encoding='utf-8').splitlines() if x.strip()]
         except Exception:
-            continue
-        if _post_sync_event(payload):
-            sent += 1
+            return 0, 0
+        kept = []
+        sent = 0
+        for line in lines:
+            try:
+                payload = json.loads(line)
+            except Exception:
+                continue
+            if _post_sync_event(payload):
+                sent += 1
+            else:
+                kept.append(line)
+        if kept:
+            SYNC_QUEUE.write_text('\n'.join(kept) + '\n', encoding='utf-8')
         else:
-            kept.append(line)
-    if kept:
-        SYNC_QUEUE.write_text('\n'.join(kept) + '\n', encoding='utf-8')
-    else:
-        try: SYNC_QUEUE.unlink()
-        except Exception: pass
-    return sent, len(kept)
+            try: SYNC_QUEUE.unlink()
+            except Exception: pass
+        return sent, len(kept)
 
 def _queue_sync_payload(payload):
     if _is_render_instance():

@@ -1,0 +1,265 @@
+<!doctype html>
+<html lang="cs">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>{{ package.title }}</title>
+<style>
+*{box-sizing:border-box} body{margin:0;font-family:Segoe UI,Arial,sans-serif;background:#f4f7fb;color:#162033;touch-action:manipulation}
+.wrap{max-width:1600px;margin:auto;padding:14px}
+.top{display:grid;grid-template-columns:78px 1fr 150px;gap:12px;align-items:center;background:#245a8d;color:#fff;border-radius:20px;padding:12px 16px;box-shadow:0 8px 24px #17395c30}
+.home,.reset,.teacherBtn{border:0;border-radius:14px;background:#fff;color:#1d4e7b;font-weight:900;font-size:18px;padding:14px;cursor:pointer}
+.title{text-align:center;font-size:34px;font-weight:950}
+.teacherBtn{width:100%;margin-top:14px;background:#fff3c9;color:#604900}
+.teacherPanel{display:none;background:#fff9df;border:3px solid #e4ca58;border-radius:20px;padding:24px;margin:14px 0;font-size:20px;line-height:1.5}
+.teacherPanel.open{display:block}.teacherPanel h2{margin-top:0}.teacherPanel h3{margin-bottom:4px;color:#245a8d}
+.plan{width:100%;border-collapse:collapse;margin-top:12px;font-size:18px}.plan th,.plan td{border:1px solid #ccb94e;padding:8px;vertical-align:top}.plan th{background:#fff1ad}
+.layout{display:grid;grid-template-columns:320px 1fr;gap:16px;margin-top:16px}
+.side,.stage{background:#fff;border-radius:20px;box-shadow:0 8px 28px #28345c14}.side{padding:12px}.stage{min-height:720px;padding:26px;display:flex;flex-direction:column}
+.progress{font-weight:900;text-align:center;padding:10px}.bar{height:13px;background:#e6edf4;border-radius:10px;overflow:hidden;margin-top:8px}.bar>div{height:100%;background:#2f70aa;width:0}
+.menuBtn{width:100%;border:0;border-radius:14px;background:#edf4fa;color:#1c4162;padding:14px 12px;margin:5px 0;text-align:left;font-size:17px;font-weight:900;cursor:pointer}.menuBtn.on{background:#2f70aa;color:#fff}
+.stageHead{display:flex;align-items:center;gap:14px;font-size:20px;font-weight:900;color:#2f70aa}.counter{margin-left:auto;color:#5b6478}
+.card{flex:1;margin-top:14px;border:2px solid #e2e8ef;border-radius:24px;background:#fbfdff;padding:28px;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center}
+.eyebrow{font-size:22px;font-weight:900;color:#2f70aa;margin-bottom:10px}.prompt{font-size:40px;line-height:1.2;font-weight:950;max-width:1120px}.sub{font-size:24px;line-height:1.45;max-width:1120px;color:#45506a;margin-top:14px}.visual{font-size:94px;margin:18px}
+.answers{display:grid;grid-template-columns:repeat(2,minmax(280px,1fr));gap:18px;width:min(1100px,100%);margin-top:24px}.ans{border:3px solid #cbd8e5;background:#fff;border-radius:20px;padding:24px 20px;font-size:27px;font-weight:950;cursor:pointer;min-height:92px}.ans.ok{background:#def5e4;border-color:#56a969}.ans.bad{background:#ffe8e3;border-color:#d36556}.ans.selected{background:#e6f1fb;border-color:#2f70aa}
+.feedback{min-height:58px;font-size:27px;font-weight:950;margin-top:18px}
+.nav{display:flex;gap:12px;margin-top:16px}.nav button{border:0;border-radius:14px;padding:15px 24px;font-size:20px;font-weight:900;cursor:pointer}.prev{background:#e8edf2}.next{margin-left:auto;background:#2f70aa;color:#fff}
+.teacher{background:#fff3c9;border:2px solid #e4ca58;border-radius:18px;padding:16px 20px;margin-top:20px;font-size:20px;max-width:1120px}.teacher b{display:block;margin-bottom:5px}
+.chips{display:flex;flex-wrap:wrap;gap:14px;justify-content:center;max-width:1160px;margin-top:20px}.chip{font-size:25px;font-weight:900;padding:17px 21px;border:3px solid #cbd8e5;background:#fff;border-radius:18px;cursor:pointer}.chip.on{background:#e6f1fb;border-color:#2f70aa}
+.twoCols{display:grid;grid-template-columns:1fr 1fr;gap:18px;width:min(1120px,100%);margin-top:20px}.bucket{min-height:210px;border:3px dashed #9fb2c7;border-radius:22px;padding:18px;background:#fff}.bucket h3{font-size:29px;margin:0 0 12px}.bucket p{font-size:19px;color:#566078}
+.cardsRow{display:flex;flex-wrap:wrap;gap:12px;justify-content:center;width:min(1160px,100%);margin-top:18px}.sortCard{border:3px solid #cbd8e5;background:#fff;border-radius:18px;padding:16px 20px;font-size:23px;font-weight:900;cursor:pointer}.sortCard.on{background:#e6f1fb;border-color:#2f70aa}
+.reading{max-width:1080px;text-align:left;background:white;border:3px solid #d8e3ed;border-radius:20px;padding:24px;font-size:27px;line-height:1.6}
+.score{font-size:82px;font-weight:950;color:#2f70aa;margin:20px}.final{font-size:33px;font-weight:950;max-width:1050px}
+@media(max-width:900px){.layout{grid-template-columns:1fr}.side{max-height:250px;overflow:auto}.title{font-size:25px}.top{grid-template-columns:64px 1fr}.reset{grid-column:1/-1}.prompt{font-size:31px}.answers,.twoCols{grid-template-columns:1fr}.ans{font-size:24px}.visual{font-size:74px}.card{padding:19px}}
+</style>
+</head>
+<body>
+<div class="wrap">
+ <div class="top">
+  <button class="home" onclick="location.href='{{ portal_url }}'">⌂</button>
+  <div class="title">💬 ČESKÝ JAZYK – UMÍME SPOLU MLUVIT</div>
+  <button class="reset" id="resetBtn">↻ ZNOVU</button>
+ </div>
+
+ <button class="teacherBtn" id="teacherBtn">👨‍🏫 PRO UČITELE – TEORIE A PŘESNÝ PLÁN 45 MINUT</button>
+ <div class="teacherPanel" id="teacherPanel">
+  <h2>👨‍🏫 Příprava pro učitele</h2>
+  <h3>Cíl</h3>
+  <div>Žák používá základní zdvořilostní výrazy v běžných situacích, rozliší vhodné a nevhodné vyjádření a porozumí krátkému praktickému textu.</div>
+  <h3>Teorie</h3>
+  <div><b>Komunikace</b> je dorozumívání mezi lidmi. V běžném životě používáme pozdrav, oslovení, prosbu, poděkování, omluvu a rozloučení. Nezáleží jen na slovech, ale také na situaci a tónu hlasu. Pro žáky je nejdůležitější praktický nácvik, ne učení definic nazpaměť.</div>
+  <h3>Přesný průběh hodiny</h3>
+  <table class="plan">
+   <tr><th>Minuty</th><th>Co dělat</th></tr>
+   <tr><td>0–2</td><td>Zahájení. „Dnes budeme zkoušet, jak mluvíme s lidmi v běžném životě.“</td></tr>
+   <tr><td>2–5</td><td>Motivace: S kým jste dnes už mluvili? Kde potřebujeme umět slušně mluvit?</td></tr>
+   <tr><td>5–8</td><td>Pozdrav: AHOJ × DOBRÝ DEN. Kamarád, učitel, lékař, prodavač, cizí člověk.</td></tr>
+   <tr><td>8–11</td><td>Oslovení: „Pane učiteli…“, „Prosím vás…“, jméno kamaráda.</td></tr>
+   <tr><td>11–15</td><td>Prosba: porovnejte „Dej mi tužku.“ × „Prosím, mohl bys mi podat tužku?“</td></tr>
+   <tr><td>15–18</td><td>Poděkování a omluva: DĚKUJI, PROSÍM, PROMIŇTE/PROMIŇ, OMLOUVÁM SE.</td></tr>
+   <tr><td>18–22</td><td>Hra VHODNÉ × NEVHODNÉ.</td></tr>
+   <tr><td>22–28</td><td>Modelové situace – obchod, autobus, škola, lékař, telefon.</td></tr>
+   <tr><td>28–33</td><td>Slovní zásoba: pozdrav, prosba, poděkování, omluva, rozloučení.</td></tr>
+   <tr><td>33–38</td><td>Čtení s porozuměním – Petr v obchodě.</td></tr>
+   <tr><td>38–43</td><td>Závěrečná společná výzva.</td></tr>
+   <tr><td>43–45</td><td>Shrnutí: POZDRAVÍM – POPROSÍM – PODĚKUJI – OMLUVÍM SE – ROZLOUČÍM SE.</td></tr>
+  </table>
+  <h3>Doporučení</h3>
+  <div>Nechte žáky chodit k tabuli a střídat se. Po volbě se krátce ptejte „Proč?“. Přijímejte i jednoslovné odpovědi a modelujte správnou větu. Jedna instrukce najednou.</div>
+ </div>
+
+ <div class="layout">
+  <aside class="side">
+   <div class="progress">8 ČÁSTÍ<div class="bar"><div id="bar"></div></div></div>
+   <div id="menu"></div>
+  </aside>
+  <main class="stage">
+   <div class="stageHead"><span id="sectionName"></span><span class="counter" id="counter"></span></div>
+   <div class="card" id="card"></div>
+   <div class="nav"><button class="prev" id="prev">◀ PŘEDCHOZÍ</button><button class="next" id="next">DALŠÍ ▶</button></div>
+  </main>
+ </div>
+</div>
+<script>
+const sections=[
+{icon:'👋',title:'1. Pozdrav',slides:[
+ {type:'info',q:'Pozdrav zahajuje kontakt s druhým člověkem.',v:'👋',text:'Kamarádovi často řekneme AHOJ. Učiteli, lékaři, prodavači nebo neznámému dospělému obvykle řekneme DOBRÝ DEN.',teacher:'Dejte 5 osob a nechte žáky volit AHOJ nebo DOBRÝ DEN.'},
+ {type:'choice',q:'Přicházíš ráno k lékaři. Co řekneš?',v:'🩺',opts:['Ahoj!','Dobrý den.','Dobrou noc.','Promiň.'],correct:'Dobrý den.',fb:'Ano – v této situaci je vhodné „Dobrý den.“',teacher:'Zeptejte se, jak by pozdravili kamaráda.'},
+ {type:'choice',q:'Potkáš svého kamaráda. Co můžeš říct?',v:'🙂',opts:['Ahoj!','Dobrou noc.','Promiňte.','Děkuji.'],correct:'Ahoj!',fb:'Správně – mezi kamarády je „Ahoj“ běžné.',teacher:'Ukažte, že pozdrav volíme podle situace.'}
+]},
+{icon:'🗣️',title:'2. Oslovení a prosba',slides:[
+ {type:'info',q:'Když od někoho něco potřebujeme, požádáme slušně.',v:'🙏',text:'Pomáhají nám slova PROSÍM, PROSÍM VÁS, MOHL BYS / MOHLA BYSTE…',teacher:'Porovnejte nahlas „Dej mi tužku!“ a „Prosím, mohl bys mi podat tužku?“'},
+ {type:'choice',q:'Potřebuješ si půjčit spolužákovu tužku.',v:'✏️',opts:['Dej tužku!','Prosím, mohl bych si půjčit tužku?','Vezmu si ji.','To je moje.'],correct:'Prosím, mohl bych si půjčit tužku?',fb:'Výborně – je to jasná a slušná prosba.',teacher:'Nechte žáka větu zopakovat nahlas.'},
+ {type:'choice',q:'Nerozumíš zadání od učitele.',v:'❓',opts:['To je blbost.','Prosím, můžete mi to ještě jednou vysvětlit?','Nebudu nic dělat.','Neotravujte.'],correct:'Prosím, můžete mi to ještě jednou vysvětlit?',fb:'Správně – požádat o vysvětlení je v pořádku.',teacher:'Zdůrazněte, že požádat o pomoc není ostuda.'}
+]},
+{icon:'💛',title:'3. Poděkování a omluva',slides:[
+ {type:'choice',q:'Prodavačka ti pomohla najít zboží. Co řekneš?',v:'🛒',opts:['Děkuji.','Promiň.','Ahoj.','Uhni.'],correct:'Děkuji.',fb:'Ano – za pomoc poděkujeme.',teacher:'Přidejte další situace: někdo podrží dveře, půjčí tužku, poradí.'},
+ {type:'choice',q:'Omylem do někoho strčíš. Co řekneš?',v:'🚶',opts:['Děkuji.','Promiň.','Dobrou noc.','Nic.'],correct:'Promiň.',fb:'Správně – když uděláme chybu nebo někomu překážíme, omluvíme se.',teacher:'Můžete procvičit i formálnější „Promiňte“.'},
+ {type:'chips',q:'Kdy se tato slova hodí?',v:'💬',items:['DĚKUJI','PROSÍM','PROMIŇ','OMLOUVÁM SE','NA SHLEDANOU'],teacher:'Klepněte na slovo a nechte žáky uvést situaci, kdy ho použijí.'}
+]},
+{icon:'👍',title:'4. Vhodné × nevhodné',slides:[
+ {type:'judge',q:'Rozhodni, zda je věta vhodná.',items:[
+ ['Dobrý den, prosím vás, můžete mi poradit?',true],
+ ['Dej mi to!',false],
+ ['Děkuji za pomoc.',true],
+ ['Hej ty, pojď sem!',false],
+ ['Promiň, že jsem do tebe strčil.',true],
+ ['Prosím, mohl bych si půjčit tužku?',true],
+ ['Uhni!',false],
+ ['Na shledanou, děkuji.',true],
+ ['Prosím, můžete mi to zopakovat?',true],
+ ['To mě nezajímá, dej pokoj!',false],
+ ['Děkuji, že jste mi pomohl.',true],
+ ['Vypadni odsud!',false],
+ ['Omlouvám se, přišel jsem pozdě.',true],
+ ['Musíš mi to dát!',false],
+ ['Dobrý den, mohl bych se na něco zeptat?',true],
+ ['Čau vole, kde to je?',false]
+ ],teacher:'Žáci mohou ukazovat palec nahoru/dolů a jeden vždy klikne. U nevhodných vět zkuste společně vytvořit lepší variantu.'}
+]},
+{icon:'🎭',title:'5. Modelové situace',slides:[
+ {type:'scenario',questions:[
+ ['Jsi v obchodě a nemůžeš najít mléko.',['Kde je mlíko?','Dobrý den, prosím vás, můžete mi poradit, kde najdu mléko?','Dej mi mléko.','Mlčím.'],'Dobrý den, prosím vás, můžete mi poradit, kde najdu mléko?'],
+ ['Potřebuješ v autobuse projít kolem člověka.',['Uhni.','Prosím, dovolíte?','Vypadni.','Odstrčím ho.'],'Prosím, dovolíte?'],
+ ['Přicházíš ráno do školy a potkáš učitele.',['Dobrý den.','Dobrou noc.','Promiň.','Čau vole.'],'Dobrý den.'],
+ ['Odcházíš od lékaře.',['Dobrý den.','Na shledanou.','Prosím.','Ahoj ty.'],'Na shledanou.'],
+ ['Telefonuješ na neznámé místo.',['Haló, kdo tam?','Dobrý den, tady …','Čau kámo.','Mlčím.'],'Dobrý den, tady …'],
+ ['Kamarád ti půjčil věc.',['Děkuji.','Musel jsi.','Dej ještě něco.','Nic.'],'Děkuji.'],
+ ['Přišel jsi pozdě.',['Omlouvám se za zpoždění.','No a co.','To není moje věc.','Dobrý den a nic víc.'],'Omlouvám se za zpoždění.'],
+ ['Chceš se učitele na něco zeptat.',['Hej!','Prosím, můžu se zeptat?','Poslouchej mě.','Musíš mi odpovědět.'],'Prosím, můžu se zeptat?'],
+ ['Někdo ti podržel dveře.',['Děkuji.','Uhni.','Promiň.','Na shledanou.'],'Děkuji.'],
+ ['Chceš ukončit rozhovor s cizím dospělým.',['Na shledanou.','Ahoj vole.','Prosím.','Promiň.'],'Na shledanou.'],
+ ['Potřebuješ pomoc při hledání zastávky.',['Kde to je?','Prosím vás, můžete mi poradit, kde je zastávka?','Pojď sem.','Nic.'],'Prosím vás, můžete mi poradit, kde je zastávka?'],
+ ['Spolužák mluví a ty chceš něco dodat.',['Skočím mu do řeči.','Počkám a potom se přihlásím nebo slušně navážu.','Zakřičím.','Odejdu.'],'Počkám a potom se přihlásím nebo slušně navážu.']
+ ],teacher:'Po odpovědi vždy krátce „Proč je to vhodnější?“ Některé situace můžete sehrát ve dvojici.'}
+]},
+{icon:'🧩',title:'6. Slovní zásoba',slides:[
+ {type:'sort5',q:'Přiřaď větu ke správné skupině.',items:[
+ ['Dobrý den.','pozdrav'],['Ahoj.','pozdrav'],
+ ['Prosím, pomůžete mi?','prosba'],['Mohl bys mi prosím pomoct?','prosba'],
+ ['Děkuji vám.','podekovani'],['Děkuji za pomoc.','podekovani'],
+ ['Promiňte.','omluva'],['Omlouvám se.','omluva'],
+ ['Na shledanou.','rozlouceni'],['Mějte se hezky.','rozlouceni']
+ ],teacher:'Žák vybere kartičku a potom skupinu. Opakujte názvy skupin nahlas.'}
+]},
+{icon:'📖',title:'7. Čtení s porozuměním',slides:[
+ {type:'reading',q:'Petr v obchodě',text:'Petr přišel do obchodu. U dveří pozdravil prodavačku: „Dobrý den.“ Potřeboval koupit mléko, ale nevěděl, kde ho najde. Řekl: „Prosím vás, můžete mi poradit, kde najdu mléko?“ Prodavačka mu ukázala správný regál. Petr odpověděl: „Děkuji.“ Když odcházel, řekl: „Na shledanou.“',questions:[
+ ['Kam Petr přišel?',['Do školy','Do obchodu','K lékaři','Do kina'],'Do obchodu'],
+ ['Jak pozdravil prodavačku?',['Ahoj','Dobrý den','Dobrou noc','Promiň'],'Dobrý den'],
+ ['Co chtěl koupit?',['Chléb','Mléko','Jablka','Tužku'],'Mléko'],
+ ['Proč požádal o pomoc?',['Nevěděl, kde je mléko','Neměl peníze','Chtěl odejít','Zapomněl jméno'],'Nevěděl, kde je mléko'],
+ ['Jak požádal?',['Slušně','Křikem','Nadávkou','Vůbec'],'Slušně'],
+ ['Co udělala prodavačka?',['Ukázala mu regál','Odešla','Křičela','Nic'],'Ukázala mu regál'],
+ ['Co Petr řekl po pomoci?',['Děkuji','Promiň','Ahoj','Nic'],'Děkuji'],
+ ['Co řekl při odchodu?',['Dobrý den','Na shledanou','Prosím','Pomoc'],'Na shledanou']
+ ],teacher:'Text nejprve přečtěte vy. Potom může číst dobrovolník nebo celá třída po větách.'}
+]},
+{icon:'🏆',title:'8. Závěrečná výzva',slides:[
+ {type:'quiz',questions:[
+ ['Co řekneš při příchodu do obchodu?',['Dobrý den','Dobrou noc','Promiň','Nic'],'Dobrý den'],
+ ['Která věta je slušná prosba?',['Dej mi to','Prosím, můžeš mi pomoct?','Uhni','Musíš mi pomoct'],'Prosím, můžeš mi pomoct?'],
+ ['Co řekneš, když ti někdo pomůže?',['Děkuji','Promiň','Ahoj','Nic'],'Děkuji'],
+ ['Co řekneš, když do někoho omylem strčíš?',['Děkuji','Promiň','Dobrou noc','Prosím'],'Promiň'],
+ ['Jak se rozloučíš s učitelem?',['Na shledanou','Dobrý den','Prosím','Promiň'],'Na shledanou'],
+ ['Které oslovení je vhodné k neznámému dospělému?',['Hej ty','Prosím vás','Čau kámo','Ty'],'Prosím vás'],
+ ['Která věta je nevhodná?',['Děkuji za pomoc','Prosím, poradíte mi?','Dej mi to!','Dobrý den'],'Dej mi to!'],
+ ['Když nerozumím učiteli, mohu říct:',['Prosím, můžete to zopakovat?','Neotravujte','Nebudu to dělat','To mě nezajímá'],'Prosím, můžete to zopakovat?'],
+ ['Co patří ke slušné komunikaci?',['Křik','Nadávky','Pozdrav a poděkování','Strkání'],'Pozdrav a poděkování'],
+ ['Jaká řada dává smysl při návštěvě obchodu?',['Pozdrav – prosba – poděkování – rozloučení','Omluva – křik – odchod','Rozloučení – pozdrav – křik','Nic – nic – nic'],'Pozdrav – prosba – poděkování – rozloučení'],
+ ['Když si chceš půjčit tužku, řekneš:',['Dej ji sem','Prosím, půjčíš mi tužku?','Beru si ji','Musíš mi ji dát'],'Prosím, půjčíš mi tužku?'],
+ ['Když přijdeš pozdě, je vhodné:',['Omluvit se','Smát se','Nic neříct','Obvinit druhé'],'Omluvit se'],
+ ['Když někdo mluví, je vhodné:',['Počkat, až domluví','Skákat mu do řeči','Křičet','Odejít bez slova'],'Počkat, až domluví'],
+ ['Které slovo vyjadřuje poděkování?',['Děkuji','Promiň','Prosím','Ahoj'],'Děkuji'],
+ ['Co je hlavní smysl dnešní hodiny?',['Umět se slušně domluvit s lidmi','Mluvit co nejhlasitěji','Nikdy o nic nepožádat','Používat jen jedno slovo'],'Umět se slušně domluvit s lidmi']
+ ],teacher:'Třída se může radit. Cílem není známka, ale společně dokončit všech 15 otázek.'}
+]}
+];
+
+let si=0,pi=0,seen=new Set(),quizIndex=0,quizScore=0;
+let genericIndex=0,genericScore=0,sortSelected=null,sortRemaining=[];
+const card=document.getElementById('card'), menu=document.getElementById('menu'), bar=document.getElementById('bar');
+const sectionName=document.getElementById('sectionName'), counter=document.getElementById('counter');
+
+function totalSlides(){return sections.reduce((n,s)=>n+s.slides.length,0)}
+function markSeen(){seen.add(si+'-'+pi);bar.style.width=(seen.size/totalSlides()*100)+'%'}
+function renderMenu(){menu.innerHTML='';sections.forEach((s,i)=>{const b=document.createElement('button');b.className='menuBtn'+(i===si?' on':'');b.textContent=s.icon+' '+s.title;b.onclick=()=>{si=i;pi=0;quizIndex=0;quizScore=0;genericIndex=0;genericScore=0;render()};menu.appendChild(b)})}
+function teacherBox(t){return t?`<div class="teacher"><b>👨‍🏫 Pro učitele</b>${t}</div>`:''}
+
+function render(){
+ renderMenu(); markSeen();
+ const s=sections[si], x=s.slides[pi];
+ sectionName.textContent=s.icon+' '+s.title; counter.textContent=(pi+1)+' / '+s.slides.length; card.innerHTML='';
+ if(x.type==='info') card.innerHTML=`<div class="eyebrow">SPOLEČNĚ</div><div class="prompt">${x.q}</div><div class="visual">${x.v}</div><div class="sub">${x.text}</div>${teacherBox(x.teacher)}`;
+ if(x.type==='choice') renderChoice(x);
+ if(x.type==='chips') renderChips(x);
+ if(x.type==='judge') renderJudge(x);
+ if(x.type==='scenario') renderGenericQuestions(x,'SITUACE');
+ if(x.type==='sort5') renderSort5(x);
+ if(x.type==='reading') renderReading(x);
+ if(x.type==='quiz') renderQuiz(x);
+}
+
+function renderChoice(x){
+ const opts=[...x.opts].sort(()=>Math.random()-.5);
+ card.innerHTML=`<div class="prompt">${x.q}</div><div class="visual">${x.v}</div><div class="answers">${opts.map(o=>`<button class="ans">${o}</button>`).join('')}</div><div class="feedback"></div>${teacherBox(x.teacher)}`;
+ card.querySelectorAll('.ans').forEach(b=>b.onclick=()=>{const ok=b.textContent===x.correct;b.classList.add(ok?'ok':'bad');card.querySelector('.feedback').textContent=ok?'👏 SPRÁVNĚ! '+(x.fb||''):'🙂 ZKUSÍME JINOU MOŽNOST.';if(ok)card.querySelectorAll('.ans').forEach(y=>y.disabled=true);else setTimeout(()=>{b.classList.remove('bad')},700)})
+}
+function renderChips(x){
+ card.innerHTML=`<div class="prompt">${x.q}</div><div class="visual">${x.v}</div><div class="chips">${x.items.map(i=>`<button class="chip">${i}</button>`).join('')}</div><div class="feedback">Klepněte na slovo a řekněte příklad.</div>${teacherBox(x.teacher)}`;
+ card.querySelectorAll('.chip').forEach(b=>b.onclick=()=>b.classList.toggle('on'));
+}
+function renderJudge(x){
+ if(genericIndex>=x.items.length){card.innerHTML=`<div class="eyebrow">HOTOVO</div><div class="score">${genericScore} / ${x.items.length}</div><div class="final">Výborně. Teď už lépe poznáme vhodnou a nevhodnou větu.</div>${teacherBox(x.teacher)}`;return}
+ const [text,correct]=x.items[genericIndex];
+ card.innerHTML=`<div class="eyebrow">VĚTA ${genericIndex+1} Z ${x.items.length}</div><div class="prompt">${text}</div><div class="answers"><button class="ans" data-v="true">👍 VHODNÉ</button><button class="ans" data-v="false">👎 NEVHODNÉ</button></div><div class="feedback"></div>${teacherBox(x.teacher)}`;
+ card.querySelectorAll('.ans').forEach(b=>b.onclick=()=>{const ok=(b.dataset.v==='true')===correct;b.classList.add(ok?'ok':'bad');if(ok){genericScore++;card.querySelector('.feedback').textContent='👏 SPRÁVNĚ!';card.querySelectorAll('.ans').forEach(y=>y.disabled=true);setTimeout(()=>{genericIndex++;renderJudge(x)},550)}else{card.querySelector('.feedback').textContent='🙂 Zkus druhou možnost.';setTimeout(()=>b.classList.remove('bad'),550)}})
+}
+function renderGenericQuestions(x,label){
+ if(genericIndex>=x.questions.length){card.innerHTML=`<div class="eyebrow">${label} HOTOVÉ</div><div class="score">${genericScore} / ${x.questions.length}</div><div class="final">Skvěle – zvládli jsme všechny modelové situace.</div>${teacherBox(x.teacher)}`;return}
+ const q=x.questions[genericIndex], opts=[...q[1]].sort(()=>Math.random()-.5);
+ card.innerHTML=`<div class="eyebrow">${label} ${genericIndex+1} Z ${x.questions.length}</div><div class="prompt">${q[0]}</div><div class="answers">${opts.map(o=>`<button class="ans">${o}</button>`).join('')}</div><div class="feedback"></div>${teacherBox(x.teacher)}`;
+ card.querySelectorAll('.ans').forEach(b=>b.onclick=()=>{const ok=b.textContent===q[2];b.classList.add(ok?'ok':'bad');if(ok){genericScore++;card.querySelector('.feedback').textContent='👏 SPRÁVNĚ!';card.querySelectorAll('.ans').forEach(y=>y.disabled=true);setTimeout(()=>{genericIndex++;renderGenericQuestions(x,label)},600)}else{card.querySelector('.feedback').textContent='🙂 Zkusíme vhodnější větu.';setTimeout(()=>b.classList.remove('bad'),600)}})
+}
+function renderSort5(x){
+ sortRemaining=x.items.map((a,i)=>({text:a[0],kind:a[1],id:i})); sortSelected=null;
+ const labels={pozdrav:'👋 POZDRAV',prosba:'🙏 PROSBA',podekovani:'💛 PODĚKOVÁNÍ',omluva:'🤝 OMLUVA',rozlouceni:'🚪 ROZLOUČENÍ'};
+ card.innerHTML=`<div class="prompt">${x.q}</div><div class="chips" id="buckets">${Object.entries(labels).map(([k,v])=>`<button class="chip" data-kind="${k}">${v}</button>`).join('')}</div><div class="cardsRow" id="sortCards"></div><div class="feedback" id="sortFb">1. Klepni na větu. 2. Klepni na správnou skupinu.</div>${teacherBox(x.teacher)}`;
+ function draw(){const r=document.getElementById('sortCards');r.innerHTML=sortRemaining.map(z=>`<button class="sortCard" data-id="${z.id}">${z.text}</button>`).join('');r.querySelectorAll('.sortCard').forEach(b=>b.onclick=()=>{r.querySelectorAll('.sortCard').forEach(y=>y.classList.remove('on'));b.classList.add('on');sortSelected=sortRemaining.find(z=>z.id==b.dataset.id);document.getElementById('sortFb').textContent='Teď vyber správnou skupinu.'})}
+ draw();
+ document.querySelectorAll('#buckets .chip').forEach(b=>b.onclick=()=>{if(!sortSelected){document.getElementById('sortFb').textContent='Nejdřív vyber větu.';return}if(sortSelected.kind===b.dataset.kind){document.getElementById('sortFb').textContent='👏 SPRÁVNĚ!';sortRemaining=sortRemaining.filter(z=>z.id!==sortSelected.id);sortSelected=null;draw();if(!sortRemaining.length)document.getElementById('sortFb').textContent='🏆 VŠECHNO JE SPRÁVNĚ PŘIŘAZENÉ!'}else document.getElementById('sortFb').textContent='🙂 Zkus jinou skupinu.'})
+}
+function renderReading(x){
+ if(genericIndex===0){
+  card.innerHTML=`<div class="eyebrow">ČTENÍ</div><div class="prompt">${x.q}</div><div class="reading">${x.text}</div><div class="feedback">Až text přečtete, klepněte na DALŠÍ dole.</div>${teacherBox(x.teacher)}`;
+ }else{
+  const idx=genericIndex-1;
+  if(idx>=x.questions.length){card.innerHTML=`<div class="eyebrow">ČTENÍ HOTOVO</div><div class="score">${genericScore} / ${x.questions.length}</div><div class="final">Výborně – porozuměli jsme krátkému textu.</div>${teacherBox(x.teacher)}`;return}
+  const q=x.questions[idx],opts=[...q[1]].sort(()=>Math.random()-.5);
+  card.innerHTML=`<div class="eyebrow">OTÁZKA ${idx+1} Z ${x.questions.length}</div><div class="prompt">${q[0]}</div><div class="answers">${opts.map(o=>`<button class="ans">${o}</button>`).join('')}</div><div class="feedback"></div>${teacherBox(x.teacher)}`;
+  card.querySelectorAll('.ans').forEach(b=>b.onclick=()=>{const ok=b.textContent===q[2];b.classList.add(ok?'ok':'bad');if(ok){genericScore++;card.querySelector('.feedback').textContent='👏 SPRÁVNĚ!';card.querySelectorAll('.ans').forEach(y=>y.disabled=true);setTimeout(()=>{genericIndex++;renderReading(x)},600)}else{card.querySelector('.feedback').textContent='🙂 Zkus jinou odpověď.';setTimeout(()=>b.classList.remove('bad'),600)}})
+ }
+}
+function renderQuiz(x){
+ if(quizIndex>=x.questions.length){card.innerHTML=`<div class="eyebrow">SPOLEČNÁ VÝZVA HOTOVÁ</div><div class="score">${quizScore} / ${x.questions.length}</div><div class="final">👋 Pozdravím • 🙏 Poprosím • 💛 Poděkuji • 🤝 Omluvím se • 🚪 Rozloučím se</div>${teacherBox(x.teacher)}`;return}
+ const q=x.questions[quizIndex],opts=[...q[1]].sort(()=>Math.random()-.5);
+ card.innerHTML=`<div class="eyebrow">OTÁZKA ${quizIndex+1} Z ${x.questions.length}</div><div class="prompt">${q[0]}</div><div class="answers">${opts.map(o=>`<button class="ans">${o}</button>`).join('')}</div><div class="feedback"></div>${teacherBox(x.teacher)}`;
+ card.querySelectorAll('.ans').forEach(b=>b.onclick=()=>{const ok=b.textContent===q[2];b.classList.add(ok?'ok':'bad');if(ok){quizScore++;card.querySelector('.feedback').textContent='👏 SPRÁVNĚ!';card.querySelectorAll('.ans').forEach(y=>y.disabled=true);setTimeout(()=>{quizIndex++;renderQuiz(x)},600)}else{card.querySelector('.feedback').textContent='🙂 Zkusíme jinou možnost.';setTimeout(()=>b.classList.remove('bad'),600)}})
+}
+
+function go(d){
+ const x=sections[si].slides[pi];
+ if(x.type==='reading' && d===1 && genericIndex===0){genericIndex=1;renderReading(x);return}
+ pi+=d;
+ if(pi>=sections[si].slides.length){if(si<sections.length-1){si++;pi=0}else pi=sections[si].slides.length-1}
+ if(pi<0){if(si>0){si--;pi=sections[si].slides.length-1}else pi=0}
+ quizIndex=0;quizScore=0;genericIndex=0;genericScore=0;render()
+}
+document.getElementById('teacherBtn').onclick=()=>document.getElementById('teacherPanel').classList.toggle('open');
+document.getElementById('next').onclick=()=>go(1);
+document.getElementById('prev').onclick=()=>go(-1);
+document.getElementById('resetBtn').onclick=()=>{si=0;pi=0;seen.clear();quizIndex=0;quizScore=0;genericIndex=0;genericScore=0;render()};
+document.addEventListener('keydown',e=>{if(e.key==='ArrowRight')go(1);if(e.key==='ArrowLeft')go(-1)});
+render();
+</script>
+</body>
+</html>

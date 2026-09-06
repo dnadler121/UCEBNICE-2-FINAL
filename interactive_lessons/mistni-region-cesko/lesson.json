@@ -1,0 +1,15 @@
+{
+  "subject": "Zeměpis",
+  "school": "Montessori",
+  "grade": "8. třída",
+  "topic": "Česko – místní region a orientace na mapě",
+  "title": "Místní region – Karlovarsko: interaktivní atlas",
+  "slug": "mistni-region-cesko",
+  "description": "Interaktivní atlas Karlovarského kraje s 30 místy, 20 otázkami v procvičování a 20 otázkami v testu a průběžným ukládáním výsledku.",
+  "icon": "🗺️",
+  "is_published": true,
+  "focus_guard": false,
+  "allow_page_leave": true,
+  "version": 5,
+  "year": "8. třída"
+}

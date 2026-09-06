@@ -5,7 +5,10 @@
   "grade": "7. ročník",
   "topic": "Ryby – stavba těla",
   "title": "Ryby – stavba těla",
-  "description": "CZ/EN: procvičování a opakovatelný test 10 hlavních částí těla ryby a jejich funkcí.",
+  "description": "CZ/EN procvičování a test. Mobilní verze má přímo na rybě čísla 1–10 odpovídající jednotlivým políčkům.",
   "icon": "🐟",
-  "is_published": true
+  "is_published": true,
+  "focus_guard": false,
+  "allow_page_leave": true,
+  "version": 7
 }

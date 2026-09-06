@@ -1,0 +1,14 @@
+{
+  "subject": "fyzika",
+  "school": "Montessori",
+  "grade": "praktická společná výuka",
+  "topic": "Školní mix – jednoduché procvičování",
+  "title": "Školní mix – rozcvička, Dělání a jednoduché procvičování",
+  "slug": "skolni-mix-jednoduche-procvicovani",
+  "description": "Před původním Školním mixem je společná rozcvička a písnička Dělání. Ostatní úkoly zůstávají stejné.",
+  "icon": "🎒",
+  "is_published": true,
+  "focus_guard": false,
+  "allow_page_leave": true,
+  "version": 2
+}

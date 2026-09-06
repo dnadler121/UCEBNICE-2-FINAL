@@ -1,0 +1,14 @@
+{
+  "subject": "biologie",
+  "school": "Montessori",
+  "grade": "7. třída",
+  "topic": "Rostliny – jak funguje rostlina",
+  "title": "Jak funguje rostlina?",
+  "slug": "jak-funguje-rostlina",
+  "description": "Interaktivní obrázková lekce CZ/EN: jeden hlavní obrázek rostliny, klikací části s dynamickým vysvětlením, procvičování a rozšířený test.",
+  "icon": "🌿",
+  "is_published": true,
+  "focus_guard": false,
+  "allow_page_leave": true,
+  "version": 3
+}

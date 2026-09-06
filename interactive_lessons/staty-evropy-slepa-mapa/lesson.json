@@ -1,0 +1,13 @@
+{
+  "subject": "zemepis",
+  "school": "Montessori",
+  "grade": "6. ročník",
+  "topic": "Evropa",
+  "title": "Státy Evropy – slepá mapa",
+  "slug": "staty-evropy-slepa-mapa",
+  "description": "Interaktivní slepá mapa Evropy: neomezené procvičování a průběžné splnění se 47 státy; postup testu se ukládá a opuštění stránky je povoleno.",
+  "icon": "🗺️",
+  "is_published": true,
+  "focus_guard": false,
+  "allow_page_leave": true
+}

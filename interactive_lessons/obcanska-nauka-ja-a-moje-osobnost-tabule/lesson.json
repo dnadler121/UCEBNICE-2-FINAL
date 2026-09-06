@@ -1,0 +1,14 @@
+{
+  "subject": "fyzika",
+  "school": "Montessori",
+  "grade": "Praktická škola dvouletá – společná výuka",
+  "topic": "Občanská nauka – Já a moje osobnost",
+  "title": "Já a moje osobnost – společná interaktivní hodina",
+  "slug": "obcanska-nauka-ja-a-moje-osobnost-tabule",
+  "description": "Společná 45minutová aktivita pro interaktivní tabuli: každý jsme jiný, vlastnosti a dovednosti, situační otázky, co mám rád, co umím a co se chci naučit.",
+  "icon": "👤",
+  "is_published": true,
+  "focus_guard": false,
+  "allow_page_leave": true,
+  "version": 1
+}

@@ -1,0 +1,11 @@
+{
+  "subject": "matematika",
+  "school": "Střední škola",
+  "grade": "1. ročník",
+  "topic": "Základní početní operace",
+  "title": "Zlomky",
+  "slug": "zlomky",
+  "description": "Interaktivní procvičování sčítání, odčítání, násobení a dělení zlomků.",
+  "icon": "➗",
+  "is_published": true
+}

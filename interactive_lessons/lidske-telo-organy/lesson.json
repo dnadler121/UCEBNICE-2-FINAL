@@ -1,0 +1,14 @@
+{
+  "subject": "biologie",
+  "school": "Montessori",
+  "grade": "5.–9. ročník",
+  "topic": "Člověk – lidské tělo",
+  "title": "Lidské tělo – orgány",
+  "slug": "lidske-telo-organy",
+  "description": "Interaktivní lidské tělo: vyber název orgánu a klikni na jeho místo.",
+  "icon": "🫀",
+  "is_published": true,
+  "focus_guard": false,
+  "allow_page_leave": true,
+  "version": "1.0"
+}

@@ -1,0 +1,14 @@
+{
+  "subject": "zemepis",
+  "school": "Montessori",
+  "grade": "5.–7. ročník",
+  "topic": "Základní zeměpisné útvary",
+  "title": "Základní zeměpisné útvary",
+  "slug": "zakladni-zemepisne-utvary",
+  "description": "Přehledná interaktivní aplikace k základním zeměpisným útvarům; cílová pole jsou přesně zarovnána s popisky v obrázcích.",
+  "icon": "🏔️",
+  "is_published": true,
+  "focus_guard": false,
+  "allow_page_leave": true,
+  "version": 6
+}

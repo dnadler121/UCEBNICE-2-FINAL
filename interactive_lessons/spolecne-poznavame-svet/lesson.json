@@ -1,0 +1,14 @@
+{
+  "subject": "fyzika",
+  "school": "Montessori",
+  "grade": "praktická společná výuka",
+  "topic": "Společně poznáváme svět – střední obtížnost",
+  "title": "Společně poznáváme svět – střední obtížnost V5",
+  "slug": "spolecne-poznavame-svet",
+  "description": "Stejný osvědčený společný formát, ale střední obtížnost mezi původní lehkou verzí a náročnější V4. Obsahuje písničku Dělání a je zařazen do Fyziky.",
+  "icon": "🌍",
+  "is_published": true,
+  "focus_guard": false,
+  "allow_page_leave": true,
+  "version": 5
+}

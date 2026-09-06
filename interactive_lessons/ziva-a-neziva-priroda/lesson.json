@@ -1,0 +1,14 @@
+{
+  "subject": "biologie",
+  "school": "Montessori",
+  "grade": "6. ročník",
+  "topic": "Živá a neživá příroda",
+  "title": "Živá a neživá příroda",
+  "slug": "ziva-a-neziva-priroda",
+  "description": "Povinný průchod: výklad → promíchané třídění → 15× procvičování → 15× test. Rozpracovaný/přerušený test se ukládá přes /api/save do databáze a test má tlačítko Zpět.",
+  "icon": "🌱",
+  "is_published": true,
+  "focus_guard": false,
+  "allow_page_leave": true,
+  "version": "17.0"
+}

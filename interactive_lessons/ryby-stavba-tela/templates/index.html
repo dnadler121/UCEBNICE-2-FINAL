@@ -16,6 +16,28 @@ header{background:linear-gradient(110deg,var(--blue2),var(--blue));color:white;p
 .stage{position:relative;min-height:650px;background:radial-gradient(circle at 50% 5%,#e9fbff 0,#b8eaf5 47%,#86cfdc 100%);overflow:hidden;border-bottom:5px solid #c9e9e3}
 .stage:after{content:"";position:absolute;inset:auto 0 0;height:78px;background:linear-gradient(180deg,transparent,#6daf9b55)}
 .fishwrap{position:absolute;left:20%;top:16%;width:60%;z-index:1}.fishwrap img{display:block;width:100%;filter:drop-shadow(0 8px 12px #124b6244)}
+.fish-marker{
+  position:absolute;z-index:5;width:34px;height:34px;border-radius:50%;
+  background:#073d7b;color:#fff;border:3px solid #fff;
+  display:flex;align-items:center;justify-content:center;
+  font-size:16px;font-weight:950;box-shadow:0 3px 9px #00284f88;
+  transform:translate(-50%,-50%);pointer-events:none
+}
+.fm1{left:13%;top:58%}   /* ústa */
+.fm2{left:20%;top:45%}   /* oko */
+.fm3{left:28%;top:58%}   /* žábry */
+.fm4{left:52%;top:18%}   /* hřbetní ploutev */
+.fm5{left:39%;top:72%}   /* prsní ploutve */
+.fm6{left:55%;top:86%}   /* břišní ploutve */
+.fm7{left:61%;top:50%}   /* postranní čára */
+.fm8{left:52%;top:42%}   /* šupiny */
+.fm9{left:68%;top:76%}   /* řitní ploutev */
+.fm10{left:84%;top:48%}  /* ocasní ploutev */
+.mobile-number-help{
+  display:none;margin:8px 10px 0;padding:10px 12px;border-radius:10px;
+  background:#fff8d7;border:2px solid #f0c64d;font-weight:850;text-align:center
+}
+
 .callout{position:absolute;width:18%;min-width:190px;background:#ffffffee;border:2px solid #d6e9f2;border-radius:14px;padding:8px;z-index:3;box-shadow:var(--shadow)}
 .callout .head{font-weight:900;font-size:14px;margin-bottom:7px;display:flex;gap:7px;align-items:center}.num{background:var(--blue2);color:#fff;border-radius:50%;width:24px;height:24px;display:inline-flex;align-items:center;justify-content:center;flex:0 0 24px}
 .slot{min-height:43px;border:2px dashed #2589e6;border-radius:9px;margin:6px 0;padding:8px;text-align:center;font-weight:800;background:#f8fcff;display:flex;align-items:center;justify-content:center;cursor:pointer}
@@ -26,7 +48,7 @@ header{background:linear-gradient(110deg,var(--blue2),var(--blue));color:white;p
 .tile{min-height:54px;border:2px solid #72aee5;border-radius:10px;background:#fff;color:var(--ink);font-weight:850;padding:8px;display:flex;align-items:center;justify-content:center;text-align:center;cursor:grab;box-shadow:0 2px 8px #00355d12;user-select:none}.descs .tile{border-color:#79c692;font-size:13px}.tile.selected{outline:4px solid #ffbd2e;transform:translateY(-2px)}.tile.used{opacity:.23;pointer-events:none}
 footer{display:flex;gap:10px;align-items:center;justify-content:center;padding:13px;position:sticky;bottom:0;background:#ffffffee;box-shadow:0 -3px 15px #002a4f18;z-index:9}.score{font-size:21px;font-weight:950;min-width:150px;text-align:center}.msg{font-weight:800}
 @media(max-width:1050px){.stage{min-height:930px}.fishwrap{left:10%;top:29%;width:80%}.callout{width:30%}.c1{left:1%;top:2%}.c2{left:35%;top:2%}.c3{right:1%;left:auto;top:2%}.c4{left:1%;top:65%}.c5{left:35%;top:65%}.c6{right:1%;left:auto;top:65%}.c7{left:1%;top:80%}.c8{left:35%;top:80%}.c9{right:1%;left:auto;top:80%}.c10{right:1%;top:46%}.row{grid-template-columns:90px repeat(2,1fr)}.lines{display:none}}
-@media(max-width:650px){header{padding:10px}.brand{min-width:0}.lang{margin-left:0}.stage{min-height:1650px}.fishwrap{position:relative;left:0;top:0;width:100%;padding:10px}.callout{position:relative!important;left:auto!important;right:auto!important;top:auto!important;width:calc(100% - 20px);margin:8px 10px}.lines{display:none}.row{grid-template-columns:1fr 1fr}.label{grid-column:1/-1}.top-actions{width:100%}.btn{flex:1}.subtitle{font-size:13px}footer{flex-wrap:wrap}}
+@media(max-width:650px){header{padding:10px}.fish-marker{width:30px;height:30px;font-size:14px;border-width:2px}.mobile-number-help{display:block}.brand{min-width:0}.lang{margin-left:0}.stage{min-height:1650px}.fishwrap{position:relative;left:0;top:0;width:100%;padding:10px}.callout{position:relative!important;left:auto!important;right:auto!important;top:auto!important;width:calc(100% - 20px);margin:8px 10px}.lines{display:none}.row{grid-template-columns:1fr 1fr}.label{grid-column:1/-1}.top-actions{width:100%}.btn{flex:1}.subtitle{font-size:13px}footer{flex-wrap:wrap}}
 </style>
 </head>
 <body>
@@ -39,7 +61,20 @@ footer{display:flex;gap:10px;align-items:center;justify-content:center;padding:1
 <div class="instructions" id="instructions"></div>
 
 <div class="stage" id="stage">
-  <div class="fishwrap"><img src="{{ asset_url('kapr.png') }}" alt="kapr / carp"></div>
+  <div class="mobile-number-help" id="mobileNumberHelp">Číslo na rybě = stejné číslo u políčka.</div>
+  <div class="fishwrap">
+    <img src="{{ asset_url('kapr.png') }}" alt="kapr / carp">
+    <span class="fish-marker fm1">1</span>
+    <span class="fish-marker fm2">2</span>
+    <span class="fish-marker fm3">3</span>
+    <span class="fish-marker fm4">4</span>
+    <span class="fish-marker fm5">5</span>
+    <span class="fish-marker fm6">6</span>
+    <span class="fish-marker fm7">7</span>
+    <span class="fish-marker fm8">8</span>
+    <span class="fish-marker fm9">9</span>
+    <span class="fish-marker fm10">10</span>
+  </div>
   <svg class="lines" viewBox="0 0 1000 650" preserveAspectRatio="none">
     <line x1="185" y1="100" x2="292" y2="255"/><circle cx="292" cy="255" r="5"/>
     <line x1="185" y1="255" x2="265" y2="300"/><circle cx="265" cy="300" r="5"/>
@@ -67,6 +102,7 @@ footer{display:flex;gap:10px;align-items:center;justify-content:center;padding:1
 </footer>
 </div>
 <script>
+const CURRENT_ROLE={{ user.role|tojson }};
 const PARTS=[
 {id:"mouth",cs:"Ústa",en:"Mouth",csd:"Slouží k přijímání potravy.",end:"Used for taking in food."},
 {id:"eye",cs:"Oko",en:"Eye",csd:"Slouží k vidění a orientaci.",end:"Used for seeing and orientation."},
@@ -89,7 +125,10 @@ function keyVal(p,type){return lang==="cs"?(type==="name"?p.cs:p.csd):(type==="n
 function render(){
   const t=T[lang];
   document.documentElement.lang=lang; document.getElementById("title").textContent=t.title; document.getElementById("subtitle").textContent=t.subtitle;
-  document.getElementById("instructions").textContent=t.instructions; document.getElementById("checkBtn").textContent=t.check;document.getElementById("solutionBtn").textContent=t.solution;
+  document.getElementById("instructions").textContent=t.instructions;
+  document.getElementById("mobileNumberHelp").textContent = lang==="cs"
+    ? "📱 Číslo na rybě = stejné číslo u políčka. Podle čísla poznáš, kam název a popis patří."
+    : "📱 The number on the fish = the same number by the answer boxes. Use the number to know where each name and description belongs."; document.getElementById("checkBtn").textContent=t.check;document.getElementById("solutionBtn").textContent=t.solution;
   document.getElementById("resetBtn").textContent=t.reset; document.getElementById("namesLabel").textContent=t.names;document.getElementById("descLabel").textContent=t.descs;document.getElementById("backBtn").textContent=t.back;
   document.getElementById("csBtn").classList.toggle("active",lang==="cs");document.getElementById("enBtn").classList.toggle("active",lang==="en");
   document.getElementById("practiceBtn").textContent=t.practice;
@@ -156,23 +195,66 @@ function gradeFromPercent(percent){
  if(percent>=40)return 4;
  return 5;
 }
-function check(){
+async function check(){
  const t=T[lang], m=document.getElementById("msg");
+
  if(mode==="practice"){
    const score=updateScore(true);
    m.textContent=score===20?t.ok:t.try;
-   save();
    return;
  }
+
  const filled=Object.values(state).reduce((n,x)=>n+(x.name?1:0)+(x.desc?1:0),0);
+ if(filled<20){
+   m.textContent = lang==="cs"
+     ? `Nejdříve vyplň všech 20 polí. Hotovo: ${filled}/20.`
+     : `First complete all 20 fields. Completed: ${filled}/20.`;
+   return;
+ }
+
  const score=updateScore(true);
- const percent=Math.round(score/20*100);
- const grade=gradeFromPercent(percent);
- testEvaluated=true;
- m.textContent=`${t.result}: ${score}/20 = ${percent} % • ${lang==="cs"?"známka":"grade"} ${grade}`;
- document.getElementById("score").textContent=`${percent} % • ${grade}`;
- fetch("{{ complete_url }}",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({percent,grade})})
-   .then(()=>save()).catch(()=>save());
+ const percent=Math.round(100*score/20);
+
+ try{
+   // Stejný princip jako ve funkční lekci Jak funguje rostlina:
+   // nejprve získáme známku z lesson API, potom výsledek uložíme přes complete_url.
+   const gr = await fetch("{{ api_url('grade') }}",{
+     method:"POST",
+     headers:{"Content-Type":"application/json"},
+     body:JSON.stringify({percent:percent})
+   });
+   const gj = await gr.json();
+   if(!gr.ok || !gj.ok) throw new Error(gj.error || gj.message || "grade");
+
+   const grade=gj.grade;
+   const saveResult = await fetch("{{ complete_url }}",{
+     method:"POST",
+     headers:{"Content-Type":"application/json"},
+     body:JSON.stringify({percent:percent,grade:grade})
+   });
+   const saved = await saveResult.json();
+
+   if(!saveResult.ok || !saved.ok){
+     throw new Error(saved.error || saved.message || "complete");
+   }
+
+   testEvaluated=true;
+   if(CURRENT_ROLE==="student"){
+     m.textContent = lang==="cs"
+       ? `Výsledek testu: ${score}/20 = ${percent} % • známka ${grade} • Uloženo do hodnocení ✓`
+       : `Test result: ${score}/20 = ${percent}% • grade ${grade} • Saved ✓`;
+   }else{
+     m.textContent = lang==="cs"
+       ? `Náhled učitele: ${score}/20 = ${percent} % • známka ${grade}. Do hodnocení se ukládají pouze testy přihlášených studentů.`
+       : `Teacher preview: ${score}/20 = ${percent}% • grade ${grade}. Only signed-in student tests are stored.`;
+   }
+   document.getElementById("score").textContent=`${percent} % • ${grade}`;
+ }catch(err){
+   console.error("Uložení výsledku selhalo:",err);
+   m.textContent = lang==="cs"
+     ? `Výsledek: ${score}/20 = ${percent} %. Výsledek se NEPODAŘILO uložit do databáze.`
+     : `Result: ${score}/20 = ${percent}%. The result could NOT be saved.`;
+ }
 }
 function solution(){
  PARTS.forEach(p=>state[p.id]={name:p.id,desc:p.id});render();updateScore(true);document.getElementById("msg").textContent=T[lang].ok;
@@ -191,6 +273,7 @@ document.getElementById("csBtn").onclick=()=>switchLang("cs");document.getElemen
 document.getElementById("checkBtn").onclick=check;document.getElementById("solutionBtn").onclick=solution;document.getElementById("resetBtn").onclick=reset;
 document.getElementById("backBtn").onclick=()=>{window.location.href="{{ portal_url }}"};
 render();
-fetch("{{ api_url('load') }}").then(r=>r.json()).then(x=>{if(x?.state?.lang){lang=x.state.lang;if(x.state.mode)mode=x.state.mode;render()}}).catch(()=>{});
+fetch("{{ api_url('start') }}",{method:"POST"}).catch(()=>{});
+fetch("{{ api_url('status') }}").then(r=>r.json()).catch(()=>{});
 </script>
 </body></html>

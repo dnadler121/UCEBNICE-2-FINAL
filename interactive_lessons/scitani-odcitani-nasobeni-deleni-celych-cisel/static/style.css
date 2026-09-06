@@ -359,3 +359,5 @@ fieldset label {
     background: var(--primary);
     transition: width .3s ease;
 }
+
+.exit-button{border:0;background:transparent;cursor:pointer;font:inherit}.exit-button:disabled{opacity:.65;cursor:wait}

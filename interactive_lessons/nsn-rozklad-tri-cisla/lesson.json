@@ -1,0 +1,11 @@
+{
+  "subject": "matematika",
+  "school": "Střední škola",
+  "grade": "1. ročník",
+  "topic": "Dělitelnost a násobky",
+  "title": "Nejmenší společný násobek – rozklad tří čísel",
+  "slug": "nsn-rozklad-tri-cisla",
+  "description": "Interaktivní procvičování NSN tří náhodných čísel pomocí postupného rozkladu na prvočinitele, škrtání společných činitelů a závěrečného součinu.",
+  "icon": "✖️",
+  "is_published": true
+}

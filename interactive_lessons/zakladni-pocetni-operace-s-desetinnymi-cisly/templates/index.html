@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="cs">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{ package.title }}</title>
+  <link rel="stylesheet" href="{{ asset_url('style.css') }}">
+</head>
+<body>
+<header>
+  <button id="exitLessonBtn" class="portal-back exit-button" type="button">← Ukončit a uložit výsledek</button>
+  <h1>Základní početní operace s desetinnými čísly</h1>
+  <p>Výuková lekce pracuje s chybou a vede žáka po jednotlivých krocích.</p>
+</header>
+
+<div class="progress-wrap">
+  <div class="progress-label"><span id="section-name">Sčítání pod sebe</span><span id="progress-text"></span></div>
+  <div class="progress"><div id="progress-bar"></div></div>
+  <div class="roadmap">
+    <span id="road-addition" class="active">1. Sčítání</span>
+    <span id="road-multiplication">2. Násobení</span>
+    <span id="road-division">3. Dělení</span>
+    <span id="road-algebra">4. Výrazy</span>
+  </div>
+</div>
+
+<main>
+  <section class="panel">
+    <h2 id="title"></h2>
+    <p id="instruction" class="instruction"></p>
+    <div id="work"></div>
+    <div class="bottom-actions">
+      <button id="continue" class="continue" disabled>Pokračovat na další úkol</button>
+    </div>
+  </section>
+</main>
+<script>
+window.LESSON_URLS = {
+  course: "{{ api_url('course') }}",
+  completeLesson: "{{ complete_url }}",
+  portal: "{{ portal_url }}"
+};
+</script>
+<script src="{{ asset_url('app.js') }}"></script>
+</body>
+</html>
