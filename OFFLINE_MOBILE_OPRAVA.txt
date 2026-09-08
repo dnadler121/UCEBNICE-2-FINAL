@@ -1,0 +1,21 @@
+Oprava pro lokální Wi-Fi UCEBNICE / mobil.
+Base64 obrázky byly přesunuty do static/offline_images a načítají se přes asset_url.
+To řeší zejména Globalizaci a další lekce s velkými vloženými obrázky.
+
+ziva-a-neziva-priroda: převedeno 28 vložených obrázků do static/offline_images
+zakladni-zemepisne-utvary: převedeno 3 vložených obrázků do static/offline_images
+rostlina-casti-funkce: převedeno 3 vložených obrázků do static/offline_images
+pohlavni-a-nepohlavni-rozmnozovani: převedeno 32 vložených obrázků do static/offline_images
+lidske-telo-organy: převedeno 1 vložených obrázků do static/offline_images
+lidska-kostra-kosti: převedeno 1 vložených obrázků do static/offline_images
+globalizace-montessori-9: převedeno 18 vložených obrázků do static/offline_images
+jak-funguje-rostlina: převedeno 1 vložených obrázků do static/offline_images
+mistni-region-cesko: převedeno 3 vložených obrázků do static/offline_images
+cteme-v-mapach: převedeno 5 vložených obrázků do static/offline_images
+hustota-zalidneni: nepodařilo se stáhnout https://assets.simard.solutions/deserttrainadventures.c…
+hustota-zalidneni: nepodařilo se stáhnout https://commons.wikimedia.org/wiki/Special:Redirect/fil…
+hustota-zalidneni: nepodařilo se stáhnout https://images.unsplash.com/photo-1500530855697-b586d89…
+hustota-zalidneni: nepodařilo se stáhnout https://images.unsplash.com/photo-1500534314209-a25ddb2…
+hustota-zalidneni: nepodařilo se stáhnout https://images.unsplash.com/photo-1540959733332-eab4dea…
+hustota-zalidneni: lokálně uloženo 0 externích obrázků
+mistni-region-cesko: lokálně uloženo 0 pevných externích obrázků

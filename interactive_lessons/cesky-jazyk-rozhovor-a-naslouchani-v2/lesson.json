@@ -1,0 +1,14 @@
+{
+  "subject": "fyzika",
+  "school": "Pomocná škola",
+  "grade": "Praktická škola dvouletá – společná výuka",
+  "topic": "Český jazyk – Rozhovor a naslouchání",
+  "title": "Rozhovor a naslouchání – komunikační mise",
+  "slug": "cesky-jazyk-rozhovor-a-naslouchani-v2",
+  "description": "Rozšířená interaktivní 45minutová hodina českého jazyka: naslouchání, smysluplné reakce, poslechové detektivky, doplňující otázky, konverzační ruleta, týmové body a sebehodnocení.",
+  "icon": "👂",
+  "is_published": true,
+  "focus_guard": false,
+  "allow_page_leave": true,
+  "version": 2
+}

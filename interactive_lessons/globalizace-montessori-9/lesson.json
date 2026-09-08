@@ -1,0 +1,15 @@
+{
+  "subject": "Zeměpis",
+  "school": "Montessori",
+  "grade": "9. třída",
+  "topic": "Globalizace",
+  "title": "Globalizace – svět v jednom batohu",
+  "slug": "globalizace-montessori-9",
+  "description": "Interaktivní lekce vysvětlující globalizaci na jednoduchých příkladech z běžného života. Obsahuje cestu výrobku, propojený svět, výhody a rizika, procvičování a test.",
+  "icon": "🌍",
+  "is_published": true,
+  "focus_guard": false,
+  "allow_page_leave": true,
+  "version": 1,
+  "year": "9. třída"
+}

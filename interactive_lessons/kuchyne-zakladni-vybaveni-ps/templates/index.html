@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="cs">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Základní vybavení kuchyně – 45 minut</title>
+<style>
+:root{--bg:#f7f3ea;--card:#fff;--ink:#24312b;--accent:#52745b;--accent2:#e7b86a;--bad:#b44;--ok:#2d7a45}
+*{box-sizing:border-box} body{margin:0;font-family:Arial,Helvetica,sans-serif;background:var(--bg);color:var(--ink)}
+header{background:#fff;padding:18px;position:sticky;top:0;z-index:3;border-bottom:1px solid #ddd}
+h1{margin:0;font-size:clamp(22px,4vw,36px)} .sub{margin-top:5px;color:#566}
+nav{display:flex;gap:7px;overflow:auto;padding-top:12px}.tab{border:0;border-radius:20px;padding:9px 13px;background:#e8eee9;white-space:nowrap;font-weight:700;cursor:pointer}.tab.active{background:var(--accent);color:#fff}
+main{max-width:1050px;margin:auto;padding:18px}.screen{display:none}.screen.active{display:block}
+.card{background:var(--card);border-radius:18px;padding:18px;margin:12px 0;box-shadow:0 4px 16px #00000012}
+.hero{display:grid;grid-template-columns:1.3fr .7fr;gap:15px}.goal{font-size:20px;line-height:1.45}.timer{font-size:34px;font-weight:800;text-align:center;padding:15px;border-radius:15px;background:#f2ead9}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px}.item{background:#fff;border:2px solid #e5e0d6;border-radius:16px;padding:14px;text-align:center;cursor:pointer;min-height:155px}.item:hover{border-color:var(--accent)}.emoji{font-size:48px;height:60px;display:flex;align-items:center;justify-content:center}.name{font-size:19px;font-weight:800}.use{display:none;margin-top:8px;font-size:14px}.item.open .use{display:block}
+button.big{font-size:18px;padding:13px 18px;border:0;border-radius:13px;background:var(--accent);color:#fff;font-weight:700;cursor:pointer}button.alt{background:#765f42}.answers{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-top:15px}.ans{padding:14px;border:2px solid #ddd;border-radius:12px;background:white;font-size:17px;cursor:pointer}.ans.ok{background:#dff4e5;border-color:var(--ok)}.ans.bad{background:#f8dddd;border-color:var(--bad)}
+.prompt{font-size:25px;font-weight:800;margin:12px 0}.feedback{min-height:28px;font-weight:800;margin-top:10px}.progress{height:12px;background:#ddd;border-radius:10px;overflow:hidden}.bar{height:100%;width:0;background:var(--accent)}
+.scenario{font-size:25px;background:#f5efe2;border-radius:15px;padding:18px;margin:12px 0}.chips{display:flex;flex-wrap:wrap;gap:9px}.chip{padding:10px 13px;border-radius:20px;border:2px solid #ccc;background:#fff;cursor:pointer}.chip.sel{background:#dfeadf;border-color:var(--accent)}
+.teacher{border-left:6px solid var(--accent2)}.danger{border-left:6px solid #c55}.score{font-size:32px;font-weight:900}.small{font-size:14px;color:#667}
+@media(max-width:650px){.hero{grid-template-columns:1fr}.answers{grid-template-columns:1fr}header{position:static}.prompt,.scenario{font-size:21px}}
+@media print{header nav,.no-print{display:none!important}.screen{display:block!important}.card{box-shadow:none;border:1px solid #ccc;break-inside:avoid}}
+</style>
+</head>
+<body>
+<header><h1>🍳 Základní vybavení kuchyně</h1><div class="sub">Interaktivní hodina • 45 minut • praktické poznávání</div>
+<nav id="nav"></nav></header>
+<main>
+<section class="screen active" data-title="Start">
+<div class="hero">
+<div class="card"><h2>🎯 Cíl hodiny</h2><div class="goal">Poznám a pojmenuji základní vybavení kuchyně. Dokážu říct nebo ukázat, k čemu jednotlivé předměty slouží, a vyberu vhodnou pomůcku pro jednoduchou činnost.</div></div>
+<div class="card"><h2>⏱️ Čas</h2><div class="timer" id="timer">45:00</div><div style="text-align:center;margin-top:10px"><button class="big" onclick="toggleTimer()">Spustit / zastavit</button></div></div>
+</div>
+<div class="card teacher"><h2>👩‍🏫 0–5 min: Co známe z kuchyně?</h2><p>Učitel se ptá: <b>Co máte doma v kuchyni? Na čem vaříme? Čím jíme polévku? Čím krájíme chleba? V čem vaříme těstoviny?</b></p>
+<button class="big" onclick="randomWarmup()">Náhodná otázka</button><div class="prompt" id="warm">Klikni na tlačítko.</div></div>
+</section>
+
+<section class="screen" data-title="Poznáváme">
+<div class="card"><h2>👀 5–12 min: Poznáváme vybavení</h2><p>Klikni na předmět. Zobrazí se, k čemu slouží. Základních 12 je označeno ⭐, další jsou pro šikovnější žáky.</p></div>
+<div class="grid" id="learnGrid"></div>
+</section>
+
+<section class="screen" data-title="Co k čemu">
+<div class="card"><h2>🧩 12–20 min: Co k čemu patří?</h2><div class="progress"><div class="bar" id="qbar"></div></div><div class="prompt" id="qprompt"></div><div class="answers" id="qanswers"></div><div class="feedback" id="qfeedback"></div><button class="big no-print" onclick="nextQ()">Další úkol</button></div>
+</section>
+
+<section class="screen" data-title="Jsem kuchař">
+<div class="card"><h2>👨‍🍳 20–30 min: Hra „Jsem kuchař“</h2><p>Přečti úkol. Vyber všechny věci, které by se ti hodily. Potom nahlas vysvětli, co s nimi uděláš.</p><div class="scenario" id="scenario"></div><div class="chips" id="chips"></div><div class="feedback" id="sfeedback"></div><div style="margin-top:14px"><button class="big" onclick="checkScenario()">Zkontrolovat</button> <button class="big alt" onclick="newScenario()">Nový úkol</button></div></div>
+</section>
+
+<section class="screen" data-title="Co je špatně">
+<div class="card"><h2>❌ 30–38 min: Co je špatně?</h2><p>Rozhodni, jestli je věta správně. Když je špatně, zkus ji nahlas opravit.</p><div class="prompt" id="wrongPrompt"></div><div class="answers"><button class="ans" onclick="judge(true)">✅ Je to správně</button><button class="ans" onclick="judge(false)">❌ Je to špatně</button></div><div class="feedback" id="wrongFeedback"></div><button class="big" onclick="newWrong()">Další věta</button></div>
+</section>
+
+<section class="screen" data-title="Rychlovka">
+<div class="card"><h2>⚡ 38–43 min: Rychlé opakování</h2><p>Nejdřív řekni název předmětu. Potom řekni, k čemu slouží. Teprve pak odkryj odpověď.</p><div style="text-align:center"><div class="emoji" style="font-size:90px;height:110px" id="flashEmoji"></div><div class="prompt" id="flashName">?</div><div id="flashUse" style="font-size:20px;display:none"></div><button class="big" onclick="revealFlash()">Ukázat odpověď</button> <button class="big alt" onclick="newFlash()">Další</button></div></div>
+</section>
+
+<section class="screen" data-title="Závěr">
+<div class="card"><h2>⭐ 43–45 min: Závěr</h2><p class="prompt">Kterou věc z kuchyně si pamatuješ a k čemu slouží?</p><p>Každý žák řekne alespoň jeden předmět a jeho použití.</p></div>
+<div class="card"><h2>🏁 Mini test – 10 otázek</h2><p>Na závěr může žák samostatně ověřit, co si zapamatoval.</p><button class="big" onclick="startTest()">Spustit mini test</button><div id="testArea"></div></div>
+<div class="card teacher"><h2>📚 Diferenciace</h2><p><b>Podpora:</b> „Kde je hrnec?“ – stačí ukázat. &nbsp; <b>Střední:</b> „Co je to?“ – žák pojmenuje. &nbsp; <b>Vyšší:</b> „Co je to a k čemu to používáme?“ – žák pojmenuje a vysvětlí funkci.</p></div>
+<div class="card danger"><h2>⚠️ Bezpečnost</h2><p>Nůž, sporák, trouba, horká voda a elektrické spotřebiče používáme pouze bezpečně a podle pokynů učitele. Při krájení používáme vhodnou podložku.</p></div>
+</section>
+</main>
+<script>
+const items = [["Hrnec", "🍲", "vaření polévky, těstovin nebo brambor"], ["Pánev", "🍳", "smažení a opékání"], ["Nůž", "🔪", "krájení potravin"], ["Prkénko", "▰", "bezpečné krájení potravin na podložce"], ["Vařečka", "🥄", "míchání jídla při vaření"], ["Naběračka", "🥣", "nabírání polévky nebo omáčky"], ["Cedník", "🫗", "scezení vody z těstovin nebo zeleniny"], ["Struhadlo", "🧀", "strouhání sýra, zeleniny nebo ovoce"], ["Metlička", "〽️", "šlehání a rozmíchávání"], ["Talíř", "🍽️", "servírování a jedení jídla"], ["Hrnek", "☕", "pití čaje, kakaa nebo jiného nápoje"], ["Příbor", "🍴", "jedení jídla"], ["Rychlovarná konvice", "♨️", "ohřev vody"], ["Mikrovlnná trouba", "📻", "ohřev hotového jídla"], ["Sporák", "🔥", "vaření a smažení"], ["Trouba", "♨️", "pečení pokrmů"], ["Lednice", "❄️", "uchovávání potravin v chladu"], ["Mixér", "🥤", "mixování potravin a nápojů"]];
+const base=items.slice(0,12);
+const warmups=["Co máte doma v kuchyni?","Na čem vaříme?","Čím jíme polévku?","Čím krájíme chleba?","V čem vaříme těstoviny?","Čím zamícháme polévku?","Do čeho nalijeme čaj?","Kde uchováváme potraviny v chladu?","Čím scedíme těstoviny?","Na čem můžeme smažit vajíčko?"];
+const questions=[
+["Chci uvařit polévku. Co potřebuji?","Hrnec"],["Chci nakrájet chleba. Co použiji?","Nůž"],["Na čem bezpečně krájím?","Prkénko"],["Chci scedit těstoviny. Co použiji?","Cedník"],["Chci nastrouhat sýr. Co použiji?","Struhadlo"],["Chci zamíchat polévku. Co použiji?","Vařečka"],["Čím naberu polévku z hrnce?","Naběračka"],["Na čem usmažím vajíčko?","Pánev"],["Do čeho si dám čaj?","Hrnek"],["Na co si dám hotové jídlo?","Talíř"],["Čím jím běžné jídlo?","Příbor"],["Čím rozmíchám vejce?","Metlička"],["Kde uchovám mléko v chladu?","Lednice"],["Čím rychle ohřeji vodu na čaj?","Rychlovarná konvice"],["Kde upeču koláč?","Trouba"],["Na čem vařím hrnec polévky?","Sporák"],["Čím rozmixuji ovoce?","Mixér"],["Kde mohu ohřát hotové jídlo?","Mikrovlnná trouba"]
+];
+const scenarios=[
+["Udělej čaj.",["Hrnek","Rychlovarná konvice"]],["Připrav chleba se sýrem.",["Nůž","Prkénko","Talíř"]],["Uvař těstoviny.",["Hrnec","Sporák","Cedník","Vařečka"]],["Prostři stůl pro jednoho.",["Talíř","Příbor","Hrnek"]],["Připrav míchaná vejce.",["Miska","Metlička","Pánev"]],["Nastrouhej sýr na těstoviny.",["Struhadlo","Talíř"]],["Naservíruj polévku.",["Naběračka","Talíř"]],["Upeč jednoduchý koláč.",["Miska","Metlička","Trouba"]]
+];
+const wrongs=[
+["Polévku budu jíst vidličkou.",false,"Na polévku použiji lžíci."],["Těstoviny scedím přes cedník.",true,"Ano, cedník je vhodný."],["Chleba nakrájím vařečkou.",false,"Chleba krájím nožem na prkénku."],["Sýr nastrouhám na struhadle.",true,"Správně."],["Horký hrnec vezmu holou rukou.",false,"Použiji chňapku a postupuji bezpečně."],["Čaj naliji do hrnku.",true,"Správně."],["Potraviny, které mají být v chladu, dám do lednice.",true,"Správně."],["Vajíčko budu smažit v hrnku.",false,"Vajíčko smažíme na pánvi."],["Při krájení používám prkénko.",true,"Správně."],["Nůž je hračka.",false,"Nůž je ostrý nástroj a používáme ho bezpečně."],["Polévku naberu naběračkou.",true,"Správně."],["Koláč peču v lednici.",false,"Koláč pečeme v troubě."],["Vodu na čaj mohu ohřát v rychlovarné konvici.",true,"Správně."],["Mixér používám na krájení chleba.",false,"Mixér slouží k mixování."],["Mokrou elektrickou konvici zapojím do zásuvky.",false,"Elektrický spotřebič musí být používán bezpečně a suchý."]
+];
+const allNames=[...new Set(items.map(x=>x[0]).concat(["Miska"]))];
+let sec=0, qidx=0, qscore=0, currentScenario=null, wrong=null, flash=null, remaining=45*60, running=false, intv=null;
+document.querySelectorAll(".screen").forEach((s,i)=>{let b=document.createElement("button");b.className="tab"+(i===0?" active":"");b.textContent=s.dataset.title;b.onclick=()=>show(i);nav.appendChild(b)});
+function show(i){document.querySelectorAll(".screen").forEach((x,j)=>x.classList.toggle("active",i===j));document.querySelectorAll(".tab").forEach((x,j)=>x.classList.toggle("active",i===j));window.scrollTo(0,0)}
+function toggleTimer(){running=!running;if(running&&!intv)intv=setInterval(()=>{if(!running)return;if(remaining>0)remaining--;let m=Math.floor(remaining/60),s=remaining%60;timer.textContent=`${m}:${String(s).padStart(2,"0")}`},1000)}
+function randomWarmup(){warm.textContent=warmups[Math.floor(Math.random()*warmups.length)]}
+learnGrid.innerHTML=items.map((x,i)=>`<div class="item" onclick="this.classList.toggle('open')"><div>${i<12?"⭐":"➕"}</div><div class="emoji">${x[1]}</div><div class="name">${x[0]}</div><div class="use">${x[2]}</div></div>`).join("");
+function shuffle(a){return [...a].sort(()=>Math.random()-.5)}
+function nextQ(){let q=questions[qidx%questions.length];qprompt.textContent=q[0];qfeedback.textContent="";let opts=shuffle([q[1],...shuffle(allNames.filter(x=>x!==q[1])).slice(0,3)]);qanswers.innerHTML=opts.map(o=>`<button class="ans" onclick="answerQ(this,'${o.replaceAll("'","")}','${q[1].replaceAll("'","")}')">${o}</button>`).join("");qbar.style.width=((qidx%questions.length)/questions.length*100)+"%";qidx++}
+function answerQ(el,a,c){document.querySelectorAll("#qanswers .ans").forEach(b=>b.disabled=true);if(a===c){el.classList.add("ok");qfeedback.textContent="✅ Správně!";qscore++}else{el.classList.add("bad");[...document.querySelectorAll("#qanswers .ans")].find(b=>b.textContent===c)?.classList.add("ok");qfeedback.textContent="Zkus si zapamatovat správnou odpověď: "+c}}
+function newScenario(){currentScenario=scenarios[Math.floor(Math.random()*scenarios.length)];scenario.textContent=currentScenario[0];let opts=shuffle([...new Set(currentScenario[1].concat(shuffle(allNames).slice(0,8)))]).slice(0,10);currentScenario[1].forEach(x=>{if(!opts.includes(x))opts.push(x)});chips.innerHTML=shuffle(opts).map(x=>`<button class="chip" onclick="this.classList.toggle('sel')">${x}</button>`).join("");sfeedback.textContent=""}
+function checkScenario(){let sel=[...document.querySelectorAll(".chip.sel")].map(x=>x.textContent), need=currentScenario[1];let missing=need.filter(x=>!sel.includes(x));sfeedback.textContent=missing.length?"Ještě se hodí: "+missing.join(", "):"✅ Výborně. Teď nahlas vysvětli postup."}
+function newWrong(){wrong=wrongs[Math.floor(Math.random()*wrongs.length)];wrongPrompt.textContent=wrong[0];wrongFeedback.textContent=""}
+function judge(v){wrongFeedback.textContent=(v===wrong[1]?"✅ Správně. ":"❌ Tentokrát ne. ")+wrong[2]}
+function newFlash(){flash=items[Math.floor(Math.random()*items.length)];flashEmoji.textContent=flash[1];flashName.textContent="?";flashUse.style.display="none"}
+function revealFlash(){flashName.textContent=flash[0];flashUse.textContent="Použití: "+flash[2];flashUse.style.display="block"}
+function startTest(){let qs=shuffle(questions).slice(0,10), score=0, pos=0;function render(){if(pos>=qs.length){testArea.innerHTML=`<div class="score">Výsledek: ${score}/10 (${score*10} %)</div><p>${score>=8?"Skvělé zvládnutí!":score>=6?"Dobrá práce – ještě trochu procvičit.":"Vrátíme se k procvičování a zkusíme to znovu."}</p><button class="big" onclick="startTest()">Zkusit znovu</button>`;return}let q=qs[pos],opts=shuffle([q[1],...shuffle(allNames.filter(x=>x!==q[1])).slice(0,3)]);testArea.innerHTML=`<div class="prompt">${pos+1}/10 — ${q[0]}</div><div class="answers">${opts.map(o=>`<button class="ans">${o}</button>`).join("")}</div>`;[...testArea.querySelectorAll(".ans")].forEach(b=>b.onclick=()=>{if(b.textContent===q[1])score++;pos++;render()})}render()}
+nextQ();newScenario();newWrong();newFlash();
+</script></body></html>

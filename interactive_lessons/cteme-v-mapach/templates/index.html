@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="cs"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>Čteme v mapách</title>
+<style>
+:root{--green:#0a7a45;--green2:#0b5e36;--brown:#81501f;--cream:#fff9ee;--ink:#172d26;--line:#d8e5dc;--soft:#eff8f2;--blue:#0e73c8}*{box-sizing:border-box}body{margin:0;background:#eef4ef;color:var(--ink);font-family:Segoe UI,Arial,sans-serif}.app{max-width:1540px;margin:auto;min-height:100vh;background:var(--cream);box-shadow:0 0 40px #0001}.hero{min-height:108px;background:url('{{ asset_url('offline_images/img_399d37a9c9d5.jpg') }}') center/cover no-repeat;position:relative;border-bottom:3px solid #d8c38d}.hero:after{content:"";position:absolute;inset:0;background:linear-gradient(90deg,rgba(255,251,239,.93) 0%,rgba(255,251,239,.65) 36%,rgba(255,255,255,.1) 75%)}.hero-inner{position:relative;z-index:1;padding:14px 22px;display:flex;align-items:flex-start;justify-content:space-between;gap:20px}.title h1{margin:0;font:700 clamp(34px,4vw,56px)/.95 Georgia,serif}.title p{margin:6px 0 0;font-weight:800}.steps{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end;margin-top:2px}.step{border:0;cursor:pointer;background:#ffffffd9;border-radius:999px;padding:9px 13px;font-size:14px}.step.on{background:var(--green);color:white;font-weight:800}.layout{display:grid;grid-template-columns:190px minmax(0,1fr) 210px;gap:12px;padding:12px}.side,.legend{background:#fff;border:1px solid var(--line);border-radius:16px;padding:13px;box-shadow:0 5px 16px #0001}.side h2,.legend h2{margin:0 0 10px;font-size:20px}.menu{display:grid;gap:6px}.menu button{border:0;background:#fff;border-radius:10px;padding:10px;text-align:left;font-weight:700;font-size:14px}.menu button.active{background:var(--green);color:#fff}.tip{margin-top:14px;background:#fff4c9;border-radius:13px;padding:12px;font-size:14px;line-height:1.35}.scenic{width:100%;border-radius:13px;margin-top:12px;display:block}.main{min-width:0}.maps{display:grid;grid-template-columns:1fr 1fr;gap:10px}.map-card{background:#fff;border:1px solid var(--line);border-radius:18px;overflow:hidden;box-shadow:0 5px 16px #0001}.map-head{padding:12px 15px;color:#fff;font-size:20px;font-weight:850}.sat .map-head{background:var(--green2)}.tour .map-head{background:var(--brown)}.sub{display:block;font-size:13px;font-weight:600;opacity:.92;margin-top:2px}.map-img{display:block;width:100%;aspect-ratio:1.1/1;object-fit:cover;background:#ddd}.map-wrap{position:relative}.obj{position:absolute;transform:translate(-50%,-50%);background:#fffef5e8;border:2px solid #17633f;border-radius:10px;padding:3px 7px;font-size:12px;font-weight:800;box-shadow:0 2px 5px #0004;white-space:nowrap;pointer-events:none}.obj::before{content:"";display:inline-block;width:7px;height:7px;border-radius:50%;background:#0a7a45;margin-right:4px}.obj.small{font-size:11px;padding:2px 5px}.map-mobile-tabs{display:none}.legend .row{display:flex;align-items:center;gap:8px;font-size:13px;margin:8px 0}.sym{width:26px;display:inline-block;text-align:center;font-weight:900}.qbox{margin-top:10px;background:#fff;border:1px solid var(--line);border-radius:18px;padding:15px;box-shadow:0 5px 18px #0001}.qtop{display:flex;align-items:center;gap:13px}.qicon{width:44px;height:44px;border-radius:50%;background:var(--green);color:white;display:grid;place-items:center;font-size:28px;font-weight:900}.qmeta{flex:1}.qmeta h2{margin:0;font-size:20px}.dots{display:flex;gap:5px;margin-top:7px;flex-wrap:wrap}.dot{width:12px;height:12px;border-radius:50%;background:#d6dfd9}.dot.done{background:var(--green)}.qbody{display:grid;grid-template-columns:minmax(0,1.4fr) minmax(260px,.7fr);gap:12px;margin-top:12px}.qtext{font-size:20px;font-weight:800;margin:4px 0 12px}.answers{display:grid;gap:8px}.ans{display:flex;align-items:center;gap:10px;width:100%;border:1px solid #cbdcd0;border-radius:10px;background:#f7fbf8;padding:11px 13px;font-size:16px;text-align:left;cursor:pointer}.ans:hover{border-color:var(--green)}.ans.bad{background:#ffe9e7;border-color:#d94a42}.ans.good{background:#e4f7e9;border-color:#3aa05a}.letter{width:30px;height:30px;border-radius:7px;background:#6c7771;color:#fff;display:grid;place-items:center;font-weight:900}.feedback{border-radius:13px;padding:13px;display:none;line-height:1.35}.feedback.show{display:block}.feedback.bad{background:#fff0ed;color:#9a1f1a}.feedback.good{background:#e8f8ed;color:#176a36}.hint{margin-top:10px;background:#fff7d7;border-radius:13px;padding:12px;line-height:1.35}.actions{display:flex;justify-content:space-between;gap:10px;margin-top:12px}.btn{border:0;border-radius:11px;padding:11px 17px;font-weight:850;font-size:15px}.primary{background:var(--green);color:white}.secondary{background:#eef3ef}.footer{min-height:86px;background:url('{{ asset_url('offline_images/img_103571afc96a.jpg') }}') center bottom/cover no-repeat;display:flex;align-items:flex-start;justify-content:center;padding:15px;font-family:Georgia,serif;font-style:italic;font-size:18px}.question-list{display:grid;grid-template-columns:repeat(2,1fr);gap:6px}.qnum{width:32px;height:32px;border-radius:50%;border:0;background:#eef2ef}.qnum.active,.qnum.done{background:var(--green);color:#fff;font-weight:800}
+.subteach{margin-top:4px;color:#486258}.teachgrid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin:14px 0}.teachcard{background:linear-gradient(135deg,#f4fbf6,#fffaf0);border:1px solid #d9e7dc;border-radius:14px;padding:14px;line-height:1.42}.teachcard b{font-size:18px;color:#075f39}.teachcard p{margin:7px 0 0}.teachrule{background:#fff4c9;border-left:5px solid #e1b73b;border-radius:12px;padding:13px;margin:12px 0;line-height:1.45}@media(max-width:1050px){.layout{grid-template-columns:170px minmax(0,1fr)}.legend{grid-column:1/-1}.legend .rows{display:grid;grid-template-columns:repeat(4,1fr);gap:4px 10px}.qbody{grid-template-columns:1fr}.question-list{grid-template-columns:repeat(10,1fr)}}
+@media(max-width:760px){.teachgrid{grid-template-columns:1fr}.teaching{margin-top:0}.teachcard{padding:12px}.teachcard b{font-size:16px}body{background:#fff}.app{box-shadow:none}.hero{min-height:92px}.hero-inner{padding:10px 12px}.title h1{font-size:32px}.title p{font-size:13px}.steps{display:none}.layout{display:block;padding:8px}.side,.legend{display:none}.map-mobile-tabs{display:grid;grid-template-columns:1fr 1fr;background:#e9f0ec;border-radius:10px;overflow:hidden;margin-bottom:7px}.map-mobile-tabs button{border:0;padding:9px;font-weight:800;background:transparent}.map-mobile-tabs button.on{background:var(--green);color:#fff}.maps{display:block}.map-card{display:none}.map-card.mobile-show{display:block}.map-head{font-size:17px;padding:9px 12px}.map-img{aspect-ratio:1.25/1}.qbox{padding:11px;margin-top:8px}.qbody{display:block}.qtext{font-size:17px}.ans{font-size:15px;padding:9px}.feedback,.hint{font-size:14px}.actions{position:sticky;bottom:0;background:#fff;padding-top:8px}.footer{min-height:58px;font-size:15px}.qicon{width:36px;height:36px;font-size:22px}.qmeta h2{font-size:17px}.dots{gap:4px}.dot{width:9px;height:9px}}
+
+@media(max-width:760px){
+  html,body{width:100%;max-width:100%;overflow-x:hidden}
+  .app{width:100%;max-width:100vw;overflow-x:hidden}
+  .layout,.main,#mapssec{width:100%;min-width:0}
+  .map-mobile-tabs{position:sticky;top:0;z-index:20;box-shadow:0 2px 8px #0002}
+  .map-mobile-tabs button{min-height:46px;font-size:16px;touch-action:manipulation}
+  .map-card{width:100%;max-width:100%;border-radius:14px}
+  .map-wrap{width:100%;overflow:hidden}
+  .map-img{width:100%;height:auto;aspect-ratio:auto!important;object-fit:contain!important;max-height:none}
+  .obj{font-size:12px;line-height:1.15;padding:3px 5px;max-width:34%;white-space:normal;text-align:center}
+  .obj.small{font-size:11px}
+  .qbox{width:100%;max-width:100%;scroll-margin-top:58px}
+  .qtop{align-items:flex-start}
+  .qtext{font-size:18px;line-height:1.35;margin-top:8px}
+  .answers{gap:10px}
+  .ans{min-height:50px;font-size:16px;padding:12px 11px;touch-action:manipulation}
+  .letter{flex:0 0 auto}
+  .hint,.feedback{line-height:1.4}
+  .actions{display:grid;grid-template-columns:1fr;gap:8px;position:static;background:transparent;padding-top:10px}
+  .actions .btn{width:100%;min-height:46px}
+  .hero{min-height:78px}
+  .title h1{font-size:28px;line-height:1.05}
+  .title p{font-size:12px}
+}
+@media(max-width:390px){
+  .layout{padding:6px}
+  .map-head{font-size:15px}
+  .qbox{padding:9px}
+  .qtext{font-size:17px}
+  .ans{font-size:15px}
+  .obj{font-size:10px;padding:2px 4px}
+}
+
+.mobile-launch{display:none}
+@media(max-width:760px){
+  .mobile-launch{display:grid;grid-template-columns:1fr;gap:10px;margin:10px 0 4px}
+  .mobile-launch .btn{width:100%;min-height:52px;font-size:17px;border-radius:12px}
+}
+</style></head>
+<body><div class="app">
+<header class="hero"><div class="hero-inner"><div class="title"><h1>Čteme v mapách</h1><p>Karlovy Vary – jedno místo, dva pohledy</p></div><div class="steps"><button class="step on" onclick="showSection('lesson')">1 Učitelský výklad</button><button class="step" onclick="showSection('mapssec')">2 Mapové značky</button><button class="step" onclick="showSection('mapssec')">3 Práce s mapou</button><button class="step" onclick="startPractice()">4 Procvičování</button><button class="step" onclick="startTest()">5 Test</button><button class="step" onclick="showSection('summary')">6 Shrnutí</button></div></div></header>
+<div class="layout">
+<aside class="side"><h2>Typy úloh</h2><div class="menu"><button class="active">☷ Výběr z možností</button><button>✎ Doplň do mapy</button><button>◎ Klikni na mapu</button><button>▣ Najdi stejné místo</button><button>⌘ Naplánuj trasu</button><button>✖ Ano / Ne</button></div><div class="tip"><b>💡 Tip:</b><br>Používej oba pohledy. Satelitní mapa ukazuje skutečný vzhled krajiny, turistická mapa přidává značky, trasy, vrstevnice a zajímavá místa.</div><img class="scenic" src="{{ asset_url('offline_images/img_2d3951a7b053.jpg') }}" alt="Karlovy Vary"></aside>
+<main class="main">
+<section id="lesson" class="qbox teaching">
+<div class="qtop"><div class="qicon">🧭</div><div class="qmeta"><h2>Učitelský výklad – jak se orientovat v mapě</h2><div class="subteach">Nejdřív si přečti krátký výklad. Potom budeš stejné věci hledat přímo v mapách.</div></div></div>
+<div class="teachgrid">
+<div class="teachcard"><b>🗺️ Co je mapa?</b><p>Mapa je zmenšený a zjednodušený obraz území. Nezobrazuje všechno – vybírá to důležité a používá barvy, čáry a značky.</p></div>
+<div class="teachcard"><b>🛰️ Satelitní mapa</b><p>Ukazuje krajinu téměř jako fotografii shora. Dobře na ní poznáš řeku, les, zástavbu, silnice a tvar města.</p></div>
+<div class="teachcard"><b>🥾 Turistická mapa</b><p>Stejné místo převádí do značek. Ukáže turistické trasy, zajímavá místa, vrstevnice a další informace, které na snímku nejsou dobře vidět.</p></div>
+<div class="teachcard"><b>🧭 Světové strany</b><p>Na běžné mapě je sever nahoře, jih dole, západ vlevo a východ vpravo. Při otázkách vždy nejdřív zkontroluj orientaci mapy.</p></div>
+<div class="teachcard"><b>📏 Měřítko</b><p>Měřítko převádí vzdálenost na mapě na skutečnou vzdálenost. Úsečka 1 km ti pomůže odhadnout, jak daleko jsou dvě místa.</p></div>
+<div class="teachcard"><b>〰 Vrstevnice</b><p>Spojují místa se stejnou nadmořskou výškou. Když jsou blízko u sebe, svah je prudký; když jsou dál od sebe, je mírnější.</p></div>
+</div><div class="teachrule"><b>Jak mapu číst:</b> 1. najdi orientační bod → 2. podívej se na legendu → 3. urči směr → 4. porovnej vzdálenost → 5. porovnej oba pohledy.</div>
+<button class="btn primary" onclick="showSection('mapssec')">Jdu pracovat s mapou →</button>
+</section>
+<section id="mapssec" style="display:none">
+<div class="map-mobile-tabs"><button id="tabSat" class="on" onclick="showMap('sat')">Satelitní</button><button id="tabTour" onclick="showMap('tour')">Turistická</button></div>
+<section class="maps"><article id="satCard" class="map-card sat mobile-show"><div class="map-head">🛰️ Satelitní mapa (ortofotomapa)<span class="sub">Skutečný pohled na krajinu</span></div><img class="map-img" src="{{ asset_url('offline_images/img_97e83747ff55.jpg') }}" alt="Satelitní zobrazení stejného území"></article><article id="tourCard" class="map-card tour"><div class="map-head">🥾 Turistická mapa<span class="sub">Turistické trasy, vrstevnice a zajímavosti</span></div><div class="map-wrap"><img class="map-img" src="{{ asset_url('offline_images/img_136e8a308c8a.jpg') }}" alt="Turistická mapa stejného území">
+<span class="obj" style="left:34%;top:37%">Nádraží</span>
+<span class="obj" style="left:52%;top:58%">Most</span>
+<span class="obj" style="left:59%;top:66%">Centrum</span>
+<span class="obj" style="left:70%;top:29%">Rozcestí</span>
+<span class="obj small" style="left:20%;top:72%">Lesní cesta</span>
+<span class="obj small" style="left:76%;top:76%">Park</span>
+</div></article></section>
+<div class="mobile-launch">
+  <button type="button" class="btn primary" onclick="startPractice()">▶ Spustit procvičování – 20 otázek</button>
+  <button type="button" class="btn secondary" onclick="startTest()">✓ Spustit test</button>
+</div>
+<section id="quiz" class="qbox" style="display:none"><div class="qtop"><div class="qicon">?</div><div class="qmeta"><h2 id="qnum">Procvičování – otázka 1 z 20</h2><div class="dots" id="dots"></div></div></div><div class="qbody"><div><div class="qtext" id="qtext"></div><div class="answers" id="answers"></div><div class="actions"><button class="btn secondary" onclick="resetQuiz()">↻ Vynulovat</button><button id="next" class="btn primary" onclick="nextQ()" style="display:none">Další otázka →</button></div></div><div><div id="feedback" class="feedback"></div><div class="hint"><b>💡 Nápověda</b><div id="hintText">Používej oba pohledy a legendu.</div></div></div></div></section>
+</section>
+<section id="summary" class="qbox" style="display:none"><div class="qtop"><div class="qicon">✓</div><div class="qmeta"><h2>Shrnutí</h2></div></div><div class="teachrule">Umíš-li najít stejné místo na dvou mapách, použít legendu, určit světovou stranu, odhadnout vzdálenost a přečíst vrstevnice, mapu už opravdu používáš – nejen poznáváš.</div><button class="btn primary" onclick="showSection('quiz')">Zpět k procvičování</button></section>
+</main>
+<aside class="legend"><h2>Legenda</h2><div class="rows"><div class="row"><span class="sym">〰</span>vrstevnice</div><div class="row"><span class="sym">━</span>řeka</div><div class="row"><span class="sym">━</span>silnice</div><div class="row"><span class="sym">┅</span>železnice</div><div class="row"><span class="sym" style="color:#d22">--</span>turistická trasa</div><div class="row"><span class="sym">🏰</span>hrad / zřícenina</div><div class="row"><span class="sym">🗼</span>rozhledna</div><div class="row"><span class="sym">⭐</span>významné místo</div><div class="row"><span class="sym">🌲</span>les</div></div><h2 style="margin-top:15px">Otázky</h2><div class="question-list" id="qlist"></div></aside>
+</div><footer class="footer">„Mapy nám otevírají svět.“</footer></div>
+<script>
+const qnum=document.getElementById('qnum');
+const dots=document.getElementById('dots');
+const qtext=document.getElementById('qtext');
+const answers=document.getElementById('answers');
+const feedback=document.getElementById('feedback');
+const hintText=document.getElementById('hintText');
+const next=document.getElementById('next');
+const qlist=document.getElementById('qlist');
+const satCard=document.getElementById('satCard');
+const tourCard=document.getElementById('tourCard');
+const tabSat=document.getElementById('tabSat');
+const tabTour=document.getElementById('tabTour');
+function showSection(id){const lesson=document.getElementById('lesson'),maps=document.getElementById('mapssec'),quiz=document.getElementById('quiz'),summary=document.getElementById('summary'); if(lesson)lesson.style.display=id==='lesson'?'block':'none'; if(maps)maps.style.display=(id==='mapssec'||id==='quiz')?'block':'none'; if(quiz)quiz.style.display=id==='quiz'?'block':'none'; if(summary)summary.style.display=id==='summary'?'block':'none'; document.querySelectorAll('.step').forEach((e,i)=>e.classList.toggle('on',(id==='lesson'&&i===0)||(id==='mapssec'&&(i===1||i===2))||(id==='quiz'&&mode==='practice'&&i===3)||(id==='quiz'&&mode==='test'&&i===4)||(id==='summary'&&i===5))); if(id==='quiz'){setTimeout(()=>{const q=document.getElementById('quiz'); if(q)q.scrollIntoView({behavior:'smooth',block:'start'});},50)}else window.scrollTo({top:0,behavior:'smooth'});}
+const PRACTICE=[
+['Co leží nejvíce na severu mapy?','Diana 556 m',['Diana 556 m','Lázně','Centrum','Park'],'Najdi severku. Sever je nahoře.'],
+['Kterým směrem od Lázní leží Diana?','Na severovýchod',['Na severovýchod','Na jihozápad','Na západ','Na jih'],'Od Lázní se podívej nahoru a doprava.'],
+['Co leží severně od Centra?','Hrad',['Hrad','Park','Lázně','Řeka Ohře'],'Sever je nahoře. Porovnej polohu Centra a okolních objektů.'],
+['Co je blíž k Hradu – Most, nebo Diana?','Most',['Most','Diana','Jsou stejně daleko','Nelze zjistit'],'Porovnej vzdálenost obou objektů přímo na mapě.'],
+['Musíš při cestě z Lázní k Dianě překročit řeku Ohři?','Ano',['Ano','Ne','Jen v zimě','Z mapy to nejde zjistit'],'Lázně a Diana jsou na opačných stranách modrého toku.'],
+['Který objekt je přímo u přechodu přes řeku poblíž Hradu?','Most',['Most','Park','Diana','Nádraží'],'Hledej místo, kde cesta překračuje modrý tok.'],
+['Kterým směrem od Nádraží leží Hrad?','Na jihovýchod',['Na jihovýchod','Na severozápad','Na jihozápad','Na sever'],'Hrad je od Nádraží níže a vpravo.'],
+['Kterým směrem od Hradu leží Nádraží?','Na severozápad',['Na severozápad','Na jihovýchod','Na východ','Na jih'],'Je to opačný směr než cesta z Nádraží k Hradu.'],
+['Co je nejblíž k Centru?','Most',['Most','Diana','Nádraží','Lesní cesta'],'Porovnej polohu Centra s nabízenými objekty.'],
+['Který objekt leží nejvýše podle údaje přímo v mapě?','Diana 556 m',['Diana 556 m','Hrad','Lázně','Nádraží'],'Hledej číslo udávající nadmořskou výšku.'],
+['Která turistická trasa vede nejblíže k Dianě?','Zelená',['Zelená','Modrá','Červená','Žlutá'],'Sleduj barevné přerušované trasy v okolí Diany.'],
+['Která turistická trasa překračuje Ohři poblíž středu mapy?','Červená',['Červená','Zelená','Žlutá','Žádná'],'Najdi místo, kde přerušovaná barevná čára protíná řeku.'],
+['Chceš z Centra k Dianě. Kterým směrem se budeš převážně pohybovat?','Na severovýchod',['Na severovýchod','Na jihozápad','Na západ','Na jih'],'Diana je od Centra nahoře a vpravo.'],
+['Chceš z Diany do Lázní. Kterým směrem se budeš převážně pohybovat?','Na jihozápad',['Na jihozápad','Na severovýchod','Na sever','Na východ'],'Lázně jsou od Diany dole a vlevo.'],
+['Kde podle mapy očekáváš prudší svah?','Tam, kde jsou vrstevnice blízko u sebe',['Tam, kde jsou vrstevnice blízko u sebe','Tam, kde jsou vrstevnice daleko od sebe','U každé řeky','Jen u nádraží'],'Čím jsou vrstevnice hustší, tím prudší je svah.'],
+['Chceš zjistit skutečnou vzdálenost z Nádraží do Centra. Co použiješ?','Měřítko',['Měřítko','Severku','Jen legendu','Barvu lesa'],'Měřítko převádí vzdálenost na mapě na vzdálenost ve skutečnosti.'],
+['Celá černá úsečka měřítka představuje přibližně kolik?','1 km',['1 km','100 m','5 km','10 km'],'Podívej se na popisek měřítka dole na mapě.'],
+['Na které mapě nejlépe poznáš skutečný vzhled domů, ulic a lesa?','Na satelitní mapě',['Na satelitní mapě','Na turistické mapě','V legendě','Na severce'],'Satelitní snímek ukazuje skutečný povrch shora.'],
+['Na které mapě nejlépe naplánuješ pěší cestu k Dianě?','Na turistické mapě',['Na turistické mapě','Jen na satelitním snímku','Na fotografii města','Bez mapy'],'Turistická mapa ukazuje trasy, značky, vrstevnice a cíle.'],
+['Chceš naplánovat výlet Nádraží → Hrad → Most → Centrum → Diana. Co musíš při plánování sledovat?','Cesty, řeku, směry, vzdálenost a turistické trasy',['Cesty, řeku, směry, vzdálenost a turistické trasy','Jen názvy objektů','Jen barvu mapy','Pouze nadmořskou výšku'],'Dobrá orientace spojuje více informací z mapy najednou.']
+];
+const TEST=PRACTICE.map(q=>[q[0],q[1],[...q[2]],q[3]]);
+let mode='practice',Q=PRACTICE,score=0;
+let qi=0,answered=false,completed=new Set();
+function buildDots(){dots.innerHTML='';Q.forEach((_,i)=>{let d=document.createElement('span');d.className='dot'+(completed.has(i)?' done':'');dots.appendChild(d)});qlist.innerHTML='';Q.forEach((_,i)=>{let b=document.createElement('button');b.className='qnum'+(completed.has(i)?' done':'')+(i===qi?' active':'');b.textContent=i+1;b.onclick=()=>{qi=i;render()};qlist.appendChild(b)})}
+function render(){answered=false;let q=Q[qi];qnum.textContent=`${mode==='test'?'Test':'Procvičování'} – otázka ${qi+1} z 20`;qtext.textContent=q[0];hintText.textContent=mode==='test'?'V testu pracuj samostatně s mapou. Nápověda je vypnutá.':q[3];answers.innerHTML='';feedback.className='feedback';feedback.innerHTML='';next.style.display='none';const letters=['A','B','C','D'];[...q[2]].sort(()=>Math.random()-.5).forEach((x,i)=>{let b=document.createElement('button');b.className='ans';b.innerHTML=`<span class="letter">${letters[i]}</span><span>${x}</span>`;b.onclick=()=>pick(b,x===q[1],q);answers.appendChild(b)});buildDots()}
+function pick(b,ok,q){if(answered)return;if(mode==='practice'&&!ok){b.classList.add('bad');feedback.className='feedback bad show';feedback.innerHTML='<b>✖ Ještě ne.</b><br>Zkus to znovu. Pracuj přímo s mapou a použij nápovědu.';setTimeout(()=>b.classList.remove('bad'),800);return}answered=true;completed.add(qi);if(ok)score++;b.classList.add(ok?'good':'bad');feedback.className='feedback '+(ok?'good':'bad')+' show';feedback.innerHTML=mode==='test'?'<b>Odpověď uložena.</b><br>Pokračuj na další otázku.':'<b>✓ Správně!</b><br>'+q[3];answers.querySelectorAll('button').forEach(x=>x.disabled=true);next.style.display='block';next.textContent=qi===19?'Dokončit ✓':'Další otázka →';buildDots()}
+function nextQ(){if(!answered)return;if(qi<19){qi++;render()}else{answers.innerHTML='';next.style.display='none';if(mode==='practice'){qnum.textContent='Procvičování dokončeno';qtext.textContent='Výborně. Teď můžeš zkusit test.';feedback.className='feedback good show';feedback.innerHTML='<b>✓ Hotovo.</b><br>Procvičil/a sis orientaci, směry, vzdálenost, trasy i vrstevnice.<br><button class="btn primary" onclick="startTest()" style="margin-top:10px">Spustit test →</button>';}else{let pct=Math.round(score/20*100);qnum.textContent='Test dokončen';qtext.textContent=`Výsledek: ${score} z 20 = ${pct} %`;feedback.className='feedback good show';feedback.innerHTML=`<b>${pct} %</b><br>Test si můžeš kdykoli zopakovat.<br><button class="btn primary" onclick="startTest()" style="margin-top:10px">↻ Zopakovat test</button>`;}buildDots()}}
+function resetQuiz(){qi=0;score=0;answered=false;completed.clear();render()}
+function startPractice(){mode='practice';Q=PRACTICE;resetQuiz();showSection('quiz')}
+function startTest(){mode='test';Q=TEST;resetQuiz();showSection('quiz')}
+function showMap(which){satCard.classList.toggle('mobile-show',which==='sat');tourCard.classList.toggle('mobile-show',which==='tour');tabSat.classList.toggle('on',which==='sat');tabTour.classList.toggle('on',which==='tour')}
+render();showSection('lesson');
+</script></body></html>

@@ -1,0 +1,14 @@
+{
+  "subject": "fyzika",
+  "school": "Pomocná škola",
+  "grade": "Praktická škola dvouletá – společná výuka",
+  "topic": "Český jazyk – Ústní a jednoduchá písemná komunikace",
+  "title": "Český jazyk – Řekni to, napiš to! V2 rozšířená",
+  "slug": "cesky-jazyk-rekni-to-napis-to-v1",
+  "description": "Rozšířená praktická hra: ústní a jednoduchá písemná komunikace, 40 životních situací, scénky, ruleta a časované výzvy.",
+  "icon": "🗣️",
+  "is_published": true,
+  "focus_guard": false,
+  "allow_page_leave": true,
+  "version": 1
+}

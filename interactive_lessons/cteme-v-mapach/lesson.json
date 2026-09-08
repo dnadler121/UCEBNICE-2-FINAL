@@ -1,0 +1,15 @@
+{
+  "subject": "Zeměpis",
+  "school": "Montessori",
+  "grade": "6. třída",
+  "topic": "Mapa a její čtení",
+  "title": "Čteme v mapách – jedno místo, dva pohledy",
+  "slug": "cteme-v-mapach",
+  "description": "Interaktivní lekce orientace v mapách s učitelským výkladem, porovnáním satelitního a turistického zobrazení a 20 procvičovacími otázkami s opravou chyby.",
+  "icon": "🗺️",
+  "is_published": true,
+  "focus_guard": false,
+  "allow_page_leave": true,
+  "version": 5,
+  "year": "6. třída"
+}
