@@ -215,7 +215,6 @@ function calcEvaluate(){
 }
 document.addEventListener('DOMContentLoaded',()=>{ const c=document.getElementById('calc-expression'); if(c)c.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();calcEvaluate();}}); });
 </script>
-<script>window.UCEBNICE_FOCUS_GUARD={{ {'kind':'math','key':item.id}|tojson }};</script>
-<script src="{{url_for('static',filename='js/focus_guard.js')}}"></script>
+
 {% endif %}
 {% endblock %}

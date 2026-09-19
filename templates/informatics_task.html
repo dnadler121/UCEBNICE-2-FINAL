@@ -99,7 +99,6 @@
 </main></div>
 
 {% if user.role=='student' %}
-<script>window.UCEBNICE_FOCUS_GUARD={{ {'kind':'informatics','key':task.id}|tojson }};</script>
-<script src="{{url_for('static',filename='js/focus_guard.js')}}"></script>
+
 {% endif %}
 {% endblock %}

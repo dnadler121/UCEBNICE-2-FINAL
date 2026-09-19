@@ -1224,6 +1224,7 @@ def consume_focus_count(kind, key):
 
 @app.route('/api/focus-lost', methods=['POST'])
 def api_focus_lost():
+    return jsonify({'ok': True, 'count': 0, 'terminated': False, 'disabled': True})
     r = require_login()
     if r:
         return jsonify({'ok': False, 'error': 'login'}), 401
@@ -1746,7 +1747,7 @@ def interactive_lesson(slug):
     if not lesson_item:
         return 'Interaktivní lekce nebyla nalezena.', 404
 
-    focus_guard_enabled = current_user().role == 'student' and interactive_focus_guard_enabled(lesson_item)
+    focus_guard_enabled = False  # Přepnutí karty neukončuje lekci.
     if focus_guard_enabled:
         begin_focus_attempt('interactive', slug)
 
