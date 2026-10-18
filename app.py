@@ -826,6 +826,7 @@ def normalize_subject(value):
         'biologie': 'biologie', 'biology': 'biologie', 'prirodopis': 'biologie',
         'zemepis': 'zemepis', 'geografie': 'zemepis', 'geography': 'zemepis',
         'fyzika': 'fyzika', 'physics': 'fyzika',
+        'chemie': 'chemie', 'chemistry': 'chemie',
         'obcanska-nauka': 'obcanska', 'obcanska-vychova': 'obcanska', 'obcanka': 'obcanska', 'obcanska': 'obcanska',
         'cesky-jazyk': 'cesky-jazyk', 'cestina': 'cesky-jazyk', 'cesky': 'cesky-jazyk',
         'anglicky-jazyk': 'anglictina', 'anglictina': 'anglictina', 'english': 'anglictina',
@@ -840,6 +841,7 @@ SUBJECT_META = {
     'biologie': ('Biologie / přírodopis', '🧬'),
     'zemepis': ('Zeměpis / geografie', '🌍'),
     'fyzika': ('Fyzika', '⚛️'),
+    'chemie': ('Chemie', '🧪'),
     'obcanska': ('Občanská nauka', '🧑‍🤝‍🧑'),
     'cesky-jazyk': ('Český jazyk', '📖'),
     'anglictina': ('Anglický jazyk', '🇬🇧'),
@@ -857,6 +859,8 @@ def effective_interactive_subject(lesson):
     subject = normalize_subject(lesson.subject or '')
     text = strip_accents(' '.join([lesson.topic or '', lesson.title or '', lesson.description or ''])).lower()
     if subject == 'fyzika':
+        if any(x in text for x in ('chemie', 'chemicky', 'chemicka', 'chemicke', 'chemistry')):
+            return 'chemie'
         if any(x in text for x in ('obcanska', 'obcan', 'osobnost')):
             return 'obcanska'
         if any(x in text for x in ('cesky-jazyk', 'cesky jazyk', 'komunikace a opakovani')):
@@ -908,6 +912,7 @@ def interactive_groups_for(subject_kind):
         'informatika': ('informatika',),
         'bio-obc': ('biologie', 'zemepis'),
         'fyzika': ('fyzika',),
+        'chemie': ('chemie',),
     }.get(subject_kind, ())
     if not subject_values:
         return []
@@ -1389,6 +1394,7 @@ def subject_catalog(kind):
     filters = {
         'bio-obc': lambda q: q.filter(db.or_(Subject.name.ilike('%bio%'), Subject.name.ilike('%občan%'), Subject.name.ilike('%obcan%'), Subject.name.ilike('%zeměpis%'), Subject.name.ilike('%zemepis%'), Subject.name.ilike('%geog%'))),
         'fyzika': lambda q: q.filter(Subject.name.ilike('%fyz%')),
+        'chemie': lambda q: q.filter(Subject.name.ilike('%chem%')),
         'matematika': lambda q: q.filter(Subject.name.ilike('%matemat%')),
         'informatika': lambda q: q.filter(Subject.name.ilike('%informat%')),
     }
@@ -1399,11 +1405,12 @@ def subject_catalog(kind):
     titles = {
         'bio-obc': ('Biologie, občanská výchova a zeměpis', '🧬'),
         'fyzika': ('Fyzika', '⚛️'),
+        'chemie': ('Chemie', '🧪'),
         'matematika': ('Matematika', '➗'),
         'informatika': ('Informatika', '💻'),
     }
     title, icon = titles[kind]
-    interactive_groups = interactive_groups_for(kind) if kind in ('bio-obc', 'fyzika', 'matematika', 'informatika') else []
+    interactive_groups = interactive_groups_for(kind) if kind in ('bio-obc', 'fyzika', 'chemie', 'matematika', 'informatika') else []
     informatics_lessons = InformaticsLesson.query.filter_by(is_published=True).order_by(
         InformaticsLesson.school, InformaticsLesson.grade_name, InformaticsLesson.topic, InformaticsLesson.title
     ).all() if kind == 'informatika' else []
