@@ -830,7 +830,9 @@ def normalize_subject(value):
         'obcanska-nauka': 'obcanska', 'obcanska-vychova': 'obcanska', 'obcanka': 'obcanska', 'obcanska': 'obcanska',
         'cesky-jazyk': 'cesky-jazyk', 'cestina': 'cesky-jazyk', 'cesky': 'cesky-jazyk',
         'anglicky-jazyk': 'anglictina', 'anglictina': 'anglictina', 'english': 'anglictina',
-        'dejepis': 'dejepis', 'history': 'dejepis'
+        'dejepis': 'dejepis', 'history': 'dejepis',
+        'telocvik': 'telocvik', 'telesna-vychova': 'telocvik',
+        'pracovni-vyucovani': 'pracovni-vyucovani', 'pracovni-cinnosti': 'pracovni-vyucovani'
     }
     return aliases.get(value, value)
 
@@ -846,11 +848,13 @@ SUBJECT_META = {
     'cesky-jazyk': ('Český jazyk', '📖'),
     'anglictina': ('Anglický jazyk', '🇬🇧'),
     'dejepis': ('Dějepis', '🏛️'),
+    'telocvik': ('Tělocvik', '🏃'),
+    'pracovni-vyucovani': ('Pracovní vyučování', '🛠️'),
 }
 SUBJECT_ORDER = list(SUBJECT_META.keys())
 SCHOOL_META = {
     'montessori': ('Montessori', '🌿'),
-    'ps': ('PŠ – praktická / pomocná škola', '🎓'),
+    'ps': ('Střední škola', '🎓'),
 }
 
 
@@ -873,6 +877,8 @@ def effective_school_key(lesson):
     """Rozdělí lekce na Montessori a PŠ. Praktická škola v ročníku má přednost."""
     text = strip_accents(' '.join([lesson.school or '', lesson.grade_name or '', lesson.topic or ''])).lower()
     if any(x in text for x in ('prakticka skola', 'pomocna skola', 'prs ', 'prs-', 'ps ', 'dvouleta', 'prakticka spolecna')):
+        return 'ps'
+    if any(x in text for x in ('stredni skola', 'stredni odborna', 'ss ', 'sš ', 'gymnazium')):
         return 'ps'
     if 'montessori' in text:
         return 'montessori'
@@ -1367,8 +1373,8 @@ def school_catalog(school_key):
     school = tree[school_key]
     subjects = []
     for key in SUBJECT_ORDER:
-        if key in school['subjects']:
-            subj = school['subjects'][key]
+        if True:
+            subj = school['subjects'].get(key, {'key': key, 'name': SUBJECT_META[key][0], 'icon': SUBJECT_META[key][1], 'grades': {}})
             count = sum(len(items) for grade in subj['grades'].values() for items in grade['topics'].values())
             subjects.append({**subj, 'count': count})
     return render_template('school_catalog.html', course=course_from_lesson(None), lesson=None, school=school, subjects=subjects)
