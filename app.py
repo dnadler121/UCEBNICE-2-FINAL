@@ -7358,6 +7358,9 @@ def inject_local_access():
     }
 
 
+from montessori_evidence import register as register_montessori_evidence
+register_montessori_evidence(app, db, User, require_teacher)
+
 with app.app_context():
     seed()
 
