@@ -34,8 +34,19 @@
         <div class="title-row" style="align-items:center;">
           <div>
             <h2 style="margin-bottom:2px;">👤 {{ student.user.name or student.user.username }}</h2>
-            <small>{{ student.user.username }}</small>
+            <small>{{ student.user.username }} · {{ (student.user.class_grade|string ~ '. třída') if student.user.class_grade else 'Ročník nenastaven' }}</small>
           </div>
+          <details style="min-width:250px;max-width:100%;">
+            <summary class="savebtn" style="cursor:pointer;padding:10px 14px;list-style:none;">✏️ Upravit studenta</summary>
+            <form method="post" action="{{ url_for('edit_student', user_id=student.user.id) }}" style="display:grid;gap:9px;padding:12px;border:1px solid #ddd;border-radius:10px;margin-top:8px;">
+              <input type="hidden" name="return_to" value="database">
+              <label>Jméno a příjmení<input name="name" value="{{ student.user.name }}" required></label>
+              <label>Login<input name="username" value="{{ student.user.username }}" required></label>
+              <label>Ročník<select name="class_grade"><option value="">Nevybrán</option>{% for g in [6,7,8,9] %}<option value="{{ g }}" {% if student.user.class_grade == g %}selected{% endif %}>{{ g }}. třída</option>{% endfor %}</select></label>
+              <label>Nové heslo (nepovinné)<input type="password" name="password" autocomplete="new-password"></label>
+              <button type="submit" class="savebtn">💾 Uložit změny</button>
+            </form>
+          </details>
         </div>
 
         {% for subject in student.subjects %}

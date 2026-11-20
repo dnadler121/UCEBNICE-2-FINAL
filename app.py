@@ -5930,7 +5930,7 @@ def edit_student(user_id):
     stu = db.session.get(User, user_id)
     if not stu or stu.role != 'student':
         flash('Student nebyl nalezen.')
-        return redirect(url_for('teacher_students'))
+        return redirect(url_for('teacher_database' if request.form.get('return_to') == 'database' else 'teacher_students'))
     name = ' '.join(request.form.get('name', '').split())
     username = strip_accents(request.form.get('username', '').strip().lower()).replace(' ', '.')
     username = re.sub(r'[^a-z0-9._-]+', '', username)
@@ -5951,7 +5951,7 @@ def edit_student(user_id):
             stu.password_hash = generate_password_hash(password.strip())
         db.session.commit()
         flash('Údaje studenta byly uloženy. Výsledky a pokrok zůstaly zachovány.')
-    return redirect(url_for('teacher_students'))
+    return redirect(url_for('teacher_database' if request.form.get('return_to') == 'database' else 'teacher_students'))
 
 
 def _answer_text(q):
