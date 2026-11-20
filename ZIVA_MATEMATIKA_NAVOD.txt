@@ -1,0 +1,16 @@
+ŽIVÁ MATEMATIKA – SPOLEČNÁ HODINA
+
+1. Nahrajte celý obsah tohoto ZIPu do GitHub repozitáře Učebnice FINAL.
+2. Po nasazení na Renderu se přihlaste jako učitel.
+3. Otevřete https://VAŠE-DOMÉNA/live-math
+4. Klikněte na Založit novou hodinu. Objeví se QR kód a NOVÝ šestimístný PIN.
+5. Žáci načtou QR nebo otevřou https://VAŠE-DOMÉNA/live-math/join a zadají PIN a jméno.
+6. Zadejte operaci a čísla, klikněte na Zadat všem žákům.
+7. Odpovědi žáků se obnovují přibližně každé 2,5 sekundy.
+8. Kliknutím na Ukázat řešení zobrazíte výsledek.
+
+Jde o novou společnou hodinu integrovanou přímo do serveru Učebnice FINAL, ne o samostatný importní ZIP.
+Učitel musí být přihlášen. Žáci se připojují bez účtu přes PIN.
+Výsledky této živé hodiny jsou oddělené od standardní klasifikace Učebnice FINAL.
+Učitel má k dispozici sčítání, odčítání, násobení a celočíselné dělení.
+Nové hodiny používají nový PIN. Vyžaduje internet nebo společně dostupný server.

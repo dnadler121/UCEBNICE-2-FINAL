@@ -7399,6 +7399,9 @@ def inject_local_access():
     }
 
 
+from live_math import register as register_live_math
+register_live_math(app, DATA_DIR, require_teacher)
+
 from montessori_evidence import register as register_montessori_evidence
 register_montessori_evidence(app, db, User, require_teacher)
 
