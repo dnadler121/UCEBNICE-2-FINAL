@@ -110,6 +110,7 @@ class User(db.Model):
     name = db.Column(db.String(160), nullable=False)
     role = db.Column(db.String(20), default='student')
     password_hash = db.Column(db.String(255), nullable=False)
+    class_grade = db.Column(db.Integer, nullable=True)  # ročník žáka (6–9)
 
 class Subject(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -1669,11 +1670,17 @@ def import_interactive_lesson():
 
         existing = InteractiveLesson.query.filter_by(slug=slug).first()
 
-        if not (package_root / 'templates' / 'index.html').exists():
-            raise ValueError('Balíček musí obsahovat templates/index.html.')
+        # Novy univerzalni format: HTML lekce bez povinneho Python backendu.
+        # Stare ZIP balicky s lesson_app.py zustavaji plne kompatibilni.
+        html_template = package_root / 'templates' / 'index.html'
+        if not html_template.exists():
+            standalone = package_root / 'index.html'
+            if standalone.exists():
+                (package_root / 'templates').mkdir(exist_ok=True)
+                shutil.copy2(standalone, html_template)
+            else:
+                raise ValueError('Balíček musí obsahovat templates/index.html nebo index.html.')
 
-        if not (package_root / 'lesson_app.py').exists():
-            raise ValueError('Balíček musí obsahovat lesson_app.py.')
 
         destination = INTERACTIVE_LESSONS / slug
         if destination.exists():
@@ -1968,7 +1975,7 @@ def interactive_api(slug, action):
 
     module = load_interactive_module(lesson_item)
     if not module or not hasattr(module, 'handle'):
-        return jsonify({'ok': False, 'error': 'Balíček neobsahuje lesson_app.py s funkcí handle().'}), 500
+        return jsonify({'ok': False, 'error': 'Tato HTML lekce nemá vlastní API. Pro ukládání použijte /interactive/<slug>/state.'}), 404
 
     payload = request.get_json(silent=True) if request.is_json else request.form.to_dict()
     payload = payload or {}
@@ -5896,6 +5903,8 @@ def teacher_students():
     if request.method == 'POST':
         username = request.form.get('username','').strip().lower()
         password = request.form.get('password','').strip()
+        grade_raw = request.form.get('class_grade', '').strip()
+        class_grade = int(grade_raw) if grade_raw in ('6','7','8','9') else None
         username = strip_accents(username).replace(' ', '.')
         username = re.sub(r'[^a-z0-9._-]+', '', username)
         username = re.sub(r'\.+', '.', username).strip('.')
@@ -5905,13 +5914,44 @@ def teacher_students():
         elif User.query.filter_by(username=username).first():
             flash('Toto uživatelské jméno už existuje.')
         else:
-            db.session.add(User(username=username, name=name or username, role='student', password_hash=generate_password_hash(password)))
+            db.session.add(User(username=username, name=name or username, role='student', class_grade=class_grade, password_hash=generate_password_hash(password)))
             db.session.commit()
             flash('Student byl vytvořen. Může se přihlásit vlastním jménem a heslem.')
             return redirect(url_for('teacher_students'))
     students = User.query.filter_by(role='student').order_by(User.name).all()
     return render_template('students.html', course=course_from_lesson(None), students=students, student_rows=student_overview_rows())
 
+
+
+@app.route('/teacher/student/<int:user_id>/edit', methods=['POST'])
+def edit_student(user_id):
+    r = require_teacher()
+    if r: return r
+    stu = db.session.get(User, user_id)
+    if not stu or stu.role != 'student':
+        flash('Student nebyl nalezen.')
+        return redirect(url_for('teacher_students'))
+    name = ' '.join(request.form.get('name', '').split())
+    username = strip_accents(request.form.get('username', '').strip().lower()).replace(' ', '.')
+    username = re.sub(r'[^a-z0-9._-]+', '', username)
+    username = re.sub(r'\.+', '.', username).strip('.')
+    grade_raw = request.form.get('class_grade', '').strip()
+    password = request.form.get('password', '')
+    if not name or not username or '.' not in username:
+        flash('Vyplň jméno a platný login ve tvaru jmeno.prijmeni.')
+    elif grade_raw not in ('', '6', '7', '8', '9'):
+        flash('Neplatný ročník.')
+    elif User.query.filter(User.username == username, User.id != stu.id).first():
+        flash('Tento login již používá jiný účet.')
+    else:
+        stu.name = name
+        stu.username = username
+        stu.class_grade = int(grade_raw) if grade_raw else None
+        if password.strip():
+            stu.password_hash = generate_password_hash(password.strip())
+        db.session.commit()
+        flash('Údaje studenta byly uloženy. Výsledky a pokrok zůstaly zachovány.')
+    return redirect(url_for('teacher_students'))
 
 
 def _answer_text(q):
@@ -6851,6 +6891,7 @@ def img(filename):
 def ensure_schema_updates():
     inspector = inspect(db.engine)
     required = {
+        'user': {'class_grade': 'INTEGER'},
         'lesson': {
             'title_en': "VARCHAR(200) DEFAULT ''", 'tip_en': "TEXT DEFAULT ''", 'hero_image_en': "VARCHAR(255) DEFAULT ''"
         },

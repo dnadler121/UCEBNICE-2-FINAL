@@ -8,7 +8,7 @@
       <div><p>MONTESSORI · STŘEDNÍ ŠKOLA · VŠECHNY PŘEDMĚTY</p><h1>Importovat novou lekci</h1></div>
     </div>
     <p class="catalog-intro">
-      Nahraj ZIP balíček. Aplikace povinně přečte soubor <b>lesson.json</b>
+      Nahraj ZIP balíček interaktivní lekce. Stačí HTML a <b>lesson.json</b>; Python není povinný. Aplikace přečte soubor <b>lesson.json</b>
       a podle něj lekci automaticky zařadí.
     </p>
   </div>
@@ -18,13 +18,19 @@
       <label class="upload-box">
         <span class="upload-icon">⬆️</span>
         <b>Vyber ZIP balíček lekce</b>
-        <small>Musí obsahovat lesson.json a templates/index.html</small>
+        <small>Stačí lesson.json a index.html (nebo templates/index.html)</small>
         <input type="file" name="package" accept=".zip,application/zip" required>
       </label>
       <button class="switch import-submit" type="submit">📦 Importovat a automaticky zařadit</button>
     </form>
   </section>
 
+  <section class="json-help">
+    <h2>Nově: jednoduché interaktivní lekce bez programování serveru</h2>
+    <p>Do ZIP vlož <code>lesson.json</code> a <code>index.html</code> (případně <code>templates/index.html</code>). Můžeš přibalit obrázky, CSS i JavaScript. Starší lekce s <code>lesson_app.py</code> fungují dál.</p>
+    <p>Pro výuku přes dataprojektor otevři lekci na počítači a použij režim celé obrazovky (F11). Studenti mohou lekci otevřít také na svých telefonech po přihlášení.</p>
+    <p>Nový balíček se stejným <code>slug</code> aktualizuje původní lekci.</p>
+  </section>
   <section class="json-help">
     <h2>Povinný soubor lesson.json</h2>
     <pre>{
