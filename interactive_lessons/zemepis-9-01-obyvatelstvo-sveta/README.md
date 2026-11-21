@@ -1,0 +1,3 @@
+Zeměpis 9.01 – živá hodina. Importovat ZIP do Učebnice Final. Učitel otevře lekci a klikne Založit hodinu, žáci otevřou stejnou lekci přes QR/PIN. Každý žák musí být přihlášený do Učebnice. Odpovědi jsou v SQLite databázi aplikace, v tabulkách geo901_rooms a geo901_answers. POZOR: vyžaduje otestování na Renderu; nebylo provedeno integrační testování na běžícím serveru. Procenta = správně / odeslané odpovědi. QR generuje vlastní API lekce. Zabezpečení: server ověřuje roli učitele, správné odpovědi kontroluje na serveru.
+
+Prihlaseni zaku: QR kod otevre stranku s predvyplnenym PINem, zak doplni sve jmeno a klikne Pripojit. Jmeno se uchova v session a zobrazi uciteli u odpovedi. Vyzaduje prihlaseni do Ucebnice Final.

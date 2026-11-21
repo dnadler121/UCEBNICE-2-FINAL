@@ -1,0 +1,15 @@
+{
+  "subject": "Zeměpis",
+  "school": "Montessori",
+  "grade": "9. třída",
+  "year": "9. třída",
+  "topic": "01 Obyvatelstvo světa",
+  "title": "9.01 Obyvatelstvo světa – interaktivní lekce",
+  "slug": "zemepis-9-01-obyvatelstvo-sveta",
+  "description": "Živá společná hodina přes PIN/QR, 40 úloh, průběžná procenta učitele i žáků.",
+  "icon": "🌍",
+  "is_published": true,
+  "focus_guard": false,
+  "allow_page_leave": true,
+  "version": 2
+}

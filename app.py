@@ -1758,6 +1758,62 @@ def _interactive_package_root(lesson_item):
     return candidates[-1]
 
 
+# Verejny vstup POUZE pro hosty ziveho zemepisu; ostatni lekce zustavaji chranene.
+@app.route('/live-geo901')
+def live_geo901_guest():
+    slug = 'zemepis-9-01-obyvatelstvo-sveta'
+    item = InteractiveLesson.query.filter_by(slug=slug, is_published=True).first()
+    if not item:
+        return 'Zemepisna lekce neni nahrana nebo zverejnena.', 404
+    template_file = _interactive_package_root(item) / 'templates' / 'index.html'
+    if not template_file.is_file():
+        return 'Lekce nema sablonu.', 404
+    source = template_file.read_text(encoding='utf-8')
+    # Hostovska stranka je oddelena od bezneho prihlaseneho katalogu.
+    return render_template_string(source, package=item, lesson=item, user=None,
+        asset_url=lambda path: url_for('live_geo901_asset', filename=path),
+        api_url=lambda action: url_for('live_geo901_api', action=action))
+
+@app.route('/live-geo901/assets/<path:filename>')
+def live_geo901_asset(filename):
+    item = InteractiveLesson.query.filter_by(slug='zemepis-9-01-obyvatelstvo-sveta', is_published=True).first_or_404()
+    return send_from_directory(_interactive_package_root(item) / 'static', filename)
+
+@app.route('/live-geo901/api/<action>', methods=['POST'])
+def live_geo901_api(action):
+    # Verejne API neumi zakladat ani ovladat hodinu; to smi jen prihlaseny ucitel.
+    if action not in ('join', 'status', 'submit'):
+        return jsonify({'ok':False, 'error':'Tato operace vyzaduje ucitele.'}), 403
+    item = InteractiveLesson.query.filter_by(slug='zemepis-9-01-obyvatelstvo-sveta', is_published=True).first()
+    if not item:
+        return jsonify({'ok':False,'error':'Lekce neni dostupna.'}), 404
+    payload = request.get_json(silent=True)
+    if not isinstance(payload, dict):
+        return jsonify({'ok':False,'error':'Neplatna data.'}), 400
+    pin = str(payload.get('pin','')).strip()
+    if not (len(pin)==6 and pin.isascii() and pin.isdigit()):
+        return jsonify({'ok':False,'error':'Zadej sestimistny PIN.'}), 400
+    # Identita hosta je na serveru, klient si nesmi poslat libovolne user_id.
+    import secrets
+    guest_key = 'geo901_guest_id'
+    if guest_key not in session:
+        session[guest_key] = -secrets.randbelow(2**60)-1
+    guest_id = session[guest_key]
+    # Jen prislusny modul, nikdy jine importovane API.
+    module = load_interactive_module(item)
+    if not module or not hasattr(module, 'handle'):
+        return jsonify({'ok':False,'error':'Lekce nema API.'}), 404
+    try:
+        result = module.handle(action=action, payload=payload, session=session,
+            user={'id':guest_id,'username':'host','name':'Host','role':'guest'})
+        session.modified = True
+        return jsonify(result)
+    except (ValueError, TypeError, KeyError) as exc:
+        return jsonify({'ok':False,'error':str(exc)}), 400
+    except Exception:
+        app.logger.exception('Chyba verejneho zemepisneho API')
+        return jsonify({'ok':False,'error':'Chyba serveru.'}), 500
+
 @app.route('/interactive/<slug>')
 def interactive_lesson(slug):
     r = require_login()
