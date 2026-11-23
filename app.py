@@ -9,6 +9,7 @@ from werkzeug.utils import secure_filename
 from markupsafe import Markup, escape
 from dotenv import load_dotenv
 import secrets
+from collections import OrderedDict
 
 BASE = Path(__file__).resolve().parent
 load_dotenv(BASE / '.env')
@@ -962,15 +963,40 @@ def find_package_root(temp_dir):
     return candidates[0].parent
 
 
+# Omezená mezipaměť modulů: stejný soubor se při každé odpovědi znovu nenačítá.
+# Velikost je záměrně malá kvůli limitu 512 MB na Renderu.
+_INTERACTIVE_MODULE_CACHE = OrderedDict()
+_INTERACTIVE_MODULE_CACHE_LOCK = threading.RLock()
+_INTERACTIVE_MODULE_CACHE_LIMIT = 3
+
+
 def load_interactive_module(lesson):
-    module_file = BASE / lesson.package_dir / 'lesson_app.py'
-    if not module_file.exists():
+    module_file = _interactive_package_root(lesson) / 'lesson_app.py'
+    if not module_file.is_file():
         return None
-    module_name = f'interactive_{lesson.slug}_{module_file.stat().st_mtime_ns}'
-    spec = importlib.util.spec_from_file_location(module_name, module_file)
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
+    stat = module_file.stat()
+    cache_key = (str(module_file.resolve()), stat.st_mtime_ns, stat.st_size)
+    with _INTERACTIVE_MODULE_CACHE_LOCK:
+        cached = _INTERACTIVE_MODULE_CACHE.get(cache_key)
+        if cached is not None:
+            _INTERACTIVE_MODULE_CACHE.move_to_end(cache_key)
+            return cached
+
+        # Po opětovném importu ZIPu se stará verze téhož modulu zahodí.
+        for old_key in list(_INTERACTIVE_MODULE_CACHE):
+            if old_key[0] == cache_key[0] and old_key != cache_key:
+                del _INTERACTIVE_MODULE_CACHE[old_key]
+
+        module_name = f'interactive_{lesson.slug}_{stat.st_mtime_ns}'
+        spec = importlib.util.spec_from_file_location(module_name, module_file)
+        if spec is None or spec.loader is None:
+            return None
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        _INTERACTIVE_MODULE_CACHE[cache_key] = module
+        while len(_INTERACTIVE_MODULE_CACHE) > _INTERACTIVE_MODULE_CACHE_LIMIT:
+            _INTERACTIVE_MODULE_CACHE.popitem(last=False)
+        return module
 
 
 def upsert_interactive_progress(lesson, percent=100, grade=None, focus_lost=0):
