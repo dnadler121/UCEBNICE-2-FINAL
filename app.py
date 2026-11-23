@@ -1910,6 +1910,47 @@ def public_lesson_asset(slug, filename):
 @app.route('/join/<slug>/api/<action>', methods=['POST', 'GET'])
 def public_lesson_api(slug, action):
     lesson = InteractiveLesson.query.filter_by(slug=slug, is_published=True).first_or_404()
+    # Verejne API puvodniho balicku: student nepotrebuje ucet Ucebnice.
+    if action in ('join', 'submit', 'status', 'restart', 'public_room', 'qr'):
+        module = load_interactive_module(lesson)
+        if not module or not hasattr(module, 'handle'):
+            return jsonify(ok=False, error='Balicek nema API.'), 404
+        payload = request.get_json(silent=True) or {}
+        try:
+            result = module.handle(action=action, payload=payload, session=session,
+                                   user={'id': -1, 'name': str(payload.get('name', 'Zak')), 'role': 'student'})
+            session.modified = True
+            # Zapis skutecnych odpovedi do ucitelskeho prehledu.
+            if action in ('join', 'submit', 'restart') and result.get('ok'):
+                keyname = 'public_student_' + slug
+                if not session.get(keyname):
+                    session[keyname] = secrets.token_urlsafe(24)
+                item = _public_attempt(slug)
+                if action == 'restart' and item:
+                    item.archived = True
+                    item = PublicLessonAttempt(lesson_slug=slug, student_key=session[keyname],
+                        student_name=item.student_name, attempt_no=item.attempt_no + 1)
+                    db.session.add(item)
+                if not item:
+                    item = PublicLessonAttempt(lesson_slug=slug, student_key=session[keyname],
+                        student_name=str(payload.get('name', 'Zak')).strip() or 'Zak')
+                    db.session.add(item)
+                if action == 'join':
+                    item.student_name = str(payload.get('name', item.student_name)).strip() or item.student_name
+                if action in ('submit', 'restart'):
+                    state = module.handle(action='status', payload={}, session=session,
+                                          user={'id': -1, 'name': item.student_name, 'role': 'student'})
+                    main = state.get('main', {}); retry = state.get('retry', {})
+                    active = retry if retry.get('done') else main
+                    item.answered = int(active.get('done', 0))
+                    item.correct = int(active.get('correct', 0))
+                    item.total = 30 if retry.get('done') else 40
+                item.updated_at = datetime.utcnow()
+                db.session.commit()
+            return jsonify(result)
+        except Exception as exc:
+            db.session.rollback()
+            return jsonify(ok=False, error=str(exc)), 400
     if action not in ('join', 'progress', 'restart', 'status'):
         return jsonify(ok=False, error='Nepovolena operace.'), 403
     data = request.get_json(silent=True) or {}
