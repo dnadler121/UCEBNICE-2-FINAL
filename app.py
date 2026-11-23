@@ -1911,14 +1911,23 @@ def public_lesson_asset(slug, filename):
 def public_lesson_api(slug, action):
     lesson = InteractiveLesson.query.filter_by(slug=slug, is_published=True).first_or_404()
     # Verejne API puvodniho balicku: student nepotrebuje ucet Ucebnice.
-    if action in ('join', 'submit', 'status', 'restart', 'public_room', 'qr'):
+    if action in ('create', 'join', 'submit', 'status', 'restart', 'public_room', 'qr'):
         module = load_interactive_module(lesson)
         if not module or not hasattr(module, 'handle'):
             return jsonify(ok=False, error='Balicek nema API.'), 404
         payload = request.get_json(silent=True) or {}
         try:
-            result = module.handle(action=action, payload=payload, session=session,
-                                   user={'id': -1, 'name': str(payload.get('name', 'Zak')), 'role': 'student'})
+            # Učitelské operace jsou dostupné jen přihlášenému učiteli.
+            # Žák používá veřejnou relaci bez účtu Učebnice Final.
+            teacher_user = current_user()
+            teacher_mode = action == 'create' or (action == 'status' and payload.get('teacher') is True)
+            if teacher_mode:
+                if not teacher_user or teacher_user.role != 'teacher':
+                    return jsonify(ok=False, error='Učitelský panel vyžaduje přihlášení učitele.'), 403
+                actor = {'id': teacher_user.id, 'name': teacher_user.name, 'role': 'teacher'}
+            else:
+                actor = {'id': -1, 'name': str(payload.get('name', 'Zak')), 'role': 'student'}
+            result = module.handle(action=action, payload=payload, session=session, user=actor)
             session.modified = True
             # Zapis skutecnych odpovedi do ucitelskeho prehledu.
             if action in ('join', 'submit', 'restart') and result.get('ok'):
