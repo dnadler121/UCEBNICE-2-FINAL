@@ -8,6 +8,7 @@ from werkzeug.security import generate_password_hash, check_password_hash
 from werkzeug.utils import secure_filename
 from markupsafe import Markup, escape
 from dotenv import load_dotenv
+import secrets
 
 BASE = Path(__file__).resolve().parent
 load_dotenv(BASE / '.env')
