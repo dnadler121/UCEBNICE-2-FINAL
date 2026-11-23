@@ -1968,9 +1968,11 @@ def teacher_public_progress():
 
 @app.route('/interactive/<slug>')
 def interactive_lesson(slug):
-    r = require_login()
-    if r:
-        return r
+    # Veřejný odkaz na interaktivní lekci nesmí návštěvníka poslat
+    # na přihlášení do celé Učebnice Final. Přesměrujeme jej na
+    # trvalý vstup lekce /join/<slug>; učitelská část zůstává chráněná.
+    if not current_user():
+        return redirect(url_for('public_lesson_page', slug=slug))
     lesson_item = InteractiveLesson.query.filter_by(slug=slug, is_published=True).first()
     if not lesson_item:
         return 'Interaktivní lekce nebyla nalezena.', 404
