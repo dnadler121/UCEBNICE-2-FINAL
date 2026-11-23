@@ -1936,9 +1936,11 @@ def public_lesson_api(slug, action):
                     session[keyname] = secrets.token_urlsafe(24)
                 item = _public_attempt(slug)
                 if action == 'restart' and item:
-                    item.archived = True
+                    old_name = item.student_name
+                    next_no = item.attempt_no + 1
+                    _delete_public_name_lesson(slug, old_name)
                     item = PublicLessonAttempt(lesson_slug=slug, student_key=session[keyname],
-                        student_name=item.student_name, attempt_no=item.attempt_no + 1)
+                        student_name=old_name, attempt_no=next_no)
                     db.session.add(item)
                 if not item:
                     item = PublicLessonAttempt(lesson_slug=slug, student_key=session[keyname],
@@ -1979,9 +1981,13 @@ def public_lesson_api(slug, action):
     item = _public_attempt(slug)
     if not item: return jsonify(ok=False, error='Nejdrive zadej jmeno.'), 401
     if action == 'restart':
-        item.archived = True
-        new = PublicLessonAttempt(lesson_slug=slug, student_key=item.student_key,
-            student_name=item.student_name, attempt_no=item.attempt_no + 1, total=item.total)
+        old_name = item.student_name
+        next_no = item.attempt_no + 1
+        old_total = item.total
+        old_key = item.student_key
+        _delete_public_name_lesson(slug, old_name)
+        new = PublicLessonAttempt(lesson_slug=slug, student_key=old_key,
+            student_name=old_name, attempt_no=next_no, total=old_total)
         db.session.add(new)
         db.session.commit()
         item = new
@@ -2002,18 +2008,52 @@ def public_lesson_api(slug, action):
         percent=round(100 * item.correct / item.answered) if item.answered else 0)
 
 
+def _delete_public_name_lesson(slug, name):
+    """Odstrani stare pokusy stejneho jmena jen v dane lekci."""
+    norm = (name or '').strip().casefold()
+    for old in PublicLessonAttempt.query.filter_by(lesson_slug=slug).all():
+        if (old.student_name or '').strip().casefold() == norm:
+            db.session.delete(old)
+    db.session.flush()
+
+
+def _public_rows():
+    return db.session.query(PublicLessonAttempt, InteractiveLesson.title).outerjoin(
+        InteractiveLesson, PublicLessonAttempt.lesson_slug == InteractiveLesson.slug
+    ).order_by(PublicLessonAttempt.updated_at.desc()).all()
+
+
+@app.route('/teacher/public-attempt/<int:attempt_id>/delete', methods=['POST'])
+def teacher_delete_public_attempt(attempt_id):
+    r = require_teacher()
+    if r: return r
+    item = db.session.get(PublicLessonAttempt, attempt_id)
+    if item:
+        db.session.delete(item)
+        db.session.commit()
+        flash('Výsledek byl smazán.')
+    return redirect(url_for('teacher_database'))
+
+
+@app.route('/teacher/public-student/delete', methods=['POST'])
+def teacher_delete_public_student():
+    r = require_teacher()
+    if r: return r
+    name = (request.form.get('student_name') or '').strip().casefold()
+    if name:
+        for item in PublicLessonAttempt.query.all():
+            if (item.student_name or '').strip().casefold() == name:
+                db.session.delete(item)
+        db.session.commit()
+        flash('Výsledky vybraného jména byly smazány ve všech veřejných lekcích.')
+    return redirect(url_for('teacher_database'))
+
+
 @app.route('/teacher/public-progress')
 def teacher_public_progress():
     r = require_teacher()
     if r: return r
-    rows = db.session.query(PublicLessonAttempt, InteractiveLesson.title).outerjoin(
-        InteractiveLesson, PublicLessonAttempt.lesson_slug == InteractiveLesson.slug
-    ).order_by(PublicLessonAttempt.updated_at.desc()).all()
-    return render_template_string("""<html lang="cs"><meta charset="utf-8"><meta http-equiv="refresh" content="8">
-    <title>Prubezne vysledky</title><style>body{font:17px Arial;max-width:1100px;margin:35px auto;padding:12px}table{width:100%;border-collapse:collapse}td,th{padding:12px;border-bottom:1px solid #ddd;text-align:left}a{color:#1769aa}</style>
-    <h1>Průběžné výsledky interaktivních lekcí</h1><p>Automatická aktualizace každých 8 sekund. <a href="{{ url_for('teacher_database') }}">Zpět do databáze</a></p>
-    <table><tr><th>Žák</th><th>Lekce</th><th>Pokus</th><th>Hotovo</th><th>Správně</th><th>Úspěšnost</th><th>Stav</th></tr>
-    {% for a,title in rows %}<tr><td>{{a.student_name}}</td><td>{{title or a.lesson_slug}}</td><td>{{a.attempt_no}}</td><td>{{a.answered}}/{{a.total}}</td><td>{{a.correct}}</td><td>{{ ((100*a.correct/a.answered)|round|int) if a.answered else 0 }} %</td><td>{{'Historie' if a.archived else 'Aktuální'}}</td></tr>{% endfor %}</table></html>""", rows=rows)
+    return redirect(url_for('teacher_database'))
 
 
 @app.route('/interactive/<slug>')
@@ -6434,7 +6474,9 @@ def teacher_database():
     return render_template(
         'database.html',
         course=course_from_lesson(None),
-        groups=grouped_database_results()
+        groups=grouped_database_results(),
+        public_rows=_public_rows(),
+        public_names=sorted({a.student_name for a, _ in _public_rows()}, key=str.casefold)
     )
 
 @app.route('/teacher/result/<int:result_id>/delete', methods=['POST'])
@@ -6484,6 +6526,7 @@ def delete_all_results():
     InteractiveResult.query.delete()
     InformaticsSubmission.query.delete()
     MathAttempt.query.delete()
+    PublicLessonAttempt.query.delete()
     db.session.commit()
     flash('Všechny výsledky byly smazány. Studenti a jejich průběžný pokrok ve všech předmětech zůstali zachováni.')
     return redirect(url_for('teacher_database'))
