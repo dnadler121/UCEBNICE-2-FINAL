@@ -1814,6 +1814,57 @@ def live_geo901_api(action):
         app.logger.exception('Chyba verejneho zemepisneho API')
         return jsonify({'ok':False,'error':'Chyba serveru.'}), 500
 
+# Verejny vstup pouze pro studenty svalove soustavy (QR/PIN/jmeno).
+# Ucitelske akce zustavaji dostupne pouze v prihlasene casti.
+BIO8_PUBLIC_SLUG = 'biologie-8-svalova-soustava'
+
+@app.route('/join/biologie-8-svalova-soustava')
+def bio8_public_join():
+    item = InteractiveLesson.query.filter_by(slug=BIO8_PUBLIC_SLUG, is_published=True).first_or_404()
+    template_file = _interactive_package_root(item) / 'templates' / 'index.html'
+    if not template_file.is_file():
+        return 'Lekce nema sablonu.', 404
+    source = template_file.read_text(encoding='utf-8')
+    # API adresu v importovanem HTML nahradime pouze na verejne studentske strance.
+    source = source.replace("('/interactive/'+slug+'/api/')", "('/join/biologie-8-svalova-soustava/api/')")
+    return render_template_string(source, package=item, lesson=item, user=None,
+        asset_url=lambda path: url_for('bio8_public_asset', filename=path),
+        api_url=lambda action: url_for('bio8_public_api', action=action))
+
+@app.route('/join/biologie-8-svalova-soustava/assets/<path:filename>')
+def bio8_public_asset(filename):
+    item = InteractiveLesson.query.filter_by(slug=BIO8_PUBLIC_SLUG, is_published=True).first_or_404()
+    return send_from_directory(_interactive_package_root(item) / 'static', filename)
+
+@app.route('/join/biologie-8-svalova-soustava/api/<action>', methods=['POST'])
+def bio8_public_api(action):
+    if action not in ('join', 'status', 'submit'):
+        return jsonify({'ok': False, 'error': 'Tuto operaci smi provest pouze ucitel.'}), 403
+    item = InteractiveLesson.query.filter_by(slug=BIO8_PUBLIC_SLUG, is_published=True).first_or_404()
+    payload = request.get_json(silent=True)
+    if not isinstance(payload, dict):
+        return jsonify({'ok': False, 'error': 'Neplatna data.'}), 400
+    pin = str(payload.get('pin', '')).strip()
+    if len(pin) != 6 or not pin.isascii() or not pin.isdigit():
+        return jsonify({'ok': False, 'error': 'Zadej sestimistny PIN.'}), 400
+    module = load_interactive_module(item)
+    if not module or not hasattr(module, 'handle'):
+        return jsonify({'ok': False, 'error': 'Lekce nema API.'}), 404
+    guest_key = 'bio8_guest_id'
+    if guest_key not in session:
+        session[guest_key] = -secrets.randbelow(2**60)-1
+    guest_id = session[guest_key]
+    try:
+        result = module.handle(action=action, payload=payload, session=session,
+            user={'id': guest_id, 'username': 'host', 'name': 'Host', 'role': 'guest'})
+        session.modified = True
+        return jsonify(result)
+    except (ValueError, TypeError, KeyError) as exc:
+        return jsonify({'ok': False, 'error': str(exc)}), 400
+    except Exception:
+        app.logger.exception('Chyba verejneho API svalove soustavy')
+        return jsonify({'ok': False, 'error': 'Chyba serveru.'}), 500
+
 @app.route('/interactive/<slug>')
 def interactive_lesson(slug):
     r = require_login()

@@ -1,0 +1,10 @@
+OPRAVA QR / PRIHLASOVANI - BIOLOGIE 8 SVALOVA SOUSTAVA
+
+1. Nejdrive nasadte upravenou aplikaci Ucebnice Final na Render.
+2. V administraci znovu importujte tento opraveny ZIP lekce (aktualizace existujici lekce).
+3. Ucitel otevre lekci jako obvykle a vytvori novy PIN.
+4. QR vede na /join/biologie-8-svalova-soustava?pin=XXXXXX.
+5. Zak zada pouze jmeno; pro pocitac lze otevrit verejnou adresu a zadat PIN.
+6. V anonymnim okne telefonu vyzkousejte odeslani odpovedi a zobrazeni vysledku.
+
+Ucitelska cast /interactive/... zustava chranena prihlasenim.
