@@ -1866,6 +1866,106 @@ def bio8_public_api(action):
         app.logger.exception('Chyba verejneho API svalove soustavy')
         return jsonify({'ok': False, 'error': 'Chyba serveru.'}), 500
 
+# Jednotne verejne QR vstupy a prubezne vysledky (bez PIN).
+# Trvala adresa je odvozena ze slugu lekce; prezije restart i novy import.
+class PublicLessonAttempt(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    lesson_slug = db.Column(db.String(120), nullable=False, index=True)
+    student_key = db.Column(db.String(80), nullable=False, index=True)
+    student_name = db.Column(db.String(100), nullable=False)
+    attempt_no = db.Column(db.Integer, nullable=False, default=1)
+    answered = db.Column(db.Integer, nullable=False, default=0)
+    correct = db.Column(db.Integer, nullable=False, default=0)
+    total = db.Column(db.Integer, nullable=False, default=40)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow)
+    archived = db.Column(db.Boolean, default=False)
+
+
+def _public_attempt(lesson_slug):
+    key = session.get('public_student_' + lesson_slug)
+    if not key: return None
+    return PublicLessonAttempt.query.filter_by(lesson_slug=lesson_slug, student_key=key, archived=False).order_by(PublicLessonAttempt.id.desc()).first()
+
+
+@app.route('/join/<slug>')
+def public_lesson_page(slug):
+    lesson = InteractiveLesson.query.filter_by(slug=slug, is_published=True).first_or_404()
+    # Existujici HTML balicky zustavaji beze zmen. Jejich interni API se
+    # automaticky neprepisuje; pro nove balicky slouzi nize uvedene API.
+    template_file = _interactive_package_root(lesson) / 'templates' / 'index.html'
+    if not template_file.is_file(): return 'Lekce nema HTML sablonu.', 404
+    source = template_file.read_text(encoding='utf-8')
+    return render_template_string(source, package=lesson, lesson=lesson, user=None,
+        asset_url=lambda path: url_for('public_lesson_asset', slug=slug, filename=path),
+        api_url=lambda action: url_for('public_lesson_api', slug=slug, action=action),
+        public_api_url=url_for('public_lesson_api', slug=slug, action='progress'))
+
+
+@app.route('/join/<slug>/assets/<path:filename>')
+def public_lesson_asset(slug, filename):
+    lesson = InteractiveLesson.query.filter_by(slug=slug, is_published=True).first_or_404()
+    return send_from_directory(_interactive_package_root(lesson) / 'static', filename)
+
+
+@app.route('/join/<slug>/api/<action>', methods=['POST', 'GET'])
+def public_lesson_api(slug, action):
+    lesson = InteractiveLesson.query.filter_by(slug=slug, is_published=True).first_or_404()
+    if action not in ('join', 'progress', 'restart', 'status'):
+        return jsonify(ok=False, error='Nepovolena operace.'), 403
+    data = request.get_json(silent=True) or {}
+    if action == 'join':
+        name = str(data.get('name', '')).strip()
+        if not 2 <= len(name) <= 100:
+            return jsonify(ok=False, error='Zadej jmeno (2 az 100 znaku).'), 400
+        keyname = 'public_student_' + slug
+        if keyname not in session: session[keyname] = secrets.token_urlsafe(24)
+        item = _public_attempt(slug)
+        if not item:
+            item = PublicLessonAttempt(lesson_slug=slug, student_key=session[keyname], student_name=name)
+            db.session.add(item)
+        else: item.student_name = name
+        db.session.commit()
+        return jsonify(ok=True, attempt=item.attempt_no)
+    item = _public_attempt(slug)
+    if not item: return jsonify(ok=False, error='Nejdrive zadej jmeno.'), 401
+    if action == 'restart':
+        item.archived = True
+        new = PublicLessonAttempt(lesson_slug=slug, student_key=item.student_key,
+            student_name=item.student_name, attempt_no=item.attempt_no + 1, total=item.total)
+        db.session.add(new)
+        db.session.commit()
+        item = new
+    elif action == 'progress':
+        try:
+            answered = int(data['answered']); correct = int(data['correct']); total = int(data['total'])
+        except (KeyError, TypeError, ValueError):
+            return jsonify(ok=False, error='Ocekava se answered, correct, total.'), 400
+        if not (1 <= total <= 1000 and 0 <= correct <= answered <= total):
+            return jsonify(ok=False, error='Neplatne pocty otazek.'), 400
+        if answered < item.answered:
+            return jsonify(ok=False, error='Pro novy pokus pouzij restart.'), 409
+        item.answered, item.correct, item.total = answered, correct, total
+        item.updated_at = datetime.utcnow()
+        db.session.commit()
+    return jsonify(ok=True, lesson=lesson.title, attempt=item.attempt_no,
+        answered=item.answered, correct=item.correct, total=item.total,
+        percent=round(100 * item.correct / item.answered) if item.answered else 0)
+
+
+@app.route('/teacher/public-progress')
+def teacher_public_progress():
+    r = require_teacher()
+    if r: return r
+    rows = db.session.query(PublicLessonAttempt, InteractiveLesson.title).outerjoin(
+        InteractiveLesson, PublicLessonAttempt.lesson_slug == InteractiveLesson.slug
+    ).order_by(PublicLessonAttempt.updated_at.desc()).all()
+    return render_template_string("""<html lang="cs"><meta charset="utf-8"><meta http-equiv="refresh" content="8">
+    <title>Prubezne vysledky</title><style>body{font:17px Arial;max-width:1100px;margin:35px auto;padding:12px}table{width:100%;border-collapse:collapse}td,th{padding:12px;border-bottom:1px solid #ddd;text-align:left}a{color:#1769aa}</style>
+    <h1>Průběžné výsledky interaktivních lekcí</h1><p>Automatická aktualizace každých 8 sekund. <a href="{{ url_for('teacher_database') }}">Zpět do databáze</a></p>
+    <table><tr><th>Žák</th><th>Lekce</th><th>Pokus</th><th>Hotovo</th><th>Správně</th><th>Úspěšnost</th><th>Stav</th></tr>
+    {% for a,title in rows %}<tr><td>{{a.student_name}}</td><td>{{title or a.lesson_slug}}</td><td>{{a.attempt_no}}</td><td>{{a.answered}}/{{a.total}}</td><td>{{a.correct}}</td><td>{{ ((100*a.correct/a.answered)|round|int) if a.answered else 0 }} %</td><td>{{'Historie' if a.archived else 'Aktuální'}}</td></tr>{% endfor %}</table></html>""", rows=rows)
+
+
 @app.route('/interactive/<slug>')
 def interactive_lesson(slug):
     r = require_login()
