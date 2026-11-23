@@ -967,7 +967,8 @@ def find_package_root(temp_dir):
 # Velikost je záměrně malá kvůli limitu 512 MB na Renderu.
 _INTERACTIVE_MODULE_CACHE = OrderedDict()
 _INTERACTIVE_MODULE_CACHE_LOCK = threading.RLock()
-_INTERACTIVE_MODULE_CACHE_LIMIT = 3
+# Na instanci s 512 MB ponechavame v pameti nejvyse jeden modul lekce.
+_INTERACTIVE_MODULE_CACHE_LIMIT = 1
 
 
 def load_interactive_module(lesson):
@@ -1854,6 +1855,7 @@ def bio8_public_join():
     source = template_file.read_text(encoding='utf-8')
     # API adresu v importovanem HTML nahradime pouze na verejne studentske strance.
     source = source.replace("('/interactive/'+slug+'/api/')", "('/join/biologie-8-svalova-soustava/api/')")
+    source = _inject_idle_status_guard(source)
     return render_template_string(source, package=item, lesson=item, user=None,
         asset_url=lambda path: url_for('bio8_public_asset', filename=path),
         api_url=lambda action: url_for('bio8_public_api', action=action))
@@ -1913,6 +1915,39 @@ def _public_attempt(lesson_slug):
     return PublicLessonAttempt.query.filter_by(lesson_slug=lesson_slug, student_key=key, archived=False).order_by(PublicLessonAttempt.id.desc()).first()
 
 
+# Uspora pozadavku z neaktivnich zalozek verejnych interaktivnich lekci.
+# Odpovedi a ukladani (submit/progress) nejsou nikdy blokovany.
+def _inject_idle_status_guard(source):
+    guard = r"""<script>
+(function () {
+  if (window.__ucebniceIdleStatusGuard) return;
+  window.__ucebniceIdleStatusGuard = true;
+  const originalFetch = window.fetch.bind(window);
+  const lastStatus = new Map();
+  window.fetch = async function (input, init) {
+    const url = typeof input === 'string' ? input : (input && input.url) || '';
+    const isStatus = /\/api\/status(?:[?#]|$)/.test(url);
+    if (!isStatus) return originalFetch(input, init);
+    if (document.hidden) {
+      const cached = lastStatus.get(url);
+      if (cached) return cached.clone();
+      // Zalozka je neaktivni: nespoustet dalsi dotaz na server.
+      return new Response(JSON.stringify({ok:false, inactive:true}), {
+        status: 200, headers: {'Content-Type':'application/json'}
+      });
+    }
+    const response = await originalFetch(input, init);
+    if (response.ok) lastStatus.set(url, response.clone());
+    return response;
+  };
+})();
+</script>"""
+    index = source.lower().find('<head>')
+    if index >= 0:
+        return source[:index + 6] + guard + source[index + 6:]
+    return guard + source
+
+
 @app.route('/join/<slug>')
 def public_lesson_page(slug):
     lesson = InteractiveLesson.query.filter_by(slug=slug, is_published=True).first_or_404()
@@ -1920,7 +1955,7 @@ def public_lesson_page(slug):
     # automaticky neprepisuje; pro nove balicky slouzi nize uvedene API.
     template_file = _interactive_package_root(lesson) / 'templates' / 'index.html'
     if not template_file.is_file(): return 'Lekce nema HTML sablonu.', 404
-    source = template_file.read_text(encoding='utf-8')
+    source = _inject_idle_status_guard(template_file.read_text(encoding='utf-8'))
     return render_template_string(source, package=lesson, lesson=lesson, user=None,
         asset_url=lambda path: url_for('public_lesson_asset', slug=slug, filename=path),
         api_url=lambda action: url_for('public_lesson_api', slug=slug, action=action),
