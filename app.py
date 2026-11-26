@@ -1990,13 +1990,13 @@ def public_lesson_api(slug, action):
                 actor = {'id': -1, 'name': str(payload.get('name', 'Zak')), 'role': 'student'}
             result = module.handle(action=action, payload=payload, session=session, user=actor)
             session.modified = True
-            if slug == 'biologie-7-savci-laborator-75':
+            spec = _lesson_result_spec(lesson)
+            if spec:
                 if action in ('join', 'submit') and result.get('ok'):
-                    name = str(payload.get('name', '')).strip()[:60] if action == 'join' else session.get('savci_public_name', '')
+                    name = str(payload.get('name', '')).strip()[:60] if action == 'join' else session.get('public_name_' + slug, session.get('savci_public_name', '') if slug == 'biologie-7-savci-laborator-75' else '')
                     if name:
-                        session['savci_public_name'] = name
-                        identity = ' '.join(strip_accents(name).split())
-                        key = hashlib.sha256(identity.encode('utf-8')).hexdigest()
+                        session['public_name_' + slug] = name
+                        key = hashlib.sha256(_result_identity(name).encode('utf-8')).hexdigest()
                         session['public_student_' + slug] = key
                         item = _public_attempt(slug)
                         if not item:
@@ -2005,7 +2005,7 @@ def public_lesson_api(slug, action):
                         state = result.get('main') or module.handle(action='status', payload={}, session=session, user=actor).get('main', {})
                         item.answered = int(state.get('done', 0))
                         item.correct = int(state.get('correct', 0))
-                        item.total = 75
+                        item.total = spec[1]
                         item.updated_at = datetime.utcnow()
                         db.session.commit()
                 return jsonify(result)
@@ -2091,27 +2091,60 @@ def public_lesson_api(slug, action):
         percent=round(100 * item.correct / item.answered) if item.answered else 0)
 
 
-def _clear_savci_results(name=None):
+# Jednotny kontrakt pro balicky s vlastnimi tabulkami odpovedi.
+_LEGACY_RESULT_SPECS = {
+    'biologie-7-savci-laborator-75': ('expedition_v75', 75),
+    'biologie-8-bunky-tkane-organy-laborator-75': ('human_cells_v75', 75),
+}
+
+def _result_identity(name):
+    return ' '.join(strip_accents(name or '').split())
+
+def _lesson_result_spec(lesson):
+    if lesson.slug in _LEGACY_RESULT_SPECS:
+        return _LEGACY_RESULT_SPECS[lesson.slug]
+    try:
+        meta = json.loads((_interactive_package_root(lesson) / 'lesson.json').read_text(encoding='utf-8'))
+        spec = meta.get('result_storage', {})
+        prefix = spec.get('prefix', '')
+        total = spec.get('total')
+        # Novy prefix je jednoznacne odvozen ze slugu, bez kolizi s jinymi lekcemi.
+        expected = 'lesson_' + hashlib.sha256(lesson.slug.encode('utf-8')).hexdigest()[:24]
+        if prefix == expected and type(total) is int and 1 <= total <= 1000:
+            return prefix, total
+    except (OSError, ValueError, TypeError, AttributeError):
+        pass
+    return None
+
+def _clear_package_results(name=None, slug=None):
+    specs = dict(_LEGACY_RESULT_SPECS)
+    for lesson in InteractiveLesson.query.all():
+        spec = _lesson_result_spec(lesson)
+        if spec:
+            specs[lesson.slug] = spec
     tables = set(inspect(db.engine).get_table_names())
-    if not {'expedition_v75_students', 'expedition_v75_answers'}.issubset(tables):
-        return
-    if name is None:
-        db.session.execute(text('DELETE FROM expedition_v75_answers'))
-        db.session.execute(text('DELETE FROM expedition_v75_students'))
-    else:
-        identity = ' '.join(strip_accents(name).split())
-        rows = db.session.execute(text('SELECT k,name FROM expedition_v75_students')).mappings().all()
-        for row in rows:
-            if ' '.join(strip_accents(row['name']).split()) == identity:
-                db.session.execute(text('DELETE FROM expedition_v75_answers WHERE k=:k'), {'k': row['k']})
-                db.session.execute(text('DELETE FROM expedition_v75_students WHERE k=:k'), {'k': row['k']})
+    for lesson_slug, (prefix, total) in specs.items():
+        if slug is not None and slug != lesson_slug:
+            continue
+        students, answers = prefix + '_students', prefix + '_answers'
+        if not {students, answers}.issubset(tables):
+            continue
+        if name is None:
+            db.session.execute(text(f'DELETE FROM "{answers}"'))
+            db.session.execute(text(f'DELETE FROM "{students}"'))
+        else:
+            rows = db.session.execute(text(f'SELECT k,name FROM "{students}"')).mappings().all()
+            for row in rows:
+                if _result_identity(row['name']) == _result_identity(name):
+                    db.session.execute(text(f'DELETE FROM "{answers}" WHERE k=:k'), {'k': row['k']})
+                    db.session.execute(text(f'DELETE FROM "{students}" WHERE k=:k'), {'k': row['k']})
 
 
 def _delete_public_name_lesson(slug, name):
     """Odstrani stare pokusy stejneho jmena jen v dane lekci."""
-    norm = (name or '').strip().casefold()
+    norm = _result_identity(name)
     for old in PublicLessonAttempt.query.filter_by(lesson_slug=slug).all():
-        if (old.student_name or '').strip().casefold() == norm:
+        if _result_identity(old.student_name) == norm:
             db.session.delete(old)
     db.session.flush()
 
@@ -2128,8 +2161,8 @@ def teacher_delete_public_attempt(attempt_id):
     if r: return r
     item = db.session.get(PublicLessonAttempt, attempt_id)
     if item:
-        if item.lesson_slug == 'biologie-7-savci-laborator-75':
-            _clear_savci_results(item.student_name)
+        if item.lesson_slug in _LEGACY_RESULT_SPECS or any(_lesson_result_spec(l) for l in InteractiveLesson.query.filter_by(slug=item.lesson_slug).all()):
+            _clear_package_results(item.student_name, item.lesson_slug)
             _delete_public_name_lesson(item.lesson_slug, item.student_name)
         else:
             db.session.delete(item)
@@ -2144,9 +2177,9 @@ def teacher_delete_public_student():
     if r: return r
     name = (request.form.get('student_name') or '').strip().casefold()
     if name:
-        _clear_savci_results(name)
+        _clear_package_results(name)
         for item in PublicLessonAttempt.query.all():
-            if (item.student_name or '').strip().casefold() == name:
+            if _result_identity(item.student_name) == _result_identity(name):
                 db.session.delete(item)
         db.session.commit()
         flash('Výsledky vybraného jména byly smazány ve všech veřejných lekcích.')
@@ -6631,7 +6664,7 @@ def delete_all_results():
     InformaticsSubmission.query.delete()
     MathAttempt.query.delete()
     PublicLessonAttempt.query.delete()
-    _clear_savci_results()
+    _clear_package_results()
     db.session.commit()
     flash('Všechny výsledky byly smazány. Studenti a jejich průběžný pokrok ve všech předmětech zůstali zachováni.')
     return redirect(url_for('teacher_database'))
