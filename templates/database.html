@@ -5,7 +5,8 @@
     <div class="title-row">
       <div>
         <h1>🗄️ Databáze studentů</h1>
-        <p>Každý student je v přehledu pouze jednou. Jeho výsledky jsou uvnitř seřazené podle předmětů.</p>
+        <p>Živé výsledky a ostatní hodnocení na jedné stránce.</p>
+        <p>Průběžné výsledky se obnovují automaticky. Nový pokus ve stejné lekci nahradí starý.</p>
       </div>
       <div class="teacher-actions">
         <a class="switch" href="{{ url_for('teacher_students') }}">👨‍🎓 Studenti</a>
@@ -17,13 +18,52 @@
       {% if messages %}<div class="notice">{% for message in messages %}<p>{{ message }}</p>{% endfor %}</div>{% endif %}
     {% endwith %}
 
+    <section class="course-card" style="margin-top:18px;">
+      <div class="database-title-row"><div>
+        <h2>📊 Průběžné výsledky interaktivních lekcí</h2>
+        <p>Jméno · lekce · zodpovězené otázky · správně · úspěšnost. Nový pokus stejného jména a lekce nahradí předchozí.</p>
+      </div><span style="background:#e5f6ed;color:#166534;padding:8px 12px;border-radius:18px;font-weight:700">● Živě – 8 s</span></div>
+      <div class="table-wrap"><table class="data-table" style="width:100%">
+        <thead><tr><th>Žák</th><th>Lekce</th><th>Pokus</th><th>Hotovo</th><th>Správně</th><th>Úspěšnost</th><th>Stav</th><th>Akce</th></tr></thead>
+        <tbody>
+        {% for a, title in public_rows %}
+          <tr><td><strong>{{ a.student_name }}</strong></td><td>{{ title or a.lesson_slug }}</td>
+            <td>{{ a.attempt_no }}</td><td>{{ a.answered }}/{{ a.total }}</td><td>{{ a.correct }}</td>
+            <td><strong>{{ ((100*a.correct/a.answered)|round|int) if a.answered else 0 }} %</strong></td>
+            <td>{{ 'Historie' if a.archived else ('Hotovo' if a.answered >= a.total else 'Rozpracováno') }}</td>
+            <td><form method="post" action="{{ url_for('teacher_delete_public_attempt', attempt_id=a.id) }}" onsubmit="return confirm('Opravdu smazat tento výsledek?');"><button class="link-button danger" type="submit">Smazat</button></form></td>
+          </tr>
+        {% else %}
+          <tr><td colspan="8" style="text-align:center;padding:24px">Zatím žádné průběžné výsledky.</td></tr>
+        {% endfor %}
+        </tbody>
+      </table></div>
+      {% if public_rows %}
+      <div style="display:flex;flex-wrap:wrap;gap:12px;margin-top:18px;align-items:center">
+        <form method="post" action="{{ url_for('teacher_delete_public_student') }}" onsubmit="return confirm('Smazat všechny výsledky vybraného jména?');" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+          <select name="student_name" required style="padding:10px;border:1px solid #cbd5e1;border-radius:8px">
+            <option value="">Vyber žáka…</option>
+            {% for name in public_names %}<option value="{{ name }}">{{ name }}</option>{% endfor %}
+          </select>
+          <button class="link-button danger" type="submit">Smazat všechny výsledky žáka</button>
+        </form>
+      </div>
+      {% endif %}
+    </section>
+    <script>
+      setInterval(function(){
+        if(document.hidden || document.querySelector('input:focus,select:focus,textarea:focus,details[open]')) return;
+        window.location.reload();
+      }, 8000);
+    </script>
+
     <section class="course-card">
       <div class="database-title-row">
         <div>
           <h2>📊 Výsledky podle studentů a předmětů</h2>
           <p>Známka zůstává u konkrétního výsledku. Samostatný archiv „Hodnocení“ už není potřeba.</p>
         </div>
-        <form method="post" action="{{ url_for('delete_all_results') }}" onsubmit="return confirm('Smazat všechny výsledky? Studenti a trvalý pokrok zůstanou zachováni.');">
+        <form method="post" action="{{ url_for('delete_all_results') }}" onsubmit="return confirm('Opravdu smazat všechny výsledky včetně průběžných? Žákovské účty zůstanou zachované.');">
           <button class="link-button danger" type="submit">🗑️ Smazat všechny výsledky</button>
         </form>
       </div>
