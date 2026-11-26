@@ -9,6 +9,7 @@ from werkzeug.utils import secure_filename
 from markupsafe import Markup, escape
 from dotenv import load_dotenv
 import secrets
+from collections import OrderedDict
 
 BASE = Path(__file__).resolve().parent
 load_dotenv(BASE / '.env')
@@ -962,15 +963,41 @@ def find_package_root(temp_dir):
     return candidates[0].parent
 
 
+# Omezená mezipaměť modulů: stejný soubor se při každé odpovědi znovu nenačítá.
+# Velikost je záměrně malá kvůli limitu 512 MB na Renderu.
+_INTERACTIVE_MODULE_CACHE = OrderedDict()
+_INTERACTIVE_MODULE_CACHE_LOCK = threading.RLock()
+# Na instanci s 512 MB ponechavame v pameti nejvyse jeden modul lekce.
+_INTERACTIVE_MODULE_CACHE_LIMIT = 1
+
+
 def load_interactive_module(lesson):
-    module_file = BASE / lesson.package_dir / 'lesson_app.py'
-    if not module_file.exists():
+    module_file = _interactive_package_root(lesson) / 'lesson_app.py'
+    if not module_file.is_file():
         return None
-    module_name = f'interactive_{lesson.slug}_{module_file.stat().st_mtime_ns}'
-    spec = importlib.util.spec_from_file_location(module_name, module_file)
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
+    stat = module_file.stat()
+    cache_key = (str(module_file.resolve()), stat.st_mtime_ns, stat.st_size)
+    with _INTERACTIVE_MODULE_CACHE_LOCK:
+        cached = _INTERACTIVE_MODULE_CACHE.get(cache_key)
+        if cached is not None:
+            _INTERACTIVE_MODULE_CACHE.move_to_end(cache_key)
+            return cached
+
+        # Po opětovném importu ZIPu se stará verze téhož modulu zahodí.
+        for old_key in list(_INTERACTIVE_MODULE_CACHE):
+            if old_key[0] == cache_key[0] and old_key != cache_key:
+                del _INTERACTIVE_MODULE_CACHE[old_key]
+
+        module_name = f'interactive_{lesson.slug}_{stat.st_mtime_ns}'
+        spec = importlib.util.spec_from_file_location(module_name, module_file)
+        if spec is None or spec.loader is None:
+            return None
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        _INTERACTIVE_MODULE_CACHE[cache_key] = module
+        while len(_INTERACTIVE_MODULE_CACHE) > _INTERACTIVE_MODULE_CACHE_LIMIT:
+            _INTERACTIVE_MODULE_CACHE.popitem(last=False)
+        return module
 
 
 def upsert_interactive_progress(lesson, percent=100, grade=None, focus_lost=0):
@@ -1828,6 +1855,7 @@ def bio8_public_join():
     source = template_file.read_text(encoding='utf-8')
     # API adresu v importovanem HTML nahradime pouze na verejne studentske strance.
     source = source.replace("('/interactive/'+slug+'/api/')", "('/join/biologie-8-svalova-soustava/api/')")
+    source = _inject_idle_status_guard(source)
     return render_template_string(source, package=item, lesson=item, user=None,
         asset_url=lambda path: url_for('bio8_public_asset', filename=path),
         api_url=lambda action: url_for('bio8_public_api', action=action))
@@ -1866,11 +1894,279 @@ def bio8_public_api(action):
         app.logger.exception('Chyba verejneho API svalove soustavy')
         return jsonify({'ok': False, 'error': 'Chyba serveru.'}), 500
 
+# Jednotne verejne QR vstupy a prubezne vysledky (bez PIN).
+# Trvala adresa je odvozena ze slugu lekce; prezije restart i novy import.
+class PublicLessonAttempt(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    lesson_slug = db.Column(db.String(120), nullable=False, index=True)
+    student_key = db.Column(db.String(80), nullable=False, index=True)
+    student_name = db.Column(db.String(100), nullable=False)
+    attempt_no = db.Column(db.Integer, nullable=False, default=1)
+    answered = db.Column(db.Integer, nullable=False, default=0)
+    correct = db.Column(db.Integer, nullable=False, default=0)
+    total = db.Column(db.Integer, nullable=False, default=40)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow)
+    archived = db.Column(db.Boolean, default=False)
+
+
+def _public_attempt(lesson_slug):
+    key = session.get('public_student_' + lesson_slug)
+    if not key: return None
+    return PublicLessonAttempt.query.filter_by(lesson_slug=lesson_slug, student_key=key, archived=False).order_by(PublicLessonAttempt.id.desc()).first()
+
+
+# Uspora pozadavku z neaktivnich zalozek verejnych interaktivnich lekci.
+# Odpovedi a ukladani (submit/progress) nejsou nikdy blokovany.
+def _inject_idle_status_guard(source):
+    guard = r"""<script>
+(function () {
+  if (window.__ucebniceIdleStatusGuard) return;
+  window.__ucebniceIdleStatusGuard = true;
+  const originalFetch = window.fetch.bind(window);
+  const lastStatus = new Map();
+  window.fetch = async function (input, init) {
+    const url = typeof input === 'string' ? input : (input && input.url) || '';
+    const isStatus = /\/api\/status(?:[?#]|$)/.test(url);
+    if (!isStatus) return originalFetch(input, init);
+    if (document.hidden) {
+      const cached = lastStatus.get(url);
+      if (cached) return cached.clone();
+      // Zalozka je neaktivni: nespoustet dalsi dotaz na server.
+      return new Response(JSON.stringify({ok:false, inactive:true}), {
+        status: 200, headers: {'Content-Type':'application/json'}
+      });
+    }
+    const response = await originalFetch(input, init);
+    if (response.ok) lastStatus.set(url, response.clone());
+    return response;
+  };
+})();
+</script>"""
+    index = source.lower().find('<head>')
+    if index >= 0:
+        return source[:index + 6] + guard + source[index + 6:]
+    return guard + source
+
+
+@app.route('/join/<slug>')
+def public_lesson_page(slug):
+    lesson = InteractiveLesson.query.filter_by(slug=slug, is_published=True).first_or_404()
+    # Existujici HTML balicky zustavaji beze zmen. Jejich interni API se
+    # automaticky neprepisuje; pro nove balicky slouzi nize uvedene API.
+    template_file = _interactive_package_root(lesson) / 'templates' / 'index.html'
+    if not template_file.is_file(): return 'Lekce nema HTML sablonu.', 404
+    source = _inject_idle_status_guard(template_file.read_text(encoding='utf-8'))
+    return render_template_string(source, package=lesson, lesson=lesson, user=None,
+        asset_url=lambda path: url_for('public_lesson_asset', slug=slug, filename=path),
+        api_url=lambda action: url_for('public_lesson_api', slug=slug, action=action),
+        public_api_url=url_for('public_lesson_api', slug=slug, action='progress'))
+
+
+@app.route('/join/<slug>/assets/<path:filename>')
+def public_lesson_asset(slug, filename):
+    lesson = InteractiveLesson.query.filter_by(slug=slug, is_published=True).first_or_404()
+    return send_from_directory(_interactive_package_root(lesson) / 'static', filename)
+
+
+@app.route('/join/<slug>/api/<action>', methods=['POST', 'GET'])
+def public_lesson_api(slug, action):
+    lesson = InteractiveLesson.query.filter_by(slug=slug, is_published=True).first_or_404()
+    # Verejne API puvodniho balicku: student nepotrebuje ucet Ucebnice.
+    if action in ('create', 'join', 'submit', 'status', 'restart', 'public_room', 'qr'):
+        module = load_interactive_module(lesson)
+        if not module or not hasattr(module, 'handle'):
+            return jsonify(ok=False, error='Balicek nema API.'), 404
+        payload = request.get_json(silent=True) or {}
+        try:
+            # Učitelské operace jsou dostupné jen přihlášenému učiteli.
+            # Žák používá veřejnou relaci bez účtu Učebnice Final.
+            teacher_user = current_user()
+            teacher_mode = action == 'create' or (action == 'status' and payload.get('teacher') is True)
+            if teacher_mode:
+                if not teacher_user or teacher_user.role != 'teacher':
+                    return jsonify(ok=False, error='Učitelský panel vyžaduje přihlášení učitele.'), 403
+                actor = {'id': teacher_user.id, 'name': teacher_user.name, 'role': 'teacher'}
+            else:
+                actor = {'id': -1, 'name': str(payload.get('name', 'Zak')), 'role': 'student'}
+            result = module.handle(action=action, payload=payload, session=session, user=actor)
+            session.modified = True
+            if slug == 'biologie-7-savci-laborator-75':
+                if action in ('join', 'submit') and result.get('ok'):
+                    name = str(payload.get('name', '')).strip()[:60] if action == 'join' else session.get('savci_public_name', '')
+                    if name:
+                        session['savci_public_name'] = name
+                        identity = ' '.join(strip_accents(name).split())
+                        key = hashlib.sha256(identity.encode('utf-8')).hexdigest()
+                        session['public_student_' + slug] = key
+                        item = _public_attempt(slug)
+                        if not item:
+                            item = PublicLessonAttempt(lesson_slug=slug, student_key=key, student_name=name)
+                            db.session.add(item)
+                        state = result.get('main') or module.handle(action='status', payload={}, session=session, user=actor).get('main', {})
+                        item.answered = int(state.get('done', 0))
+                        item.correct = int(state.get('correct', 0))
+                        item.total = 75
+                        item.updated_at = datetime.utcnow()
+                        db.session.commit()
+                return jsonify(result)
+            # Zapis skutecnych odpovedi do ucitelskeho prehledu.
+            if action in ('join', 'submit', 'restart') and result.get('ok'):
+                keyname = 'public_student_' + slug
+                if not session.get(keyname):
+                    session[keyname] = secrets.token_urlsafe(24)
+                item = _public_attempt(slug)
+                if action == 'join' and item and strip_accents(item.student_name) != strip_accents(payload.get('name', '')):
+                    session[keyname] = secrets.token_urlsafe(24)
+                    item = None
+                if action == 'restart' and item:
+                    old_name = item.student_name
+                    next_no = item.attempt_no + 1
+                    _delete_public_name_lesson(slug, old_name)
+                    item = PublicLessonAttempt(lesson_slug=slug, student_key=session[keyname],
+                        student_name=old_name, attempt_no=next_no)
+                    db.session.add(item)
+                if not item:
+                    item = PublicLessonAttempt(lesson_slug=slug, student_key=session[keyname],
+                        student_name=str(payload.get('name', 'Zak')).strip() or 'Zak')
+                    db.session.add(item)
+                if action == 'join':
+                    item.student_name = str(payload.get('name', item.student_name)).strip() or item.student_name
+                if action in ('submit', 'restart'):
+                    state = module.handle(action='status', payload={}, session=session,
+                                          user={'id': -1, 'name': item.student_name, 'role': 'student'})
+                    main = state.get('main', {}); retry = state.get('retry', {})
+                    active = retry if retry.get('done') else main
+                    item.answered = int(active.get('done', 0))
+                    item.correct = int(active.get('correct', 0))
+                    item.total = 30 if retry.get('done') else 40
+                item.updated_at = datetime.utcnow()
+                db.session.commit()
+            return jsonify(result)
+        except Exception as exc:
+            db.session.rollback()
+            return jsonify(ok=False, error=str(exc)), 400
+    if action not in ('join', 'progress', 'restart', 'status'):
+        return jsonify(ok=False, error='Nepovolena operace.'), 403
+    data = request.get_json(silent=True) or {}
+    if action == 'join':
+        name = str(data.get('name', '')).strip()
+        if not 2 <= len(name) <= 100:
+            return jsonify(ok=False, error='Zadej jmeno (2 az 100 znaku).'), 400
+        keyname = 'public_student_' + slug
+        if keyname not in session: session[keyname] = secrets.token_urlsafe(24)
+        item = _public_attempt(slug)
+        if not item:
+            item = PublicLessonAttempt(lesson_slug=slug, student_key=session[keyname], student_name=name)
+            db.session.add(item)
+        else: item.student_name = name
+        db.session.commit()
+        return jsonify(ok=True, attempt=item.attempt_no)
+    item = _public_attempt(slug)
+    if not item: return jsonify(ok=False, error='Nejdrive zadej jmeno.'), 401
+    if action == 'restart':
+        old_name = item.student_name
+        next_no = item.attempt_no + 1
+        old_total = item.total
+        old_key = item.student_key
+        _delete_public_name_lesson(slug, old_name)
+        new = PublicLessonAttempt(lesson_slug=slug, student_key=old_key,
+            student_name=old_name, attempt_no=next_no, total=old_total)
+        db.session.add(new)
+        db.session.commit()
+        item = new
+    elif action == 'progress':
+        try:
+            answered = int(data['answered']); correct = int(data['correct']); total = int(data['total'])
+        except (KeyError, TypeError, ValueError):
+            return jsonify(ok=False, error='Ocekava se answered, correct, total.'), 400
+        if not (1 <= total <= 1000 and 0 <= correct <= answered <= total):
+            return jsonify(ok=False, error='Neplatne pocty otazek.'), 400
+        if answered < item.answered:
+            return jsonify(ok=False, error='Pro novy pokus pouzij restart.'), 409
+        item.answered, item.correct, item.total = answered, correct, total
+        item.updated_at = datetime.utcnow()
+        db.session.commit()
+    return jsonify(ok=True, lesson=lesson.title, attempt=item.attempt_no,
+        answered=item.answered, correct=item.correct, total=item.total,
+        percent=round(100 * item.correct / item.answered) if item.answered else 0)
+
+
+def _clear_savci_results(name=None):
+    tables = set(inspect(db.engine).get_table_names())
+    if not {'expedition_v75_students', 'expedition_v75_answers'}.issubset(tables):
+        return
+    if name is None:
+        db.session.execute(text('DELETE FROM expedition_v75_answers'))
+        db.session.execute(text('DELETE FROM expedition_v75_students'))
+    else:
+        identity = ' '.join(strip_accents(name).split())
+        rows = db.session.execute(text('SELECT k,name FROM expedition_v75_students')).mappings().all()
+        for row in rows:
+            if ' '.join(strip_accents(row['name']).split()) == identity:
+                db.session.execute(text('DELETE FROM expedition_v75_answers WHERE k=:k'), {'k': row['k']})
+                db.session.execute(text('DELETE FROM expedition_v75_students WHERE k=:k'), {'k': row['k']})
+
+
+def _delete_public_name_lesson(slug, name):
+    """Odstrani stare pokusy stejneho jmena jen v dane lekci."""
+    norm = (name or '').strip().casefold()
+    for old in PublicLessonAttempt.query.filter_by(lesson_slug=slug).all():
+        if (old.student_name or '').strip().casefold() == norm:
+            db.session.delete(old)
+    db.session.flush()
+
+
+def _public_rows():
+    return db.session.query(PublicLessonAttempt, InteractiveLesson.title).outerjoin(
+        InteractiveLesson, PublicLessonAttempt.lesson_slug == InteractiveLesson.slug
+    ).order_by(PublicLessonAttempt.updated_at.desc()).all()
+
+
+@app.route('/teacher/public-attempt/<int:attempt_id>/delete', methods=['POST'])
+def teacher_delete_public_attempt(attempt_id):
+    r = require_teacher()
+    if r: return r
+    item = db.session.get(PublicLessonAttempt, attempt_id)
+    if item:
+        if item.lesson_slug == 'biologie-7-savci-laborator-75':
+            _clear_savci_results(item.student_name)
+            _delete_public_name_lesson(item.lesson_slug, item.student_name)
+        else:
+            db.session.delete(item)
+        db.session.commit()
+        flash('Výsledek byl smazán.')
+    return redirect(url_for('teacher_database'))
+
+
+@app.route('/teacher/public-student/delete', methods=['POST'])
+def teacher_delete_public_student():
+    r = require_teacher()
+    if r: return r
+    name = (request.form.get('student_name') or '').strip().casefold()
+    if name:
+        _clear_savci_results(name)
+        for item in PublicLessonAttempt.query.all():
+            if (item.student_name or '').strip().casefold() == name:
+                db.session.delete(item)
+        db.session.commit()
+        flash('Výsledky vybraného jména byly smazány ve všech veřejných lekcích.')
+    return redirect(url_for('teacher_database'))
+
+
+@app.route('/teacher/public-progress')
+def teacher_public_progress():
+    r = require_teacher()
+    if r: return r
+    return redirect(url_for('teacher_database'))
+
+
 @app.route('/interactive/<slug>')
 def interactive_lesson(slug):
-    r = require_login()
-    if r:
-        return r
+    # Veřejný odkaz na interaktivní lekci nesmí návštěvníka poslat
+    # na přihlášení do celé Učebnice Final. Přesměrujeme jej na
+    # trvalý vstup lekce /join/<slug>; učitelská část zůstává chráněná.
+    if not current_user():
+        return redirect(url_for('public_lesson_page', slug=slug))
     lesson_item = InteractiveLesson.query.filter_by(slug=slug, is_published=True).first()
     if not lesson_item:
         return 'Interaktivní lekce nebyla nalezena.', 404
@@ -6282,7 +6578,9 @@ def teacher_database():
     return render_template(
         'database.html',
         course=course_from_lesson(None),
-        groups=grouped_database_results()
+        groups=grouped_database_results(),
+        public_rows=_public_rows(),
+        public_names=sorted({a.student_name for a, _ in _public_rows()}, key=str.casefold)
     )
 
 @app.route('/teacher/result/<int:result_id>/delete', methods=['POST'])
@@ -6332,6 +6630,8 @@ def delete_all_results():
     InteractiveResult.query.delete()
     InformaticsSubmission.query.delete()
     MathAttempt.query.delete()
+    PublicLessonAttempt.query.delete()
+    _clear_savci_results()
     db.session.commit()
     flash('Všechny výsledky byly smazány. Studenti a jejich průběžný pokrok ve všech předmětech zůstali zachováni.')
     return redirect(url_for('teacher_database'))
