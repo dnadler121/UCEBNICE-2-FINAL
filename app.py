@@ -1972,7 +1972,7 @@ def public_lesson_asset(slug, filename):
 def public_lesson_api(slug, action):
     lesson = InteractiveLesson.query.filter_by(slug=slug, is_published=True).first_or_404()
     # Verejne API puvodniho balicku: student nepotrebuje ucet Ucebnice.
-    if action in ('create', 'join', 'submit', 'status', 'restart', 'public_room', 'qr'):
+    if action in ('create', 'join', 'submit', 'status', 'restart', 'public_room', 'qr', 'group_status', 'group_mode', 'group_answer'):
         module = load_interactive_module(lesson)
         if not module or not hasattr(module, 'handle'):
             return jsonify(ok=False, error='Balicek nema API.'), 404
@@ -1981,7 +1981,7 @@ def public_lesson_api(slug, action):
             # Učitelské operace jsou dostupné jen přihlášenému učiteli.
             # Žák používá veřejnou relaci bez účtu Učebnice Final.
             teacher_user = current_user()
-            teacher_mode = action == 'create' or (action == 'status' and payload.get('teacher') is True)
+            teacher_mode = action in ('create', 'group_mode') or (action == 'group_status' and payload.get('teacher') is True) or (action == 'status' and payload.get('teacher') is True)
             if teacher_mode:
                 if not teacher_user or teacher_user.role != 'teacher':
                     return jsonify(ok=False, error='Učitelský panel vyžaduje přihlášení učitele.'), 403
@@ -2130,12 +2130,16 @@ def _clear_package_results(name=None, slug=None):
         if not {students, answers}.issubset(tables):
             continue
         if name is None:
+            for extra in (prefix + '_group_answers', prefix + '_group_room'):
+                if extra in tables: db.session.execute(text(f'DELETE FROM "{extra}"'))
             db.session.execute(text(f'DELETE FROM "{answers}"'))
             db.session.execute(text(f'DELETE FROM "{students}"'))
         else:
             rows = db.session.execute(text(f'SELECT k,name FROM "{students}"')).mappings().all()
             for row in rows:
                 if _result_identity(row['name']) == _result_identity(name):
+                    if prefix + '_group_answers' in tables:
+                        db.session.execute(text(f'DELETE FROM "{prefix}_group_answers" WHERE k=:k'), {'k': row['k']})
                     db.session.execute(text(f'DELETE FROM "{answers}" WHERE k=:k'), {'k': row['k']})
                     db.session.execute(text(f'DELETE FROM "{students}" WHERE k=:k'), {'k': row['k']})
 
