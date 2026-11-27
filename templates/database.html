@@ -50,6 +50,13 @@
       </div>
       {% endif %}
     </section>
+    <section class="course-card" style="margin-top:18px">
+      <h2>Společné aktivity – jednotlivé odpovědi</h2>
+      <p>Samostatná evidence, nezapočítává se do individuálních 75 úloh.</p>
+      <div class="table-wrap"><table class="data-table"><thead><tr><th>Žák</th><th>Lekce</th><th>Aktivita</th><th>Úloha</th><th>Odpověď</th><th>Výsledek</th></tr></thead><tbody>
+      {% for r in group_rows %}<tr><td>{{ r.name }}</td><td>{{ r.lesson }}</td><td>{{ {'detect':'Detektiv','body':'Lidské tělo','escape':'Úniková místnost','expedition':'Expedice'}.get(r.game,r.game) }}</td><td>{{ r.q+1 }}</td><td>{{ r.answer }}</td><td>{{ 'Správně' if r.correct else 'Nesprávně' }}</td></tr>{% else %}<tr><td colspan="6">Zatím žádné společné odpovědi.</td></tr>{% endfor %}
+      </tbody></table></div>
+    </section>
     <script>
       setInterval(function(){
         if(document.hidden || document.querySelector('input:focus,select:focus,textarea:focus,details[open]')) return;

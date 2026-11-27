@@ -6608,6 +6608,22 @@ def grouped_database_results():
     return grouped
 
 
+def _group_result_rows():
+    tables = set(inspect(db.engine).get_table_names())
+    rows = []
+    for lesson in InteractiveLesson.query.all():
+        spec = _lesson_result_spec(lesson)
+        if not spec:
+            continue
+        prefix = spec[0]
+        students, answers = prefix + '_students', prefix + '_group_answers'
+        if not {students, answers}.issubset(tables):
+            continue
+        query = text(f'SELECT s.name,a.game,a.q,a.answer,a.correct,a.stamp FROM "{answers}" a JOIN "{students}" s ON s.k=a.k ORDER BY a.stamp DESC LIMIT 200')
+        rows.extend(dict(r, lesson=lesson.title) for r in db.session.execute(query).mappings())
+    return sorted(rows, key=lambda r: r['stamp'], reverse=True)[:500]
+
+
 @app.route('/teacher/database')
 def teacher_database():
     r = require_teacher()
@@ -6617,6 +6633,7 @@ def teacher_database():
         course=course_from_lesson(None),
         groups=grouped_database_results(),
         public_rows=_public_rows(),
+        group_rows=_group_result_rows(),
         public_names=sorted({a.student_name for a, _ in _public_rows()}, key=str.casefold)
     )
 
