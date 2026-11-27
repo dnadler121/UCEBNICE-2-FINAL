@@ -2414,6 +2414,14 @@ def interactive_api(slug, action):
     if not lesson_item:
         return jsonify({'ok': False, 'error': 'lesson'}), 404
 
+    # Balicky s jednotnou evidenci pouzivaji stejny vstup jako QR.
+    # Prihlaseny ucitel muze vstoupit jako hrac; ucitelske operace
+    # zustavaji chranene kontrolou role v public_lesson_api.
+    if _lesson_result_spec(lesson_item) and action in (
+        'create', 'join', 'submit', 'status', 'qr', 'group_status', 'group_mode', 'group_answer'
+    ):
+        return public_lesson_api(slug, action)
+
     module = load_interactive_module(lesson_item)
     if not module or not hasattr(module, 'handle'):
         return jsonify({'ok': False, 'error': 'Tato HTML lekce nemá vlastní API. Pro ukládání použijte /interactive/<slug>/state.'}), 404
